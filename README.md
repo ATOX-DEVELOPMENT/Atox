@@ -32,9 +32,11 @@
 
 ## What it does
 
-- **Any agent, any moment.** Claude Code, Codex and more in one chat. Switch whenever you like.
+- **Any agent, any moment.** Claude Code and Codex in one chat. Switch whenever you like.
 - **Agents team up.** Claude can ask Codex for a review, and the answer comes back to the same chat.
-- **Real terminals.** Every chat is a shell in your project folder, nothing is hidden.
+- **A board for agents.** Drag a GitHub issue to the queue and an agent works on it in its own worktree.
+- **Fork a chat.** Try another approach without losing the first one.
+- **Changes and a terminal.** Review what agents changed, with a real shell next to the chat.
 - **Chats remember.** Close Atox, come back, and every chat picks up where it left off.
 - **Archive, don't lose.** Archived chats leave the sidebar but keep their history, ready to restore.
 - **Projects and spaces.** A project is a folder, its chats live inside. Give it a color and one of 400+ icons.

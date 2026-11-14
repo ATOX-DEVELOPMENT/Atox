@@ -653,6 +653,10 @@ td:last-child {
   background: var(--color-accent);
 }
 
+.dot--waiting {
+  background: #ff9f0a;
+}
+
 @keyframes pulse {
   50% {
     opacity: 0.35;
