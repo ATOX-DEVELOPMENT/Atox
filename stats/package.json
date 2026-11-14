@@ -11,6 +11,7 @@
     "start": "node server.js"
   },
   "dependencies": {
+    "geoip-country": "^5.0.202611140331",
     "pg": "^8.13.1"
   }
 }
