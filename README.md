@@ -27,7 +27,7 @@
 </p>
 
 <p align="center">
-  <img src="web/public/screenshot.png" alt="Atox: a chat with Claude, with projects and spaces in the sidebar" width="860">
+  <img src=".github/screenshot.png" alt="Atox: a chat with Claude, with projects and spaces in the sidebar" width="860">
 </p>
 
 ## What it does
@@ -55,7 +55,7 @@ chmod +x Atox-*.AppImage && ./Atox-*.AppImage
 
 ## Privacy
 
-Atox sends anonymous usage stats to its own server ([`stats/`](stats)) so we know how many people use it: an install event once, then one event per day, week and month the app is open. Each event carries only the app version, OS name and a random number for the current launch. The server keeps the country looked up from the IP address, not the address. No IDs, projects, files or chats are stored.
+Atox sends anonymous usage stats to its own server so we know how many people use it: an install event once, then one event per day, week and month the app is open. Each event carries only the app version, OS name and a random number for the current launch. The server keeps the country looked up from the IP address, not the address. No IDs, projects, files or chats are stored.
 
 Turn it off any time in Settings → General.
 
