@@ -11,8 +11,12 @@ const GITHUB_TOKEN = process.env.GITHUB_TOKEN
 /** Сколько держать подсчёт скачиваний, прежде чем спросить GitHub снова. */
 const DOWNLOADS_CACHE_MS = 10 * 60 * 1000
 const GITHUB_TIMEOUT_MS = 8000
-/** Файлы релиза, которые скачивают люди; манифесты и blockmap — служебные, их не считаем. */
-const INSTALLER = /\.(dmg|zip|AppImage|pacman|exe)$/i
+/**
+ * Файлы, которые люди скачивают сами. Не считаем то, что качает само приложение при обновлении
+ * (zip на macOS, AppImage на Linux), и служебные файлы (манифесты, blockmap): иначе каждое
+ * обновление выглядело бы как новое скачивание.
+ */
+const INSTALLER = /\.(dmg|pacman)$/i
 
 const MAX_BODY_BYTES = 4 * 1024
 /** Сколько событий с одного адреса в минуту; клиент шлёт не больше четырёх в сутки. */
@@ -186,7 +190,7 @@ function dashboard(stats) {
 <main>
   <h1>Atox</h1>
   <div class="grid">
-    ${tile('Downloads', stats.downloads, 'all releases, from GitHub')}
+    ${tile('Downloads', stats.downloads, '.dmg and Arch packages, from GitHub')}
     ${tile('Installs', stats.installs, 'first launches')}
     ${tile('Today', stats.daily, 'active in the last day')}
     ${tile('This week', stats.weekly, 'active in the last 7 days')}
