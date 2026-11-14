@@ -30,9 +30,16 @@ Task:
 ${task.trim()}`
 }
 
+/**
+ * Отчёт помощника его агенту. Команда удаления стоит прямо в отчёте: иначе агенты забывают
+ * убрать отработавших помощников, и пользователь удаляет их чаты вручную.
+ */
 export function formatReport(worker: Chat, summary: string): string {
   return `${MESSAGE_PREFIX} Worker ${describeChat(worker)} finished and reported:
-${summary.trim()}`
+${summary.trim()}
+
+Once you have checked the result and need nothing more from this worker, remove it:
+  atox remove ${worker.id}`
 }
 
 export function formatMessage(sender: Chat, message: string): string {
