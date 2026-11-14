@@ -536,8 +536,7 @@ ul {
 }
 
 /*
- * Проект — плитка с тинтом его цвета и значком внутри, справа число чатов; кнопка «+» при
- * наведении занимает место числа.
+ * Проект — плитка с тинтом его цвета и значком внутри; кнопка «+» появляется при наведении.
  */
 .row--project {
   position: relative;
@@ -555,17 +554,6 @@ ul {
 
 .row--project .row__label {
   font-weight: 600;
-}
-
-.project-count {
-  margin: 0 4px 0 auto;
-  font-size: var(--font-size-small);
-  font-variant-numeric: tabular-nums;
-  color: var(--color-text-muted);
-}
-
-.row--project:hover .project-count {
-  visibility: hidden;
 }
 
 .row--project .row__action {

@@ -240,7 +240,6 @@ export const ProjectItem = memo(function ProjectItem({
           >
             <ProjectGlyph className={glyphClass} />
             <span className="row__label">{project.name}</span>
-            <span className="project-count">{topLevel.length}</span>
           </button>
         )}
         <button
