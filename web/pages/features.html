@@ -6,7 +6,7 @@
     <title>Atox | Features</title>
     <meta
       name="description"
-      content="What Atox does: Claude Code, Codex and other agents in one chat, agent teams, approvals, changes and git, a project terminal, plan limits, projects and spaces."
+      content="What Atox does: Claude Code and Codex in one chat, agent teams, a board that turns GitHub issues into agent tasks, forks, approvals, changes and git, a project terminal, plan limits, projects and spaces."
     />
     <meta name="theme-color" content="#0b0b0c" />
     <link rel="icon" type="image/png" href="/favicon.png" />
@@ -19,6 +19,7 @@
       <nav class="docs__nav" aria-label="On this page">
         <a href="#agents">Agents and models</a>
         <a href="#teams">Agent teams</a>
+        <a href="#board">Board</a>
         <a href="#approvals">Approvals and questions</a>
         <a href="#changes">Changes and git</a>
         <a href="#terminal">Terminal</a>
@@ -26,6 +27,7 @@
         <a href="#projects">Projects and spaces</a>
         <a href="#chats">Chats</a>
         <a href="#integrations">Plugins, skills and MCP</a>
+        <a href="#appearance">Appearance</a>
         <a href="#keyboard">Keyboard</a>
         <a href="#app">Light, fast, up to date</a>
       </nav>
@@ -39,13 +41,17 @@
 
         <h2 id="agents">Agents and models</h2>
         <p>
-          Claude Code, Codex and other agents work in one chat. Pick the agent, the model and the
+          Claude Code and Codex work in one chat. Pick the agent, the model and the
           effort right in the message box, and switch whenever you like: the new agent gets the
           conversation so far and picks up where the last one stopped.
         </p>
         <p>
           Use the subscription you already have, or get models from an
           <a href="/pricing">Atox plan</a>.
+        </p>
+        <p>
+          Want to try another approach? <strong>Fork</strong> a chat: the fork starts with the
+          whole conversation and goes its own way, and the original stays as it was.
         </p>
 
         <h2 id="teams">Agent teams</h2>
@@ -54,6 +60,14 @@
           answer comes back as a message in the same chat. Workers appear right under the chat
           that started them, and the Agents page shows every running agent, with the ones that
           wait for you first.
+        </p>
+
+        <h2 id="board">Board</h2>
+        <p>
+          The board turns GitHub issues into tasks for agents. Drag an issue to the queue, pick
+          the agent, model and effort, and it works on the issue in its own git worktree, so your
+          project folder stays untouched. Finished tasks wait in Review. Filter by organization,
+          repository or assignee, and decide how many agents may work at once.
         </p>
 
         <h2 id="approvals">Approvals and questions</h2>
@@ -70,22 +84,23 @@
             diff. Discard what you don't want.
           </li>
           <li>
-            <strong>Repository:</strong> commits, pull requests and issues of the project, right
-            next to your chats.
+            <strong>Repository:</strong> pull requests and issues of the project, with
+            assignees, right next to your chats.
           </li>
         </ul>
         <p>Atox runs git in the background without getting in the way of agents' own commits.</p>
 
         <h2 id="terminal">Terminal</h2>
         <p>
-          Every project has its own terminal in a panel next to the chat. Press <kbd>⌘</kbd>
-          <kbd>J</kbd> to show or hide it; it keeps running while hidden.
+          Every project has its own terminal in a panel next to the chat. Press <kbd>Ctrl</kbd>
+          <kbd>`</kbd> to show or hide it; it keeps running while hidden.
         </p>
 
         <h2 id="limits">Plan limits</h2>
         <p>
-          How much of your Claude and Codex plans you have used stays in the sidebar, with the
-          time until each limit resets. No more surprises in the middle of a task.
+          How much of your Claude and Codex plans you have used is one click away in the sidebar,
+          with the time until each limit resets. Settings → Usage adds token totals for today and
+          for all time. No more surprises in the middle of a task.
         </p>
 
         <h2 id="projects">Projects and spaces</h2>
@@ -95,7 +110,8 @@
         </p>
         <p>
           <kbd>⌘</kbd>-click a chat to open it side by side with the current one, and drag the
-          divider to resize.
+          divider to resize. Spaces sit as tabs above the project list; switch with
+          <kbd>Ctrl</kbd> <kbd>1</kbd>–<kbd>9</kbd>.
         </p>
 
         <h2 id="chats">Chats</h2>
@@ -106,11 +122,12 @@
           </li>
           <li>
             <strong>Queue messages.</strong> Send the next message while the agent is still
-            working; it waits in line, and you can cancel it.
+            working; it waits in line, and you can cancel it. Attach files, drop them in or
+            paste a screenshot.
           </li>
           <li>
             <strong>Know when it's done.</strong> A chat shows when its agent works, waits for
-            you or finishes, and long tasks can send a notification.
+            you or finishes, and long tasks can send a notification or a soft chime.
           </li>
           <li>
             <strong>Archive, don't lose.</strong> Archived chats leave the sidebar but keep their
@@ -124,10 +141,16 @@
           through config files.
         </p>
 
+        <h2 id="appearance">Appearance</h2>
+        <p>
+          Light, dark or follow the system, with a choice of pastel accent colors. Open
+          <strong>Settings → General</strong>.
+        </p>
+
         <h2 id="keyboard">Keyboard</h2>
         <p>
-          New chat, next chat, terminal, sidebar and more are on shortcuts, and you can change any
-          of them in Settings. Type <kbd>/</kbd> in the message box to see the agent's commands.
+          New chat, next chat, terminal, changes, agents, sidebar and more are on shortcuts, and
+          you can change any of them in Settings. Type <kbd>/</kbd> in the message box to see the agent's commands.
         </p>
 
         <h2 id="app">Light, fast, up to date</h2>

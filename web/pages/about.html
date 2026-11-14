@@ -25,8 +25,8 @@
       </p>
       <p>
         Atox is the answer to that pile. It is a Mac and Linux app with a sidebar of projects and chats,
-        and every chat is a real terminal with an agent in it. You always see what is running,
-        what is done and where.
+        and every chat is a conversation with an agent working in your project folder. You always
+        see what is running, what is done and where.
       </p>
 
       <h2 id="goals">Project goals</h2>
@@ -37,11 +37,11 @@
       <ul>
         <li><strong>Stay light.</strong> It should never be the reason your laptop is warm.</li>
         <li>
-          <strong>Stay out of the way.</strong> Your agent runs exactly as it does in the
-          terminal, with its own commands, keys and settings.
+          <strong>Stay out of the way.</strong> Your agent works exactly as it does in the
+          terminal, with its own commands, tools and settings.
         </li>
         <li>
-          <strong>Work with any agent.</strong> If it runs in a terminal, it runs in Atox.
+          <strong>Work with the agents you use.</strong> Claude Code and Codex today, in one chat.
         </li>
         <li>
           <strong>Never lose context.</strong> Projects, chats and layouts are saved to disk
@@ -52,8 +52,9 @@
       <h2 id="under-the-hood">Under the hood</h2>
       <ul>
         <li>
-          Each chat is a login shell in the project folder, started through a pseudo-terminal
-          and drawn with xterm.js on the GPU.
+          Each chat talks to its agent's own command line tool in the project folder, so the
+          agent keeps its tools, models and settings. The project terminal is a real shell,
+          drawn with xterm.js.
         </li>
         <li>
           Your projects and chats are stored in a single file on your computer:
