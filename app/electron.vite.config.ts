@@ -6,7 +6,7 @@ import packageJson from './package.json'
 /** Релизы лежат в репозитории из package.json; `latest` всегда указывает на последний. */
 const updateFeedUrl = `${packageJson.repository.url}/releases/latest/download`
 
-/** Сервер анонимной статистики Atox: `stats/` в репозитории. */
+/** Сервер анонимной статистики Atox (админка). */
 const usageStatsUrl = 'https://admin.atox.dev/v1/event'
 
 export default defineConfig({
