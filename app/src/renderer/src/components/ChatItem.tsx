@@ -3,7 +3,6 @@ import {
   Archive,
   ChevronDown,
   Columns2,
-  GitBranch,
   GitFork,
   Pencil,
   Trash2
@@ -23,8 +22,6 @@ interface ChatItemProps {
   chat: Chat
   /** Помощники, которых запустил агент этого чата; показываются под ним. */
   workers: Chat[]
-  /** Ветка git, в которой работает чат; `null` — папка проекта не репозиторий. */
-  branch: string | null
   /** Чат в фокусе, если это чат карточки или его помощник; иначе `null`. */
   activeChatId: string | null
   /** Чаты на экране, если среди них есть чаты карточки; иначе пусто. */
@@ -41,7 +38,6 @@ interface ChatItemProps {
 export const ChatItem = memo(function ChatItem({
   chat,
   workers,
-  branch,
   activeChatId,
   visibleChatIds,
   canOpenBesideActive
@@ -66,7 +62,6 @@ export const ChatItem = memo(function ChatItem({
       <ChatRow
         chat={chat}
         {...rowSelection(chat.id)}
-        branch={branch}
         workerChatIds={workerChatIds}
         renaming={renaming}
         onRenamingChange={setRenaming}
@@ -130,7 +125,6 @@ function WorkerItem({ chat, ...selection }: { chat: Chat } & RowSelection) {
 
 interface ChatRowProps extends RowSelection {
   chat: Chat
-  branch?: string | null
   /** Помощники чата: пока работает любой из них, индикатор чата показывает работу. */
   workerChatIds?: readonly string[]
   /** Строка помощника: в одну строку, со значком агента вместо индикатора и ветки. */
@@ -146,7 +140,6 @@ function ChatRow({
   active,
   visible,
   canOpenBeside,
-  branch = null,
   workerChatIds,
   compact = false,
   renaming,
@@ -206,29 +199,21 @@ function ChatRow({
     <span className="row__label">{chat.title}</span>
   )
 
+  // Состояние чата — кружок у правого края; у помощника слева значок его агента.
   const content = (
-    <>
-      <span className="chat-title">
-        {compact ? (
-          <span className="worker-agent">
-            {chat.fork ? (
-              <GitFork className="agent-icon" aria-hidden />
-            ) : (
-              <AgentIcon agent={chat.agent} className="agent-icon" aria-hidden />
-            )}
-          </span>
-        ) : (
-          <ChatActivityStatus chatId={chat.id} workerChatIds={workerChatIds} />
-        )}
-        {title}
-      </span>
-      {branch && (
-        <span className="chat-branch" title={branch}>
-          <GitBranch className="chat-branch__icon" aria-hidden />
-          <span className="row__label">{branch}</span>
+    <span className="chat-title">
+      {compact && (
+        <span className="worker-agent">
+          {chat.fork ? (
+            <GitFork className="agent-icon" aria-hidden />
+          ) : (
+            <AgentIcon agent={chat.agent} className="agent-icon" aria-hidden />
+          )}
         </span>
       )}
-    </>
+      {title}
+      {!compact && <ChatActivityStatus chatId={chat.id} workerChatIds={workerChatIds} />}
+    </span>
   )
 
   return (

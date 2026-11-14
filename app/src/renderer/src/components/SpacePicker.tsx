@@ -1,53 +1,27 @@
 import { useState, type CSSProperties, type MouseEvent } from 'react'
-import { ChevronDown, Pencil, Plus, Trash2 } from 'lucide-react'
+import { Pencil, Plus, Trash2 } from 'lucide-react'
 import type { Space } from '../../../shared/models'
 import { findProjectColor } from '../../../shared/projectColors'
 import { useProjectsContext } from '../hooks/ProjectsContext'
 import { colorSubmenu, parseColorAction } from '../lib/colorMenu'
-import { colorSchemeQuery } from '../lib/colorScheme'
-import { showMenu, type MenuAnchor, type MenuItem } from '../lib/menu'
+import { showMenu, type MenuItem } from '../lib/menu'
 import { InlineRename } from './InlineRename'
-
-/** Пункт списка пространств: `space:<id>`. */
-const SPACE_ACTION_PREFIX = 'space:'
 
 /** Сколько пространств доступно по ⌃1…⌃9. */
 const NUMBERED_SPACES = 9
 
 /**
- * Текущее пространство — заголовок над списком проектов, как разделы в Finder. Клик открывает меню со всеми пространствами
- * и действиями над текущим; новое пространство сразу предлагают назвать прямо в строке.
+ * Пространства вкладками в одну строку: клик переключает, правый клик открывает действия
+ * над пространством, «+» создаёт новое и сразу предлагает назвать его прямо во вкладке.
  */
 export function SpacePicker() {
-  const {
-    spaces,
-    activeSpaceId,
-    selectSpace,
-    createSpace,
-    renameSpace,
-    setSpaceColor,
-    removeSpace
-  } = useProjectsContext()
-  const [renaming, setRenaming] = useState(false)
-  const space = spaces.find(({ id }) => id === activeSpaceId)
+  const { spaces, activeSpaceId, selectSpace, createSpace, renameSpace, setSpaceColor, removeSpace } =
+    useProjectsContext()
+  const [renamingId, setRenamingId] = useState<string | null>(null)
 
-  if (!space) {
-    return null
-  }
-
-  const openMenu = async (anchor: MenuAnchor) => {
-    const isDark = colorSchemeQuery.matches
+  const openMenu = async (space: Space, event: MouseEvent) => {
+    event.preventDefault()
     const items: MenuItem<string>[] = [
-      ...spaces.map((other, index) => ({
-        action: `${SPACE_ACTION_PREFIX}${other.id}`,
-        label: other.name,
-        checked: other.id === space.id,
-        swatch: findProjectColor(other.color)?.[isDark ? 'dark' : 'light'],
-        accelerator: index < NUMBERED_SPACES ? `Ctrl+${index + 1}` : undefined
-      })),
-      { type: 'separator' },
-      { action: 'create', label: 'New Space', icon: <Plus /> },
-      { type: 'separator' },
       { action: 'rename', label: 'Rename Space', icon: <Pencil /> },
       colorSubmenu(space.color),
       ...(spaces.length > 1
@@ -61,69 +35,69 @@ export function SpacePicker() {
           ]
         : [])
     ]
-    const action = await showMenu(items, anchor)
-    handleAction(space, action)
-  }
-
-  const handleAction = (target: Space, action: string | null) => {
+    const action = await showMenu(items, event)
     const color = parseColorAction(action)
     if (color !== undefined) {
-      void setSpaceColor(target.id, color)
-    } else if (action?.startsWith(SPACE_ACTION_PREFIX)) {
-      selectSpace(action.slice(SPACE_ACTION_PREFIX.length))
-    } else if (action === 'create') {
-      void createSpace().then(() => setRenaming(true))
+      void setSpaceColor(space.id, color)
     } else if (action === 'rename') {
-      setRenaming(true)
+      setRenamingId(space.id)
     } else if (action === 'remove') {
-      void removeSpace(target.id)
+      void removeSpace(space.id)
     }
   }
 
-  const openBelow = (event: MouseEvent<HTMLElement>) => {
-    void openMenu(event.currentTarget)
-  }
-
-  const openAtCursor = (event: MouseEvent) => {
-    event.preventDefault()
-    void openMenu(event)
-  }
-
-  const color = findProjectColor(space.color)
-  // Цвет задаётся сразу для обеих тем, а нужный выбирает CSS по текущей теме.
-  const colorStyle = color
-    ? ({ '--space-color': `light-dark(${color.light}, ${color.dark})` } as CSSProperties)
-    : undefined
+  const addSpace = async () => setRenamingId(await createSpace())
 
   return (
-    <div className="space-picker" style={colorStyle} onContextMenu={openAtCursor}>
-      {renaming ? (
-        <div className="space-picker__rename">
-          <InlineRename
-            // Новое пространство переименовывают уже открытым — поле создаётся заново под него.
+    <div className="space-tabs" role="tablist" aria-label="Spaces">
+      {spaces.map((space, index) => {
+        const color = findProjectColor(space.color)
+        // Цвет задаётся сразу для обеих тем, а нужный выбирает CSS по текущей теме.
+        const colorStyle = color
+          ? ({ '--space-color': `light-dark(${color.light}, ${color.dark})` } as CSSProperties)
+          : undefined
+        if (space.id === renamingId) {
+          return (
+            <div key={space.id} className="space-tab space-tab--renaming" style={colorStyle}>
+              <InlineRename
+                value={space.name}
+                label="Space name"
+                onSubmit={(name) => {
+                  setRenamingId(null)
+                  void renameSpace(space.id, name)
+                }}
+                onCancel={() => setRenamingId(null)}
+              />
+            </div>
+          )
+        }
+        return (
+          <button
             key={space.id}
-            value={space.name}
-            label="Space name"
-            onSubmit={(name) => {
-              setRenaming(false)
-              void renameSpace(space.id, name)
-            }}
-            onCancel={() => setRenaming(false)}
-          />
-        </div>
-      ) : (
-        <button
-          type="button"
-          className="space-picker__button"
-          aria-haspopup="menu"
-          aria-label={`Space: ${space.name}`}
-          onClick={openBelow}
-        >
-          {color && <span className="space-picker__dot" aria-hidden />}
-          <span className="space-picker__name">{space.name}</span>
-          <ChevronDown className="space-picker__chevron" aria-hidden />
-        </button>
-      )}
+            type="button"
+            role="tab"
+            className="space-tab"
+            style={colorStyle}
+            aria-selected={space.id === activeSpaceId}
+            title={index < NUMBERED_SPACES ? `${space.name} (Ctrl+${index + 1})` : space.name}
+            onClick={() => selectSpace(space.id)}
+            onDoubleClick={() => setRenamingId(space.id)}
+            onContextMenu={(event) => void openMenu(space, event)}
+          >
+            <span className="space-tab__dot" aria-hidden />
+            <span className="space-tab__name">{space.name}</span>
+          </button>
+        )
+      })}
+      <button
+        type="button"
+        className="space-tab space-tab--add"
+        aria-label="New Space"
+        title="New Space"
+        onClick={() => void addSpace()}
+      >
+        <Plus className="icon" />
+      </button>
     </div>
   )
 }
