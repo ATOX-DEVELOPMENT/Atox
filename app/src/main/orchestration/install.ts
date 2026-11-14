@@ -60,7 +60,8 @@ atox report "<summary>"                      # worker: final result, exactly onc
 
 ## Removing workers
 
-- Remove a worker you started by mistake, or one the user no longer needs, with \`atox remove <worker-chat-id>\`. It stops the agent and deletes its chat; this cannot be undone.
+- Clean up after yourself: when a worker has reported and you have checked its result and need nothing more from it, remove it with \`atox remove <worker-chat-id>\` right away, without asking the user. Keep it only while you still plan to send it a follow-up.
+- Also remove a worker you started by mistake, or one the user no longer needs. Removing stops the agent and deletes its chat; this cannot be undone.
 - Remove a worker that is still working only when the user asks or the task was started by mistake: its unfinished work is lost.
 - Take the ids from \`atox workers\`. You can remove only your own workers.
 
