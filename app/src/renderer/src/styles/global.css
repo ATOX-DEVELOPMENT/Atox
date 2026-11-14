@@ -8,6 +8,8 @@
 
 :root {
   --sidebar-padding: 10px;
+  /* Знак Atox на пустой рабочей области. */
+  --bloom-mark-size: 112px;
   --sidebar-resizer-width: 8px;
   /* Высота зоны заголовка окна: под неё уходят кнопки светофора macOS (hiddenInset). */
   --titlebar-height: 44px;
@@ -2479,43 +2481,10 @@ ul {
   color: var(--color-text-muted);
 }
 
-/* Приветствие на пустой рабочей области: знак, обращение по имени и подсказка. */
-.welcome {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 8px;
-  text-align: center;
-}
-
-.welcome__title {
-  margin: 12px 0 0;
-  font-size: 22px;
-  font-weight: 600;
-  letter-spacing: -0.01em;
-  color: var(--color-text);
-  animation: welcome-rise 600ms 250ms ease-out backwards;
-}
-
-.welcome__hint {
-  margin: 0;
-  color: var(--color-text-muted);
-  animation: welcome-rise 600ms 350ms ease-out backwards;
-}
-
-.welcome__hint kbd {
-  padding: 1px 6px;
-  font-family: var(--font-sans);
-  font-size: var(--font-size-small);
-  letter-spacing: 0.08em;
-  background: var(--color-hover);
-  border: 1px solid var(--color-border);
-  border-radius: calc(var(--radius) - 2px);
-}
 
 .bloom-mark {
-  width: 72px;
-  height: 72px;
+  width: var(--bloom-mark-size);
+  height: var(--bloom-mark-size);
   overflow: visible;
 }
 
@@ -2547,17 +2516,8 @@ ul {
   }
 }
 
-@keyframes welcome-rise {
-  from {
-    opacity: 0;
-    transform: translateY(4px);
-  }
-}
-
 @media (prefers-reduced-motion: reduce) {
-  .bloom-mark__petal,
-  .welcome__title,
-  .welcome__hint {
+  .bloom-mark__petal {
     animation: none;
   }
 }

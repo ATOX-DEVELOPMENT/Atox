@@ -1,7 +1,4 @@
-import { useState, type CSSProperties } from 'react'
-import { formatShortcut } from '../../../shared/shortcuts'
-import { useSettings } from '../hooks/SettingsContext'
-import { useUserProfile } from '../hooks/useUserProfile'
+import type { CSSProperties } from 'react'
 
 /** Лепестки знака Atox: цвет и угол каждого, как в иконке приложения. */
 const PETALS = [
@@ -9,17 +6,6 @@ const PETALS = [
   { color: '#2f7dff', angle: 60 },
   { color: '#a24dff', angle: 120 }
 ] as const
-
-/** Приветствие по времени суток: утро с 5 до 12, день до 18, дальше вечер. */
-function greeting(hour: number): string {
-  if (hour >= 5 && hour < 12) {
-    return 'Good morning'
-  }
-  if (hour >= 12 && hour < 18) {
-    return 'Good afternoon'
-  }
-  return 'Good evening'
-}
 
 /** Знак Atox: при появлении лепестки раскрываются из одного в цветок. */
 function BloomMark() {
@@ -43,23 +29,7 @@ function BloomMark() {
   )
 }
 
-/** Пустая рабочая область: здоровается и подсказывает, как начать. */
+/** Пустая рабочая область: только знак Atox по центру. */
 export function Welcome() {
-  const profile = useUserProfile()
-  const { shortcuts } = useSettings()
-  // Приветствие выбирается при открытии экрана и не меняется у пользователя на глазах.
-  const [salutation] = useState(() => greeting(new Date().getHours()))
-  const firstName = profile?.name.split(/\s+/)[0]
-
-  return (
-    <div className="welcome">
-      <BloomMark />
-      <h1 className="welcome__title">
-        {firstName ? `${salutation}, ${firstName}` : salutation}
-      </h1>
-      <p className="welcome__hint">
-        Pick a chat or press <kbd>{formatShortcut('newChat', shortcuts)}</kbd> to start a new one
-      </p>
-    </div>
-  )
+  return <BloomMark />
 }
