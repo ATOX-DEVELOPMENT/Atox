@@ -6,14 +6,14 @@ import packageJson from './package.json'
 /** Релизы лежат в репозитории из package.json; `latest` всегда указывает на последний. */
 const updateFeedUrl = `${packageJson.repository.url}/releases/latest/download`
 
-/** Ключ приложения Atox в Aptabase: публичный, он только направляет анонимную статистику. */
-const usageStatsAppKey = 'A-EU-3104499833'
+/** Сервер анонимной статистики Atox: `stats/` в репозитории. */
+const usageStatsUrl = 'https://admin.atox.dev/v1/event'
 
 export default defineConfig({
   main: {
     define: {
       __UPDATE_FEED_URL__: JSON.stringify(updateFeedUrl),
-      __USAGE_STATS_APP_KEY__: JSON.stringify(usageStatsAppKey)
+      __USAGE_STATS_URL__: JSON.stringify(usageStatsUrl)
     },
     build: {
       rollupOptions: {
