@@ -237,14 +237,20 @@ async function bootstrap(): Promise<void> {
   menu.install()
 
   // Статистика не должна мешать запуску: без неё приложение работает как обычно.
-  const usageStats = await UsageStats.load({
-    appKey: process.env['ATOX_USAGE_STATS_APP_KEY'] ?? __USAGE_STATS_APP_KEY__,
-    filePath: join(userData, USAGE_STATS_FILE_NAME),
-    settings
-  }).catch((error) => {
-    console.error('Failed to load usage stats', error)
-    return null
-  })
+  // Dev-сборки не шлют статистику, чтобы не смешивать свои запуски с настоящими пользователями;
+  // проверить отправку можно, задав адрес в ATOX_USAGE_STATS_URL.
+  const usageStatsEndpoint =
+    process.env['ATOX_USAGE_STATS_URL'] ?? (app.isPackaged ? __USAGE_STATS_URL__ : null)
+  const usageStats = usageStatsEndpoint
+    ? await UsageStats.load({
+        endpoint: usageStatsEndpoint,
+        filePath: join(userData, USAGE_STATS_FILE_NAME),
+        settings
+      }).catch((error) => {
+        console.error('Failed to load usage stats', error)
+        return null
+      })
+    : null
   usageStats?.start()
   app.on('will-quit', () => usageStats?.stop())
 

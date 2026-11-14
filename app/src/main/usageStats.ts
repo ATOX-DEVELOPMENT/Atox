@@ -5,9 +5,10 @@ import { JsonFileWriter, readVersionedJson } from './jsonFile'
 import type { SettingsStore } from './settings'
 
 /**
- * Анонимная статистика в Aptabase: сколько установок и сколько людей пользуются Atox за день,
- * неделю и месяц. Никаких идентификаторов, путей, проектов и текста чатов — только название
- * события, версия приложения и системы. Каждая установка сообщает о себе один раз за период,
+ * Анонимная статистика на сервере Atox (`stats/` в репозитории): сколько установок и сколько
+ * людей пользуются Atox за день, неделю и месяц. Никаких идентификаторов, путей, проектов и текста
+ * чатов — только название события, версия приложения, название системы и случайный номер
+ * запуска. Каждая установка сообщает о себе один раз за период,
  * поэтому число событий за период и есть число активных пользователей.
  */
 
@@ -15,12 +16,6 @@ const STATE_VERSION = 1
 
 /** Как часто проверять, не начался ли новый период: приложение может работать сутками. */
 const CHECK_INTERVAL_MS = 60 * 60 * 1000
-
-/** Серверы Aptabase по региону из ключа приложения (`A-EU-…`). */
-const REGION_HOSTS: Record<string, string> = {
-  EU: 'https://eu.aptabase.com',
-  US: 'https://us.aptabase.com'
-}
 
 const INSTALL_EVENT = 'install'
 
@@ -40,19 +35,9 @@ interface UsageStatsFile {
   reported: Partial<Record<Period, string>>
 }
 
-interface SystemProps {
-  isDebug: boolean
-  locale: string
-  osName: string
-  osVersion: string
-  appVersion: string
-  engineName: string
-  engineVersion: string
-  sdkVersion: string
-}
-
 export interface UsageStatsOptions {
-  appKey: string
+  /** Адрес, куда отправлять события. */
+  endpoint: string
   filePath: string
   settings: SettingsStore
 }
@@ -60,29 +45,26 @@ export interface UsageStatsOptions {
 export class UsageStats {
   private reporting: Promise<void> | null = null
   private timer: NodeJS.Timeout | null = null
-  private systemProps: Promise<SystemProps> | null = null
-  /** Сессия Aptabase — один запуск приложения. */
+  private osName: Promise<string> | null = null
+  /** Сессия — один запуск приложения; по ней считается, сколько раз Atox открывали. */
   private readonly sessionId = createSessionId()
 
   private constructor(
     private readonly endpoint: string,
-    private readonly appKey: string,
     private readonly settings: SettingsStore,
     private readonly file: JsonFileWriter,
     private readonly state: UsageStatsFile
   ) {}
 
-  /** `null` — ключ приложения не распознан, и статистика не отправляется. */
-  static async load({ appKey, filePath, settings }: UsageStatsOptions): Promise<UsageStats | null> {
-    const host = REGION_HOSTS[appKey.split('-')[1] ?? '']
-    if (!host) {
-      console.warn(`Usage stats are disabled: unknown app key "${appKey}"`)
+  /** `null` — адрес не похож на адрес, и статистика не отправляется. */
+  static async load({ endpoint, filePath, settings }: UsageStatsOptions): Promise<UsageStats | null> {
+    if (!URL.canParse(endpoint)) {
+      console.warn(`Usage stats are disabled: invalid endpoint "${endpoint}"`)
       return null
     }
     const saved = await readVersionedJson<UsageStatsFile>(filePath, STATE_VERSION)
     return new UsageStats(
-      `${host}/api/v0/event`,
-      appKey,
+      endpoint,
       settings,
       new JsonFileWriter(filePath),
       {
@@ -132,32 +114,31 @@ export class UsageStats {
     }
     const now = new Date()
     // Отметка ставится только после успешной отправки: без сети событие уйдёт при следующей проверке.
-    if (!this.state.installReported && (await this.send(INSTALL_EVENT, now))) {
+    if (!this.state.installReported && (await this.send(INSTALL_EVENT))) {
       this.state.installReported = true
       this.save()
     }
     for (const period of Object.keys(ACTIVITY_EVENTS) as Period[]) {
       const key = periodKey(period, now)
-      if (this.state.reported[period] !== key && (await this.send(ACTIVITY_EVENTS[period], now))) {
+      if (this.state.reported[period] !== key && (await this.send(ACTIVITY_EVENTS[period]))) {
         this.state.reported[period] = key
         this.save()
       }
     }
   }
 
-  private async send(eventName: string, timestamp: Date): Promise<boolean> {
+  private async send(eventName: string): Promise<boolean> {
     try {
-      this.systemProps ??= readSystemProps()
+      this.osName ??= readOperatingSystem().then(([name]) => name)
       const response = await net.fetch(this.endpoint, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'App-Key': this.appKey },
+        headers: { 'Content-Type': 'application/json' },
         credentials: 'omit',
         body: JSON.stringify({
-          timestamp: timestamp.toISOString(),
-          sessionId: this.sessionId,
-          eventName,
-          systemProps: await this.systemProps,
-          props: {}
+          name: eventName,
+          version: app.getVersion(),
+          os: await this.osName,
+          sessionId: this.sessionId
         })
       })
       if (!response.ok) {
@@ -200,25 +181,11 @@ function isoWeek(date: Date): { year: number; week: number } {
   return { year, week }
 }
 
-/** Формат сессии Aptabase: секунды Unix и восемь случайных цифр. */
+/** Номер сессии: секунды Unix и восемь случайных цифр. */
 function createSessionId(): string {
   const seconds = Math.floor(Date.now() / 1000)
   const random = Math.floor(Math.random() * 1e8)
   return `${seconds}${String(random).padStart(8, '0')}`
-}
-
-async function readSystemProps(): Promise<SystemProps> {
-  const [osName, osVersion] = await readOperatingSystem()
-  return {
-    isDebug: !app.isPackaged,
-    locale: app.getLocale(),
-    osName,
-    osVersion,
-    appVersion: app.getVersion(),
-    engineName: 'Chromium',
-    engineVersion: process.versions.chrome,
-    sdkVersion: `atox@${app.getVersion()}`
-  }
 }
 
 async function readOperatingSystem(): Promise<[string, string]> {
