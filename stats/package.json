@@ -1,0 +1,16 @@
+{
+  "name": "atox-stats",
+  "license": "MIT",
+  "private": true,
+  "description": "Anonymous usage and download counters for Atox",
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "pg": "^8.13.1"
+  }
+}
