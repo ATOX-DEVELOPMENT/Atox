@@ -22,11 +22,12 @@ export function SidebarButton({
       className="sidebar-button"
       data-active={active}
       aria-pressed={active}
+      aria-label={label}
+      title={label}
       disabled={disabled}
       onClick={onClick}
     >
       <Icon className="icon" />
-      <span className="sidebar-button__label">{label}</span>
     </button>
   )
 }

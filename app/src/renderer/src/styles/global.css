@@ -42,12 +42,11 @@
   --update-progress-size: 15px;
   --update-progress-stroke: 2.5px;
   --status-dot-size: 8px;
+  /* Плитка значка проекта и отступ названий чатов под ней. */
+  --project-tile-size: 24px;
+  --project-row-height: 38px;
   --status-gap: 8px;
-  --chat-row-padding: 7px;
-  --chat-row-line-gap: 2px;
-  --chat-branch-gap: 4px;
-  --chat-branch-icon-size: 12px;
-  --chat-rename-inset: 2px;
+  --worker-toggle-gap: 4px;
   --chat-pane-header-height: 32px;
   --shortcut-reset-size: 22px;
   /* Списки плагинов, скиллов и серверов MCP в настройках. */
@@ -55,10 +54,8 @@
   --integration-icon-size: 14px;
   --integration-dot-size: 7px;
   --integration-tag-height: 18px;
-  --space-chevron-size: 12px;
-  --space-picker-gap: 4px;
-  --space-picker-height: 24px;
-  --space-picker-inner-gap: 6px;
+  --space-tab-height: 26px;
+  --space-tab-gap: 6px;
   --shortcut-reset-icon-size: 13px;
   --chat-pane-close-size: 22px;
   --chat-pane-close-icon-size: 14px;
@@ -363,6 +360,9 @@ ul {
 /* Сайдбар */
 
 .sidebar {
+  --row-height: 32px;
+  --row-spacing: 2px;
+  --chat-indent: calc(var(--row-padding) + var(--project-tile-size) + var(--row-gap));
   position: relative;
   display: flex;
   flex-direction: column;
@@ -395,17 +395,17 @@ ul {
 }
 
 .sidebar__nav {
-  padding: 0 var(--sidebar-padding) 16px;
+  display: flex;
+  gap: var(--row-spacing);
+  padding: 0 var(--sidebar-padding) 12px;
 }
 
 .sidebar-button {
   display: flex;
+  flex: 1;
   align-items: center;
-  gap: var(--row-gap);
-  width: 100%;
+  justify-content: center;
   height: var(--row-height);
-  margin-bottom: var(--row-spacing);
-  padding: 0 var(--row-padding);
   border-radius: var(--radius);
 }
 
@@ -429,55 +429,68 @@ ul {
 }
 
 .sidebar__spaces {
-  padding: 0 var(--sidebar-padding) var(--space-picker-gap);
+  padding: 0 var(--sidebar-padding) 8px;
 }
 
-/*
- * Пространство — заголовок раздела над проектами, как в Finder: мелкий приглушённый текст
- * без фона. По клику открывается меню пространств; цветное отмечено точкой своего цвета.
- */
-.space-picker__button {
+/* Пространства — вкладки в одну строку; когда они не помещаются, строка прокручивается. */
+.space-tabs {
+  display: flex;
+  gap: var(--row-spacing);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.space-tab {
   display: inline-flex;
-  align-items: center;
-  gap: var(--space-picker-inner-gap);
-  max-width: 100%;
-  height: var(--space-picker-height);
-  padding: 0 var(--row-padding);
-  border-radius: var(--radius);
-  font-size: var(--font-size-small);
-  font-weight: 600;
-  color: var(--color-text-muted);
-}
-
-.space-picker__button:hover {
-  color: var(--color-text);
-}
-
-.space-picker__dot {
-  width: var(--status-dot-size);
-  height: var(--status-dot-size);
   flex-shrink: 0;
-  border-radius: 50%;
-  background: var(--space-color);
-}
-
-.space-picker__name {
-  overflow: hidden;
-  text-overflow: ellipsis;
+  align-items: center;
+  gap: var(--space-tab-gap);
+  height: var(--space-tab-height);
+  padding: 0 var(--row-padding);
+  border-radius: 999px;
+  font-size: var(--font-size-small);
+  font-weight: 500;
+  color: var(--color-text-muted);
   white-space: nowrap;
 }
 
-.space-picker__chevron {
-  width: var(--space-chevron-size);
-  height: var(--space-chevron-size);
-  flex-shrink: 0;
+.space-tab:hover {
+  color: var(--color-text);
 }
 
-.space-picker__rename {
-  display: flex;
-  align-items: center;
-  height: var(--row-height);
-  padding: 0 var(--row-padding);
+.space-tab[aria-selected='true'] {
+  color: var(--color-text);
+  background: var(--color-active);
+}
+
+.space-tab__dot {
+  width: calc(var(--status-dot-size) - 2px);
+  height: calc(var(--status-dot-size) - 2px);
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: var(--space-color, var(--color-status-idle));
+}
+
+.space-tab--add {
+  padding: 0 var(--row-spacing);
+  width: var(--space-tab-height);
+  justify-content: center;
+}
+
+.space-tab--add .icon {
+  width: 14px;
+  height: 14px;
+}
+
+.space-tab--renaming {
+  padding: 0;
+}
+
+.space-tab--renaming .row__input {
+  width: 96px;
+  height: var(--space-tab-height);
+  margin-left: 0;
+  border-radius: 999px;
 }
 
 .sidebar__empty {
@@ -518,9 +531,48 @@ ul {
   color: var(--project-color);
 }
 
-.row--project[data-colored='true'] .project-icon--folder,
 .icon-picker[data-colored='true'] .project-icon--folder {
   fill: color-mix(in srgb, var(--project-color) var(--project-icon-fill), transparent);
+}
+
+/*
+ * Проект — плитка с тинтом его цвета и значком внутри, справа число чатов; кнопка «+» при
+ * наведении занимает место числа.
+ */
+.row--project {
+  position: relative;
+  height: var(--project-row-height);
+  margin-top: var(--row-spacing);
+}
+
+.row--project .project-icon {
+  width: var(--project-tile-size);
+  height: var(--project-tile-size);
+  padding: 5px;
+  border-radius: 7px;
+  background: color-mix(in srgb, var(--project-color, var(--color-text-muted)) 16%, transparent);
+}
+
+.row--project .row__label {
+  font-weight: 600;
+}
+
+.project-count {
+  margin: 0 4px 0 auto;
+  font-size: var(--font-size-small);
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text-muted);
+}
+
+.row--project:hover .project-count {
+  visibility: hidden;
+}
+
+.row--project .row__action {
+  position: absolute;
+  top: 50%;
+  right: 0;
+  translate: 0 -50%;
 }
 
 /* Перетаскиваемый элемент идёт поверх соседей, которые расступаются под ним. */
@@ -566,70 +618,32 @@ ul {
   user-select: text;
 }
 
-/*
- * Кружок состояния стоит в колонке иконок вплотную к названию чата, а само название — на одной
- * линии с названием проекта. Блок кружка высотой в заглавную букву (1cap) выровнен по базовой
- * линии текста, поэтому центр кружка совпадает с центром букв при любом шрифте и размере.
- */
+/* Название чата и кружок его состояния у правого края: пока агент ничего не ждёт, кружка не видно. */
 .chat-title {
   display: flex;
   flex: 1;
-  align-items: baseline;
+  align-items: center;
   gap: var(--status-gap);
   min-width: 0;
 }
 
-/*
- * Строка чата — сетка: название и время сверху, под названием мелким шрифтом ветка git.
- * Без ветки строка остаётся обычной высоты, содержимое центрируется по вертикали.
- */
+.chat-title .row__label {
+  flex: 1;
+}
+
 .row--chat {
   height: auto;
   min-height: var(--row-height);
 }
 
 .chat-row {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  align-items: baseline;
-  align-content: center;
-  align-self: stretch;
-  column-gap: var(--row-gap);
-  row-gap: var(--chat-row-line-gap);
-  height: auto;
-  padding-block: var(--chat-row-padding);
+  padding-left: var(--chat-indent);
 }
 
-/* В двухстрочной строке чата поле переименования по высоте текста: оно не наезжает на ветку. */
-.chat-row .row__input {
-  height: calc(1lh + 2 * var(--chat-rename-inset));
-  margin-block: calc(-1 * var(--chat-rename-inset));
-}
-
-/* Ветка начинается там же, где название чата, — сразу за колонкой кружков. */
-.chat-branch {
-  grid-column: 1 / -1;
-  display: flex;
-  align-items: center;
-  gap: var(--chat-branch-gap);
-  min-width: 0;
-  padding-left: calc(var(--icon-size) + var(--row-gap));
-  font-size: var(--font-size-small);
-  color: var(--color-text-muted);
-}
-
-.chat-branch__icon {
-  width: var(--chat-branch-icon-size);
-  height: var(--chat-branch-icon-size);
-  flex-shrink: 0;
-  stroke-width: 2;
-}
-
-/* Кружок вынесен из потока: иначе блок взял бы базовую линию у него, а не встал на линию текста. */
 .chat-status {
   position: relative;
-  width: calc(var(--icon-size) + var(--row-gap) - var(--status-gap));
-  height: 1cap;
+  width: var(--status-dot-size);
+  height: var(--status-dot-size);
   flex-shrink: 0;
 }
 
@@ -643,6 +657,10 @@ ul {
   border-radius: 50%;
   background: var(--color-status-idle);
   transition: background-color 200ms ease;
+}
+
+.chat-status__dot[data-status='idle'] {
+  opacity: 0;
 }
 
 .chat-status__dot[data-status='working'] {
@@ -723,10 +741,10 @@ ul {
 .chat-workers__toggle {
   display: flex;
   align-items: center;
-  gap: var(--chat-branch-gap);
+  gap: var(--worker-toggle-gap);
   width: 100%;
   height: var(--worker-toggle-height);
-  padding: 0 var(--row-padding) 0 calc(var(--row-padding) + var(--icon-size) + var(--row-gap));
+  padding: 0 var(--row-padding) 0 var(--chat-indent);
   font-size: var(--font-size-small);
   color: var(--color-text-muted);
   border-radius: var(--radius);
@@ -769,11 +787,7 @@ ul {
 
 .row--worker .chat-row {
   padding-block: 0;
-  padding-left: calc(var(--row-padding) + var(--icon-size) + var(--row-gap) - var(--row-spacing));
-}
-
-.row--worker .chat-title {
-  align-items: center;
+  padding-left: calc(var(--chat-indent) - var(--row-spacing));
 }
 
 /* Значок агента помощника стоит в колонке индикаторов, справа — как кружок у чатов. */

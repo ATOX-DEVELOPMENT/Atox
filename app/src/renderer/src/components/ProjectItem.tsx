@@ -240,6 +240,7 @@ export const ProjectItem = memo(function ProjectItem({
           >
             <ProjectGlyph className={glyphClass} />
             <span className="row__label">{project.name}</span>
+            <span className="project-count">{topLevel.length}</span>
           </button>
         )}
         <button
@@ -275,7 +276,6 @@ export const ProjectItem = memo(function ProjectItem({
                     key={chat.id}
                     chat={chat}
                     workers={workers}
-                    branch={branch}
                     activeChatId={activeChatId && inGroup(activeChatId) ? activeChatId : null}
                     visibleChatIds={visibleChatIds.some(inGroup) ? visibleChatIds : NO_CHAT_IDS}
                     // Рядом открываются чаты того проекта, где чат в фокусе: раскладка у каждого
