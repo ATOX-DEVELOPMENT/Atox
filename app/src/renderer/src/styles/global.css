@@ -626,7 +626,10 @@ ul {
   min-height: var(--row-height);
 }
 
+/* Строка выше кнопки (min-height), поэтому кнопка тянется на всю высоту: кликается вся строка. */
 .chat-row {
+  align-self: stretch;
+  height: auto;
   padding-left: var(--chat-indent);
 }
 
