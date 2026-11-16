@@ -575,9 +575,21 @@ export function registerIpcHandlers({
     }
     canvas.archive(requireId(canvasId), archived)
   })
-  ipcMain.handle(IpcChannel.CanvasRemove, (_event, canvasId: unknown) =>
-    canvas.remove(requireId(canvasId))
-  )
+  ipcMain.handle(IpcChannel.CanvasRemove, async (event, canvasId: unknown) => {
+    const id = requireId(canvasId)
+    const target = canvas.state().canvases.find((other) => other.id === id)
+    if (!target) {
+      throw new Error('The canvas was not found.')
+    }
+    const confirmed = await confirm(BrowserWindow.fromWebContents(event.sender), {
+      message: `Delete “${target.name}”?`,
+      detail: 'Screen files stay in the project.',
+      confirmLabel: 'Delete'
+    })
+    if (confirmed) {
+      await canvas.remove(id)
+    }
+  })
   ipcMain.handle(
     IpcChannel.CanvasRequest,
     (_event, canvasId: unknown, text: unknown, screenId: unknown) =>
