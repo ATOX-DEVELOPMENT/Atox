@@ -1,7 +1,7 @@
 import {
   CANVAS_ZOOM,
   GROUP_PADDING,
-  SCREEN_DEVICES,
+  screenFrameOf,
   type CanvasGroup,
   type CanvasScreen,
   type CanvasView,
@@ -49,7 +49,7 @@ export const FRAME_INSETS: Record<ScreenFrame, FrameInsets> = {
 
 /** Рамка экрана: у своего размера (`custom`) её нет. */
 export function screenFrame(screen: Pick<CanvasScreen, 'device'>): ScreenFrame {
-  return screen.device === 'custom' ? 'none' : SCREEN_DEVICES[screen.device].frame
+  return screenFrameOf(screen.device)
 }
 
 /**

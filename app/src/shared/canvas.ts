@@ -42,6 +42,11 @@ export function isScreenDeviceId(value: unknown): value is ScreenDeviceId {
 /** Свой размер экрана в пикселях: меньше не видно, больше тянет память. */
 export const SCREEN_SIZE = { min: 120, max: 4000 } as const
 
+/** Рамка экрана по его устройству: у своего размера (`custom`) её нет. */
+export function screenFrameOf(device: ScreenDevice): ScreenFrame {
+  return device === 'custom' ? 'none' : SCREEN_DEVICES[device].frame
+}
+
 /** Расстояние между рамками экранов на холсте. */
 export const SCREEN_GAP = 120
 
@@ -155,6 +160,13 @@ export interface CanvasView {
   zoom: number
 }
 
+/** Холст опубликован по ссылке: любой, у кого она есть, видит снимок холста в браузере. */
+export interface CanvasShare {
+  url: string
+  /** Когда в последний раз опубликован снимок: новее правок холста, пока человек не обновит ссылку. */
+  publishedAt: number
+}
+
 export interface Canvas {
   id: string
   name: string
@@ -167,6 +179,8 @@ export interface Canvas {
   links: CanvasLink[]
   /** Именованные рамки вокруг экранов. */
   groups: CanvasGroup[]
+  /** Ссылка для просмотра; `null` — холст не опубликован. */
+  share: CanvasShare | null
   /** Сохранённый вид; нет — окно вписывает все экраны само. */
   view: CanvasView | null
   createdAt: number

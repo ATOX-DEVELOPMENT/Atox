@@ -70,6 +70,11 @@ Show screens (app, website, desktop UI) to the user on this chat's canvas.
   atox canvas link remove <from> <to> [--on "Sign in"]
                                            Remove the lines between two screens (or only the one
                                            that starts at that button)
+  atox canvas share                        Publish the canvas as a web page the user can send to a
+                                           client: it opens in any browser, also on a phone, for
+                                           viewing only. Prints the link. Run it again to update the
+                                           page after changes; the link stays the same.
+  atox canvas share stop                   Close the link
   atox canvas export <pdf|png|pptx> [--screens "Name,Name"] [--out <path>]
                                            Export the screens to a file for the user to send or
                                            print: pdf (one page per screen, real text), pptx
@@ -218,6 +223,7 @@ async function canvas(args: string[]): Promise<string> {
     return [
       `Canvas "${shown.name}", ${count}. Edit a screen's file and the canvas updates by itself.`,
       ...lines,
+      ...(shown.share ? [`Shared as a web page: ${shown.share}`] : []),
       ...(groups.length > 0 ? ['Groups:', ...groups] : []),
       ...(arrows.length > 0 ? ['Lines:', ...arrows] : [])
     ].join('\n')
@@ -344,6 +350,17 @@ async function canvas(args: string[]): Promise<string> {
           ]
         : [])
     ].join('\n')
+  }
+  if (group === 'share') {
+    if (action === 'stop') {
+      await call('canvasShareStop', {})
+      return 'The link is closed. The page no longer opens.'
+    }
+    if (action !== undefined || rest.length > 0) {
+      throw new UsageError('Usage: atox canvas share [stop]')
+    }
+    const { url } = await call('canvasShare', {})
+    return `The canvas is published: ${url}\nGive this link to the user. It shows a snapshot (view only); run the command again after changes to update it.`
   }
   if (group === 'export') {
     const { values, positional } = parseFlags([action, ...rest].filter((part) => part !== undefined), [

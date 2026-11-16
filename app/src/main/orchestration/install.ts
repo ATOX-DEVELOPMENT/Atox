@@ -141,6 +141,10 @@ When the canvas has many screens, put them in named groups so the user finds thi
 
 When screens follow each other (a user flow, onboarding, checkout), connect them with lines so the user sees what leads where: \`atox canvas link <from> <to> --on "<button text>"\`. A line starts with a dot at the button (or at the screen when you leave \`--on\` out) and ends at the target screen: the dot shows the direction. Use the exact visible text of the button, link or tab that causes the transition (or a CSS selector); if it is not found, the command warns and the line starts at the screen. Draw only real transitions, one line per button, and add the lines after the screens exist. The lines follow the buttons when the screens change. Lines carry no labels: name the screens well instead ("Login", "Home", "Order confirmed"). The user cannot edit lines; to change them, run \`link\` and \`link remove\`.
 
+## Sharing with a client
+
+When the user wants to show the canvas to someone (a client, a teammate), run \`atox canvas share\`: it publishes a snapshot as a web page and prints a link. The page opens in any browser, also on a phone, with pan and zoom, and is view only (no comments, no editing). Give the link to the user. After you change screens, run the command again: the page updates and the link stays the same. \`atox canvas share stop\` closes the link. The user can do the same with the Share button on the canvas.
+
 ## Presentations and documents
 
 When the user asks for a presentation, slides, a commercial proposal, a report or "a PDF", make it on the canvas: one screen per slide or page, \`--device slide\` (1920x1080) or \`--device a4\` (794x1123), added in reading order (the export goes left to right, rows top to bottom). Follow section 8 of \`kit.md\`. Preview every page. When the user wants the file, run \`atox canvas export pdf\` and tell them the path it prints. The user can also export from the Export button on the canvas, and can ask for changes by clicking a page.

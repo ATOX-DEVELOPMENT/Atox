@@ -3,7 +3,7 @@ import { MousePointerClick } from 'lucide-react'
 import { useCanvas, useCanvasNavigation } from '../../hooks/CanvasesContext'
 import { useProjectsContext } from '../../hooks/ProjectsContext'
 import { canvasOwner, chatLabel } from '../../lib/canvasOwner'
-import { showCanvasMenu, showExportMenu } from '../../lib/canvasMenu'
+import { showCanvasMenu, showExportMenu, showShareMenu } from '../../lib/canvasMenu'
 import { AgentBar } from './AgentBar'
 import { CanvasEmpty } from './CanvasEmpty'
 import { CanvasHeader } from './CanvasHeader'
@@ -17,6 +17,9 @@ interface CanvasPageProps {
 }
 
 /** Страница холста: шапка, холст с экранами и история версий справа. */
+/** Сколько кнопка Share показывает «ссылка скопирована», мс. */
+const LINK_COPIED_MS = 2000
+
 export function CanvasPage({ canvasId, onClose }: CanvasPageProps) {
   const canvas = useCanvas(canvasId)
   const { projects } = useProjectsContext()
@@ -29,8 +32,19 @@ export function CanvasPage({ canvasId, onClose }: CanvasPageProps) {
   const [historyScreenId, setHistoryScreenId] = useState<string | null>(null)
   const [preview, setPreview] = useState<{ screenId: string; versionId: string } | null>(null)
   const [exporting, setExporting] = useState(false)
+  const [publishing, setPublishing] = useState(false)
+  const [linkCopied, setLinkCopied] = useState(false)
 
   useEffect(() => () => viewState.cancel(), [viewState])
+
+  // Ссылка в буфере: кнопка на пару секунд показывает галочку.
+  useEffect(() => {
+    if (!linkCopied) {
+      return undefined
+    }
+    const timer = window.setTimeout(() => setLinkCopied(false), LINK_COPIED_MS)
+    return () => window.clearTimeout(timer)
+  }, [linkCopied])
 
   // Холст, который был на экране и пропал (его удалили), закрывает страницу. Только что
   // созданный холст может прийти чуть позже самой страницы — его ждём.
@@ -112,6 +126,39 @@ export function CanvasPage({ canvasId, onClose }: CanvasPageProps) {
               await window.atox.canvas.export(canvas.id, format)
             } finally {
               setExporting(false)
+            }
+          })()
+        }}
+        publishing={publishing}
+        linkCopied={linkCopied}
+        onShare={(event) => {
+          const anchor = event.currentTarget
+          void (async () => {
+            // Опубликованный холст предлагает меню; неопубликованный публикуется сразу.
+            const action = canvas.share ? await showShareMenu(anchor) : 'update'
+            if (!action) {
+              return
+            }
+            if (action === 'stop') {
+              await window.atox.canvas.stopSharing(canvas.id)
+              return
+            }
+            if (action === 'open' && canvas.share) {
+              window.open(canvas.share.url)
+              return
+            }
+            let url = canvas.share?.url
+            if (action === 'update' || !url) {
+              setPublishing(true)
+              try {
+                url = (await window.atox.canvas.share(canvas.id))?.url
+              } finally {
+                setPublishing(false)
+              }
+            }
+            if (url) {
+              await navigator.clipboard.writeText(url)
+              setLinkCopied(true)
             }
           })()
         }}

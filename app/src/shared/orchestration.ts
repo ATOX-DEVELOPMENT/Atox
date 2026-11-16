@@ -90,6 +90,8 @@ export interface OrchestrationMethods {
       screens: CanvasScreenInfo[]
       links: { from: string; to: string; on: string | null }[]
       groups: { name: string; screens: string[] }[]
+      /** Адрес страницы для просмотра; `null` — холст не опубликован. */
+      share: string | null
     } | null
   }
   /**
@@ -163,6 +165,13 @@ export interface OrchestrationMethods {
   }
   /** Распускает группу по имени; экраны остаются на холсте. */
   canvasGroupRemove: { params: { name: string }; result: { name: string } }
+  /**
+   * Публикует холст по ссылке для просмотра в браузере (клиенту, с телефона): снимок экранов
+   * без комментариев и правок. Повторный вызов обновляет снимок по той же ссылке.
+   */
+  canvasShare: { params: Record<string, never>; result: { url: string } }
+  /** Закрывает ссылку на холст. */
+  canvasShareStop: { params: Record<string, never>; result: Record<string, never> }
   /** Убирает экран с холста; HTML-файл остаётся. */
   canvasScreenRemove: { params: { name: string }; result: { screen: string } }
   /**
