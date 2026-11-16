@@ -2,6 +2,7 @@ import { contextBridge, ipcRenderer, webUtils } from 'electron'
 import type { AgentId } from '../shared/agents'
 import type { AppCommand } from '../shared/commands'
 import type { BoardState } from '../shared/board'
+import type { CanvasState } from '../shared/canvas'
 import type { PlanLimitsState } from '../shared/planLimits'
 import type { TokenSpendSummary } from '../shared/tokenSpend'
 import type { Settings } from '../shared/settings'
@@ -273,6 +274,28 @@ const api: AtoxApi = {
       ipcRenderer.invoke(IpcChannel.BoardMove, issueId, column, start),
     defaultProject: (repository: string) =>
       ipcRenderer.invoke(IpcChannel.BoardDefaultProject, repository)
+  },
+  canvas: {
+    get: () => ipcRenderer.invoke(IpcChannel.CanvasGet),
+    subscribe: (listener) => {
+      const handler = (_event: Electron.IpcRendererEvent, state: CanvasState) => listener(state)
+      ipcRenderer.on(IpcChannel.CanvasChanged, handler)
+      return () => ipcRenderer.removeListener(IpcChannel.CanvasChanged, handler)
+    },
+    create: (chatId) => ipcRenderer.invoke(IpcChannel.CanvasCreate, chatId),
+    rename: (canvasId, name) => ipcRenderer.invoke(IpcChannel.CanvasRename, canvasId, name),
+    renameScreen: (canvasId, screenId, name) =>
+      ipcRenderer.invoke(IpcChannel.CanvasRenameScreen, canvasId, screenId, name),
+    moveScreen: (canvasId, screenId, x, y) =>
+      ipcRenderer.invoke(IpcChannel.CanvasMoveScreen, canvasId, screenId, x, y),
+    setView: (canvasId, view) => ipcRenderer.invoke(IpcChannel.CanvasSetView, canvasId, view),
+    archive: (canvasId, archived) => ipcRenderer.invoke(IpcChannel.CanvasArchive, canvasId, archived),
+    remove: (canvasId) => ipcRenderer.invoke(IpcChannel.CanvasRemove, canvasId),
+    request: (canvasId, text, screenId) =>
+      ipcRenderer.invoke(IpcChannel.CanvasRequest, canvasId, text, screenId),
+    history: (canvasId, screenId) => ipcRenderer.invoke(IpcChannel.CanvasHistory, canvasId, screenId),
+    restore: (canvasId, screenId, versionId) =>
+      ipcRenderer.invoke(IpcChannel.CanvasRestore, canvasId, screenId, versionId)
   }
 }
 

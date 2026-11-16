@@ -7,6 +7,7 @@ import type {
   BoardState,
   TaskStart
 } from './board'
+import type { CanvasState, CanvasView, ScreenVersion } from './canvas'
 import type { ChangesResult, FileDiff } from './changes'
 import type { AppCommand } from './commands'
 import type { GitHubAccount } from './github'
@@ -284,6 +285,40 @@ export interface AtoxApi {
     /** Проект, под которым чат агента появится по умолчанию; `null` — репозиторий ещё склонируют. */
     defaultProject(repository: string): Promise<string | null>
   }
+  /**
+   * Холсты: экраны, которые агент показывает на отдельной странице. Содержимое экранов окно не
+   * получает вызовом: iframe открывает их по адресу `canvasScreenUrl` (протокол `atox-canvas`).
+   */
+  canvas: {
+    get(): Promise<CanvasState>
+    subscribe(listener: (state: CanvasState) => void): () => void
+    /**
+     * Создаёт пустой холст чата. У чата не больше одного холста вне архива: если он уже есть,
+     * возвращается его id.
+     */
+    create(chatId: string): Promise<string>
+    rename(canvasId: string, name: string): Promise<void>
+    renameScreen(canvasId: string, screenId: string, name: string): Promise<void>
+    /** Вызывается, когда человек отпустил экран; позицию в процессе перетаскивания держит окно. */
+    moveScreen(canvasId: string, screenId: string, x: number, y: number): Promise<void>
+    /** Запоминает сдвиг и масштаб холста; окно зовёт редко (после паузы), не на каждый кадр. */
+    setView(canvasId: string, view: CanvasView): Promise<void>
+    archive(canvasId: string, archived: boolean): Promise<void>
+    /**
+     * Удаляет холст и сохранённые версии экранов. HTML-файлы экранов в проекте не трогает:
+     * они принадлежат проекту.
+     */
+    remove(canvasId: string): Promise<void>
+    /**
+     * Отправляет просьбу человека в чат холста. С `screenId` это «Fix»: к тексту добавляются имя
+     * экрана, путь к его файлу и скриншот. Без него — обычное сообщение. Если чата уже нет,
+     * бросает ошибку.
+     */
+    request(canvasId: string, text: string, screenId?: string): Promise<void>
+    history(canvasId: string, screenId: string): Promise<ScreenVersion[]>
+    /** Записывает снимок версии в файл экрана; агент и холст видят его как обычную правку. */
+    restore(canvasId: string, screenId: string, versionId: string): Promise<void>
+  }
 }
 
 export const IpcChannel = {
@@ -371,5 +406,17 @@ export const IpcChannel = {
   BoardAvailableRepositories: 'board:available-repositories',
   BoardSetRepositories: 'board:set-repositories',
   BoardMove: 'board:move',
-  BoardDefaultProject: 'board:default-project'
+  BoardDefaultProject: 'board:default-project',
+  CanvasGet: 'canvas:get',
+  CanvasChanged: 'canvas:changed',
+  CanvasCreate: 'canvas:create',
+  CanvasRename: 'canvas:rename',
+  CanvasRenameScreen: 'canvas:rename-screen',
+  CanvasMoveScreen: 'canvas:move-screen',
+  CanvasSetView: 'canvas:set-view',
+  CanvasArchive: 'canvas:archive',
+  CanvasRemove: 'canvas:remove',
+  CanvasRequest: 'canvas:request',
+  CanvasHistory: 'canvas:history',
+  CanvasRestore: 'canvas:restore'
 } as const
