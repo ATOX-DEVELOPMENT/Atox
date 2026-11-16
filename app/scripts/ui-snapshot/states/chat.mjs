@@ -119,7 +119,7 @@ export const states = [
   // --- Агент работает: настоящий Claude Code и поддельный API -----------------------------
   {
     id: 'chat-working',
-    title: 'Chat: agent working, steps expanded',
+    title: 'Chat: agent working (steps expanded)',
     async run(window) {
       await openChat(window, 'Trace the double retries')
       await send(window, 'Find out why the webhook retries fire twice.')

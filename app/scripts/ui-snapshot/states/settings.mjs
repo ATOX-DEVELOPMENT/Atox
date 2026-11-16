@@ -133,7 +133,7 @@ export const states = [
   },
   {
     id: 'settings-update-unsupported',
-    title: 'Settings: Update, can’t update here',
+    title: 'Settings: Update unavailable here',
     async run(window) {
       await openSettings(window)
       await window.click('.settings__button', { text: 'Check for Updates' })
