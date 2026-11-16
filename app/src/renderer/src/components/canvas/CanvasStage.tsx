@@ -43,6 +43,8 @@ const WHEEL_LINE_HEIGHT = 16
 const VIEW_SAVE_DELAY = 600
 /** Сколько длится перелёт к экрану после клика, мс. */
 const FOCUS_DURATION = 380
+/** Пауза после жеста, после которой холст перерисовывается в чётком масштабе, мс. */
+const VIEW_SETTLE_DELAY = 200
 
 export interface CanvasStageHandle {
   /** Вписывает все экраны в окно. */
@@ -99,6 +101,7 @@ export function CanvasStage({
   const [panning, setPanning] = useState(false)
   const saveTimerRef = useRef<number | undefined>(undefined)
   const flightRef = useRef<number | null>(null)
+  const settleTimerRef = useRef<number | undefined>(undefined)
   const { id: canvasId, screens, groups } = canvas
 
   const positionOf = useCallback(
@@ -282,6 +285,10 @@ export function CanvasStage({
 
   // Вид — в transform и фон сетки. Экраны за краем окна не прячутся: скрытый iframe теряет
   // картинку, и при возвращении в кадр на миг пустеет; невидимое браузер и так не рисует.
+  // will-change держится только во время жеста: с ним Chromium не перерисовывает слой при
+  // смене масштаба, и после приближения весь холст при отдалении остаётся в крупном масштабе.
+  // Такому слою не хватает памяти видеокарты: часть плиток не рисуется, и кадр застывает с
+  // серыми дырами. После жеста слой перерисовывается в масштабе, при котором его видно.
   const applyView = useCallback(() => {
     const stage = stageRef.current
     const world = worldRef.current
@@ -291,9 +298,15 @@ export function CanvasStage({
     }
     world.style.transform = `translate(${view.x}px, ${view.y}px) scale(${view.zoom})`
     world.style.setProperty('--z', String(view.zoom))
+    world.style.willChange = 'transform'
     stage.style.backgroundPosition = `${view.x}px ${view.y}px`
+    window.clearTimeout(settleTimerRef.current)
+    settleTimerRef.current = window.setTimeout(() => {
+      world.style.willChange = ''
+    }, VIEW_SETTLE_DELAY)
   }, [viewState])
   useEffect(() => viewState.subscribe(applyView), [viewState, applyView])
+  useEffect(() => () => window.clearTimeout(settleTimerRef.current), [])
   // Вид нужно применить и после отрисовки: холст мог только что появиться.
   useLayoutEffect(applyView)
 
