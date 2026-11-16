@@ -1,6 +1,5 @@
 import { useSyncExternalStore, type MouseEvent } from 'react'
 import {
-  ArrowUpRight,
   Check,
   Download,
   Ellipsis,
@@ -11,7 +10,7 @@ import {
   Share2
 } from 'lucide-react'
 import { CANVAS_NAME_MAX_LENGTH, type Canvas } from '../../../../shared/canvas'
-import { chatLabel, type CanvasOwner } from '../../lib/canvasOwner'
+import type { CanvasOwner } from '../../lib/canvasOwner'
 import { InlineRename } from '../InlineRename'
 import type { ViewState } from './viewState'
 
@@ -25,7 +24,6 @@ interface CanvasHeaderProps {
   onToggleHistory(): void
   onFit(): void
   onResetZoom(): void
-  onOpenChat(): void
   /** Выгрузка экранов идёт: кнопка занята. */
   exporting: boolean
   onExport(event: MouseEvent<HTMLButtonElement>): void
@@ -47,7 +45,6 @@ export function CanvasHeader({
   onToggleHistory,
   onFit,
   onResetZoom,
-  onOpenChat,
   exporting,
   onExport,
   publishing,
@@ -56,7 +53,6 @@ export function CanvasHeader({
   onOpenMenu
 }: CanvasHeaderProps) {
   const hasScreens = canvas.screens.length > 0
-  const chatTitle = chatLabel(owner)
 
   return (
     <header className="canvas-header">
@@ -84,19 +80,6 @@ export function CanvasHeader({
         )}
       </h1>
       {owner.project && <span className="canvas-header__project">{owner.project.name}</span>}
-      <button
-        type="button"
-        className="canvas-header__chat"
-        disabled={!owner.chat}
-        title={owner.chat ? `Open chat “${chatTitle}”` : 'The chat of this canvas was deleted'}
-        onClick={onOpenChat}
-      >
-        <span className="canvas-header__chat-dot" aria-hidden />
-        <span className="canvas-header__chat-title">
-          {owner.chat ? `Chat: ${chatTitle}` : chatTitle}
-        </span>
-        {owner.chat && <ArrowUpRight className="canvas-header__chat-arrow" aria-hidden />}
-      </button>
       {canvas.archived && <span className="canvas-header__badge">Archived</span>}
 
       <div className="canvas-header__actions">

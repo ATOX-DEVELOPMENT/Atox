@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { MousePointerClick } from 'lucide-react'
 import { useCanvas, useCanvasNavigation } from '../../hooks/CanvasesContext'
 import { useProjectsContext } from '../../hooks/ProjectsContext'
 import { canvasOwner, chatLabel } from '../../lib/canvasOwner'
@@ -112,7 +111,6 @@ export function CanvasPage({ canvasId, onClose }: CanvasPageProps) {
         }}
         onFit={() => stageRef.current?.fit()}
         onResetZoom={() => stageRef.current?.resetZoom()}
-        onOpenChat={openChat}
         exporting={exporting}
         onExport={(event) => {
           const anchor = event.currentTarget
@@ -184,12 +182,6 @@ export function CanvasPage({ canvasId, onClose }: CanvasPageProps) {
             preview={shownPreview}
             chatTitle={chatTitle}
           >
-            <p className="canvas-hint" data-canvas-ui>
-              <MousePointerClick className="icon" aria-hidden />
-              <span className="canvas-hint__text">
-                Click a screen to go to it · Right-click for Fix, Rename, Remove · Drag to move
-              </span>
-            </p>
             {owner.chat && (
               <AgentBar chatId={owner.chat.id} chatTitle={chatTitle} onOpenChat={openChat} />
             )}
