@@ -35,7 +35,9 @@ export function CanvasNavigationProvider({
   children: ReactNode
 }) {
   return (
-    <CanvasNavigationContext.Provider value={navigation}>{children}</CanvasNavigationContext.Provider>
+    <CanvasNavigationContext.Provider value={navigation}>
+      {children}
+    </CanvasNavigationContext.Provider>
   )
 }
 

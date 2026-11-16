@@ -1,11 +1,5 @@
 import { useEffect, useReducer, useRef, type PointerEvent } from 'react'
-import {
-  inflate,
-  unionRect,
-  visibleArea,
-  type Point,
-  type Rect
-} from '../../lib/canvasView'
+import { inflate, unionRect, visibleArea, type Point, type Rect } from '../../lib/canvasView'
 import type { ViewState } from './viewState'
 
 /** Поле вокруг экранов на мини-карте, в долях её содержимого. */
@@ -28,7 +22,8 @@ export function CanvasMinimap({ viewState, rects, onCenter }: CanvasMinimapProps
   const view = viewState.view()
   const map = mapRef.current
   const content = view && unionRect([...rects, visibleArea(view, viewState.viewport())])
-  const world = content && inflate(content, Math.max(content.width, content.height) * MINIMAP_PADDING)
+  const world =
+    content && inflate(content, Math.max(content.width, content.height) * MINIMAP_PADDING)
   const scale =
     world && map ? Math.min(map.clientWidth / world.width, map.clientHeight / world.height) : 0
   // Содержимое стоит по центру карты.

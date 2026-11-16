@@ -69,8 +69,7 @@ export function CanvasPage({ canvasId, onClose }: CanvasPageProps) {
   const openChat = () => owner.chat && navigation.openChat(owner.chat.id)
   const hasScreens = canvas.screens.length > 0
   // Экран истории — выбранный последним, а если его уже нет — первый.
-  const historyScreen =
-    canvas.screens.find(({ id }) => id === historyScreenId) ?? canvas.screens[0]
+  const historyScreen = canvas.screens.find(({ id }) => id === historyScreenId) ?? canvas.screens[0]
   const shownPreview =
     historyOpen && preview && canvas.screens.some(({ id }) => id === preview.screenId)
       ? preview
@@ -136,7 +135,9 @@ export function CanvasPage({ canvasId, onClose }: CanvasPageProps) {
             screens={canvas.screens}
             screenId={historyScreen.id}
             onScreenChange={setHistoryScreenId}
-            previewVersionId={shownPreview?.screenId === historyScreen.id ? shownPreview.versionId : null}
+            previewVersionId={
+              shownPreview?.screenId === historyScreen.id ? shownPreview.versionId : null
+            }
             onPreview={(versionId) =>
               setPreview(versionId ? { screenId: historyScreen.id, versionId } : null)
             }
