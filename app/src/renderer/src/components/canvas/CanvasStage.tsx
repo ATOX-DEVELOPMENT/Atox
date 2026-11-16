@@ -346,15 +346,15 @@ export function CanvasStage({
         }
         const position = { x: Math.round(current.x), y: Math.round(current.y) }
         setDropped((map) => new Map(map).set(screenId, position))
-        void window.atox.canvas
-          .moveScreen(canvasId, screenId, position.x, position.y)
-          .finally(() =>
-            setDropped((map) => {
-              const next = new Map(map)
-              next.delete(screenId)
-              return next
-            })
-          )
+        // Сохранённое место приходит с новым состоянием холста; не сохранилось — экран
+        // возвращается туда, где был.
+        const settle = () =>
+          setDropped((map) => {
+            const next = new Map(map)
+            next.delete(screenId)
+            return next
+          })
+        void window.atox.canvas.moveScreen(canvasId, screenId, position.x, position.y).then(settle, settle)
       }
       target.addEventListener('pointermove', onMove)
       target.addEventListener('pointerup', onEnd)
