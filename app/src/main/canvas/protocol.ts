@@ -14,14 +14,13 @@ export interface ScreenDocumentSource {
 }
 
 /**
- * Схему нужно объявить до готовности приложения. `standard` разбирает адрес на хост и путь,
- * `secure` позволяет встраивать экран в окно приложения без предупреждений о смешанном
- * содержимом. Доступа к fetch и CORS у экранов нет.
+ * Схема экранов; объявляется до готовности приложения. `standard` разбирает адрес на хост
+ * и путь, `secure` позволяет встраивать экран в окно приложения без предупреждений
+ * о смешанном содержимом. Доступа к fetch и CORS у экранов нет.
  */
-export function registerCanvasScheme(): void {
-  protocol.registerSchemesAsPrivileged([
-    { scheme: CANVAS_PROTOCOL, privileges: { standard: true, secure: true } }
-  ])
+export const CANVAS_SCHEME: Electron.CustomScheme = {
+  scheme: CANVAS_PROTOCOL,
+  privileges: { standard: true, secure: true }
 }
 
 /**

@@ -34,6 +34,12 @@ function platformWindowOptions(): BrowserWindowConstructorOptions {
 /** Адрес dev-сервера renderer'а; electron-vite задаёт его только в режиме разработки. */
 const devServerUrl = process.env['ELECTRON_RENDERER_URL']
 
+/**
+ * Источник окна приложения для `frame-ancestors`: dev-сервер при разработке, файлы приложения
+ * в сборке. Только окно приложения может встраивать страницы, которые отдаёт приложение.
+ */
+export const APP_FRAME_SOURCE = devServerUrl ? new URL(devServerUrl).origin : 'file:'
+
 export function createMainWindow(): BrowserWindow {
   const window = new BrowserWindow({
     ...WINDOW_SIZE,

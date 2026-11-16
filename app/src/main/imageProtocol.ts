@@ -7,16 +7,12 @@ import { IMAGE_PROTOCOL, imagePathOfUrl } from '../shared/imageProtocol'
 const NOT_FOUND = 404
 
 /**
- * Схему нужно объявить до готовности приложения. `secure` и `corsEnabled` нужны, чтобы
+ * Схема картинок; объявляется до готовности приложения. `secure` и `corsEnabled` нужны, чтобы
  * картинку можно было перерисовать на canvas и скопировать в буфер обмена.
  */
-export function registerImageScheme(): void {
-  protocol.registerSchemesAsPrivileged([
-    {
-      scheme: IMAGE_PROTOCOL,
-      privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true }
-    }
-  ])
+export const IMAGE_SCHEME: Electron.CustomScheme = {
+  scheme: IMAGE_PROTOCOL,
+  privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true }
 }
 
 /**

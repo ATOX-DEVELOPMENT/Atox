@@ -364,7 +364,10 @@ export class CanvasService implements ScreenDocumentSource {
     }
     const device = request.device !== undefined ? parseDevice(request.device) : undefined
     const size = request.size !== undefined ? parseScreenSize(request.size) : undefined
-    const folders = [caller.project.path, caller.chat.worktree].filter((folder) => folder !== undefined)
+    // Агент задачи с доски работает в worktree: его экраны лежат там.
+    const folders = [caller.project.path, caller.chat.worktree].filter(
+      (folder) => folder !== undefined
+    )
     const file = await verifyScreenFile(request.file, folders)
     // Пока проверяли файл, чат могли удалить.
     const location = this.services.store.findChat(caller.chat.id)
@@ -562,7 +565,8 @@ export class CanvasService implements ScreenDocumentSource {
         : this.snapshots.removeCanvas(canvas.id))
       return
     }
-    this.addVersion(canvas, screen, hash, this.restoring.delete(key) ? 'restore' : latest ? 'edit' : 'created')
+    const cause = this.restoring.delete(key) ? 'restore' : latest ? 'edit' : 'created'
+    this.addVersion(canvas, screen, hash, cause)
   }
 
   private addVersion(
@@ -576,7 +580,13 @@ export class CanvasService implements ScreenDocumentSource {
     if (fix !== undefined) {
       delete screen.pendingFix
     }
-    const version: StoredVersion = { id: randomUUID(), savedAt: now, cause, hash, ...(fix && { fix }) }
+    const version: StoredVersion = {
+      id: randomUUID(),
+      savedAt: now,
+      cause,
+      hash,
+      ...(fix && { fix })
+    }
     const { versions, dropped } = appendVersion(screen.versions, version, SCREEN_HISTORY_LIMIT)
     screen.versions = versions
     screen.missing = false
@@ -614,7 +624,11 @@ function screenKey(canvasId: string, screenId: string): string {
   return `${canvasId}/${screenId}`
 }
 
-function deviceLook(device: ScreenDeviceId): { device: ScreenDevice; width: number; height: number } {
+function deviceLook(device: ScreenDeviceId): {
+  device: ScreenDevice
+  width: number
+  height: number
+} {
   const { width, height } = SCREEN_DEVICES[device]
   return { device, width, height }
 }
@@ -657,11 +671,15 @@ async function verifyScreenFile(file: string, folders: readonly string[]): Promi
     )
   }
   const real = await realpath(file).catch(() => {
-    throw new CanvasError(`File not found: ${file}. Write the HTML file first, then run this command.`)
+    throw new CanvasError(
+      `File not found: ${file}. Write the HTML file first, then run this command.`
+    )
   })
   const info = await stat(real)
   if (!info.isFile() || !isScreenFileName(real)) {
-    throw new CanvasError(`${file} is not an .html file. A screen is one self-contained .html file.`)
+    throw new CanvasError(
+      `${file} is not an .html file. A screen is one self-contained .html file.`
+    )
   }
   if (info.size > SCREEN_FILE_MAX_BYTES) {
     throw new CanvasError(
