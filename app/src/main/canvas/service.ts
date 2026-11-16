@@ -392,7 +392,8 @@ export class CanvasService implements ScreenDocumentSource {
       if (!(error instanceof ScreenBuildError)) {
         console.error('Failed to render a React canvas screen', error)
       }
-      const message = error instanceof ScreenBuildError ? error.message : 'The screen could not be built.'
+      const message =
+        error instanceof ScreenBuildError ? error.message : 'The screen could not be built.'
       return { html: renderBuildErrorPage(message), modules: false }
     }
   }
@@ -511,7 +512,7 @@ export class CanvasService implements ScreenDocumentSource {
       const names = canvas.screens.map((other) => `"${other.name}"`).join(', ') || 'none'
       throw new CanvasError(`There is no screen "${name.trim()}" on the canvas. Screens: ${names}.`)
     }
-    // Сначала дописывается идущая проверка: снимок должен показать то, что агент только что записал.
+    // Сначала дописывается идущая проверка: снимок покажет то, что агент только что записал.
     await this.checks.get(screenKey(canvas.id, screen.id))
     const rendered = await this.render(canvas, screen)
     if (!rendered) {
@@ -560,7 +561,8 @@ export class CanvasService implements ScreenDocumentSource {
 
   /** Открывает экран в скрытом окне; экран, который не собрался ни разу, не открывается. */
   private async inspect(canvas: StoredCanvas, screen: StoredScreen) {
-    const built = screenSourceKind(screen.file) !== 'react' || this.builds.has(screenKey(canvas.id, screen.id))
+    const key = screenKey(canvas.id, screen.id)
+    const built = screenSourceKind(screen.file) !== 'react' || this.builds.has(key)
     return built
       ? inspectScreen(
           canvasScreenUrl(canvas.id, screen.id, screen.revision),
