@@ -100,7 +100,14 @@ export interface OrchestrationMethods {
       width: number
       height: number
       file: string
+      /** Проблемы раскладки словами; пусто — всё помещается или измерить не удалось. */
+      layout: string[]
     }
+  }
+  /** Снимает экран в PNG, как он выглядит на холсте, и проверяет раскладку. */
+  canvasScreenPreview: {
+    params: { name: string }
+    result: { screen: string; path: string; layout: string[] }
   }
   /** Убирает экран с холста; HTML-файл остаётся. */
   canvasScreenRemove: { params: { name: string }; result: { screen: string } }

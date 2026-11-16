@@ -41,6 +41,9 @@ Show screens (app, website, desktop UI) to the user on this chat's canvas.
                                            Put an HTML file on the canvas as a screen, or
                                            update the screen with that name. Then just edit
                                            the file: the canvas updates by itself.
+  atox canvas screen preview <name>        Render the screen to a PNG and print its path, so you
+                                           can open the image and check your work. Also reports
+                                           content that does not fit the screen.
   atox canvas screen remove <name>         Remove a screen from the canvas (the file stays)
 
 Works only for agents running in Atox chats.`
@@ -140,6 +143,13 @@ const CANVAS_SET_COMMAND = 'atox canvas screen set <name> <file.html> [--device 
 
 const CANVAS_SET_USAGE = `Usage: ${CANVAS_SET_COMMAND} [--size WxH]. Quote names with spaces.`
 
+/** Проблемы раскладки отдельными строками: агент правит HTML по ним. */
+function describeLayout(problems: string[]): string[] {
+  return problems.length > 0
+    ? ['Layout problems (fix them in the HTML):', ...problems.map((problem) => `- ${problem}`)]
+    : []
+}
+
 /** `atox canvas …`: холст чата и его экраны. */
 async function canvas(args: string[]): Promise<string> {
   const [group, action, ...rest] = args
@@ -176,10 +186,21 @@ async function canvas(args: string[]): Promise<string> {
       ? `Added the screen "${result.screen}" (${look}) to the canvas "${result.canvas}". The user sees it now.`
       : `Updated the screen "${result.screen}" (${look}) on the canvas "${result.canvas}".`
     return [
-      ...(result.canvasCreated ? [`Created the canvas "${result.canvas}" for this chat.`] : []),
-      done,
-      `From now on just edit ${result.file}: the canvas updates by itself. Run this command again only to change the device or size.`
-    ].join(' ')
+      [
+        ...(result.canvasCreated ? [`Created the canvas "${result.canvas}" for this chat.`] : []),
+        done,
+        `From now on just edit ${result.file}: the canvas updates by itself. Run this command again only to change the device or size.`
+      ].join(' '),
+      ...describeLayout(result.layout)
+    ].join('\n')
+  }
+  if (group === 'screen' && action === 'preview') {
+    const name = rest.join(' ')
+    if (!name.trim()) {
+      throw new UsageError('Usage: atox canvas screen preview <name>')
+    }
+    const { screen, path, layout } = await call('canvasScreenPreview', { name })
+    return [`Screenshot of "${screen}": ${path}`, ...describeLayout(layout)].join('\n')
   }
   if (group === 'screen' && action === 'remove') {
     const name = rest.join(' ')

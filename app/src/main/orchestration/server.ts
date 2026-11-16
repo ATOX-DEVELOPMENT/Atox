@@ -308,6 +308,13 @@ export class OrchestrationServer {
       })
     },
 
+    canvasScreenPreview: (caller, { name }) => {
+      if (typeof name !== 'string' || !name.trim()) {
+        throw new CommandError('Specify the name of the screen to preview.')
+      }
+      return this.services.canvas.previewScreen(caller.chat.id, name)
+    },
+
     canvasScreenRemove: async (caller, { name }) => {
       if (typeof name !== 'string' || !name.trim()) {
         throw new CommandError('Specify the name of the screen to remove.')

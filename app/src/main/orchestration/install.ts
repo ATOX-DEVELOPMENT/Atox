@@ -98,6 +98,7 @@ atox canvas                                                    # this chat's can
 atox canvas screen set Login .atox/canvas/login.html --device iphone
 atox canvas screen set "Admin dashboard" .atox/canvas/admin.html --device web
 atox canvas screen set Widget .atox/canvas/widget.html --size 360x640
+atox canvas screen preview Login                               # PNG of the screen as the user sees it, plus layout problems
 atox canvas screen remove Login                                # removes the screen; the file stays
 \`\`\`
 
@@ -107,6 +108,9 @@ atox canvas screen remove Login                                # removes the scr
 2. Put it on the canvas once: \`atox canvas screen set Login .atox/canvas/login.html --device iphone\`. The canvas is created for this chat if it has none.
 3. From then on just edit the file. Do not run \`set\` again unless the device or size changes; \`set\` with the name of an existing screen updates it and keeps its name and place.
 4. One file per screen. Add several screens for a flow (Login, Home, Settings).
+5. Check your own work: run \`atox canvas screen preview <name>\` after the first draft and after bigger changes, open the PNG it prints, and fix whatever looks wrong (broken layout, overlaps, unreadable text, empty areas) before you tell the user it is done.
+
+\`set\` and \`preview\` also print "Layout problems" when the content does not fit the screen, for example "Content is 1240 px tall but the screen is 844 px: it is cut off." Fix these in the HTML: shrink the layout to the screen, or scroll inside an inner element. No output about layout means it fits.
 
 The user, not you, names and arranges screens. If they renamed a screen, use the new name from \`atox canvas\`.
 

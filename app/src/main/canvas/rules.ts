@@ -140,6 +140,44 @@ export function appendVersion<Version>(
   return { versions: all.slice(overflow), dropped: all.slice(0, overflow) }
 }
 
+/** Допуск измерения: скроллбар или округление не считаются выходом за экран. */
+const OVERFLOW_TOLERANCE_PX = 1
+
+/**
+ * Что не так с раскладкой экрана, словами, по которым агент может поправить HTML. Пусто —
+ * всё помещается. Если окно измерения не совпало с экраном (его ужали), измерение
+ * недостоверно, и о раскладке молчим.
+ */
+export function describeOverflow(
+  screen: { width: number; height: number },
+  size: {
+    contentWidth: number
+    contentHeight: number
+    viewportWidth: number
+    viewportHeight: number
+  } | null
+): string[] {
+  if (
+    !size ||
+    Math.abs(size.viewportWidth - screen.width) > OVERFLOW_TOLERANCE_PX ||
+    Math.abs(size.viewportHeight - screen.height) > OVERFLOW_TOLERANCE_PX
+  ) {
+    return []
+  }
+  const problems: string[] = []
+  if (size.contentHeight > screen.height + OVERFLOW_TOLERANCE_PX) {
+    problems.push(
+      `Content is ${size.contentHeight} px tall but the screen is ${screen.height} px: it is cut off.`
+    )
+  }
+  if (size.contentWidth > screen.width + OVERFLOW_TOLERANCE_PX) {
+    problems.push(
+      `Content is wider than the screen (${size.contentWidth} > ${screen.width} px).`
+    )
+  }
+  return problems
+}
+
 export interface FixMessage {
   screenName: string
   canvasName: string
