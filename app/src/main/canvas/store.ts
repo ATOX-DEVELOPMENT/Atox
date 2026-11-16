@@ -1,5 +1,6 @@
 import { isAbsolute } from 'node:path'
 import {
+  CANVAS_GROUPS_MAX,
   CANVAS_LINKS_MAX,
   CANVAS_NAME_MAX_LENGTH,
   CANVAS_ZOOM,
@@ -8,6 +9,7 @@ import {
   SCREEN_HISTORY_LIMIT,
   isScreenDeviceId,
   type Canvas,
+  type CanvasGroup,
   type CanvasLink,
   type CanvasScreen,
   type LinkAnchor,
@@ -113,6 +115,7 @@ function normalizeCanvas(raw: unknown, now: number): StoredCanvas | null {
     projectId: value['projectId'],
     screens,
     links: normalizeLinks(value['links'], screenIds),
+    groups: normalizeGroups(value['groups'], screenIds),
     archived: value['archived'] === true,
     view: normalizeView(value['view']),
     createdAt: timestamp(value['createdAt'], now),
@@ -152,6 +155,41 @@ function normalizeLinks(raw: unknown, screenIds: ReadonlySet<string>): CanvasLin
   return links
 }
 
+/** Группы из файла: экран входит не больше чем в одну, пустые группы и повторы имён отпадают. */
+function normalizeGroups(raw: unknown, screenIds: ReadonlySet<string>): CanvasGroup[] {
+  const groups: CanvasGroup[] = []
+  const ids = new Set<string>()
+  const names = new Set<string>()
+  const grouped = new Set<string>()
+  for (const item of Array.isArray(raw) ? raw : []) {
+    const value = record(item)
+    const name = normalizedName(value['name'])
+    if (
+      !isCanvasId(value['id']) ||
+      ids.has(value['id']) ||
+      !name ||
+      names.has(name.toLowerCase())
+    ) {
+      continue
+    }
+    const screens = (Array.isArray(value['screens']) ? value['screens'] : []).filter(
+      (id): id is string => typeof id === 'string' && screenIds.has(id) && !grouped.has(id)
+    )
+    const members = [...new Set(screens)]
+    if (members.length === 0) {
+      continue
+    }
+    ids.add(value['id'])
+    names.add(name.toLowerCase())
+    members.forEach((id) => grouped.add(id))
+    groups.push({ id: value['id'], name, screens: members })
+    if (groups.length >= CANVAS_GROUPS_MAX) {
+      break
+    }
+  }
+  return groups
+}
+
 function boundedText(value: unknown, max: number): string | null {
   const text = typeof value === 'string' ? value.trim() : ''
   return text ? text.slice(0, max) : null
@@ -163,7 +201,12 @@ function normalizeAnchor(raw: unknown): LinkAnchor | null {
   return [x, y, width, height].every((part) => typeof part === 'number' && Number.isFinite(part)) &&
     (width as number) > 0 &&
     (height as number) > 0
-    ? { x: x as number, y: y as number, width: width as number, height: height as number }
+    ? {
+        x: x as number,
+        y: y as number,
+        width: width as number,
+        height: height as number
+      }
     : null
 }
 
@@ -195,9 +238,7 @@ function normalizeScreen(raw: unknown, now: number): StoredScreen | null {
     x: finite(value['x']),
     y: finite(value['y']),
     revision:
-      typeof revision === 'number' && Number.isSafeInteger(revision) && revision > 0
-        ? revision
-        : 0,
+      typeof revision === 'number' && Number.isSafeInteger(revision) && revision > 0 ? revision : 0,
     missing: value['missing'] === true,
     buildError: null,
     updatedAt: timestamp(value['updatedAt'], now),

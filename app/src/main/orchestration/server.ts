@@ -351,6 +351,25 @@ export class OrchestrationServer {
       }
     },
 
+    canvasGroupSet: (caller, { name, screens }) => {
+      if (
+        typeof name !== 'string' ||
+        !name.trim() ||
+        !Array.isArray(screens) ||
+        !screens.every((screen) => typeof screen === 'string')
+      ) {
+        throw new CommandError('Specify the group name and the names of its screens.')
+      }
+      return this.services.canvas.setGroup(caller.chat.id, name, screens)
+    },
+
+    canvasGroupRemove: (caller, { name }) => {
+      if (typeof name !== 'string' || !name.trim()) {
+        throw new CommandError('Specify the name of the group to remove.')
+      }
+      return { name: this.services.canvas.removeGroup(caller.chat.id, name) }
+    },
+
     canvasExport: async (caller, { format, screens, out }) => {
       if (typeof format !== 'string') {
         throw new CommandError('Specify the format: pdf, png or pptx.')

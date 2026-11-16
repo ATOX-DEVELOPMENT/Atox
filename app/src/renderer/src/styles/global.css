@@ -98,6 +98,12 @@
   --canvas-label-height: 22px;
   --canvas-label-gap: 8px;
   --canvas-label-font-size: 13px;
+  --canvas-group-radius: 40px;
+  --canvas-group-border-width: 1.5px;
+  --canvas-group-font-size: 15px;
+  /* Сколько рамка группы добирает сверху под заголовок и подписи экранов: в пикселях окна, но не больше предела в пикселях холста. */
+  --canvas-group-lift: 90px;
+  --canvas-group-lift-max: 300px;
   --canvas-link-width: 2px;
   --canvas-link-dot: 5px;
   --canvas-link-dot-ring: var(--color-menu);
@@ -5713,6 +5719,102 @@ ul {
   stroke: var(--canvas-link-dot-ring);
   stroke-width: 2px;
   vector-effect: non-scaling-stroke;
+}
+
+/* Группа: рамка под экранами; мышь ловит только заголовок, по остальному холст двигается. */
+.canvas-group {
+  --group-lift: min(calc(var(--canvas-group-lift) / var(--z)), var(--canvas-group-lift-max));
+  position: absolute;
+  left: 0;
+  top: calc(var(--group-lift) * -1);
+  height: calc(var(--group-height) * 1px + var(--group-lift));
+  pointer-events: none;
+  border: calc(var(--canvas-group-border-width) / var(--z)) solid
+    color-mix(in srgb, var(--color-text) 12%, transparent);
+  border-radius: var(--canvas-group-radius);
+  background: color-mix(in srgb, var(--color-text) 3.5%, transparent);
+  box-sizing: border-box;
+}
+
+.canvas-group[data-dragging='true'] {
+  z-index: 1;
+}
+
+/* Заголовок не масштабируется вместе с холстом и не шире своей рамки. */
+.canvas-group__header {
+  position: absolute;
+  left: 0;
+  top: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--status-gap);
+  width: calc(var(--group-width) * var(--z) * 1px);
+  padding: 14px 16px;
+  box-sizing: border-box;
+  font-size: var(--canvas-group-font-size);
+  line-height: 1.4;
+  transform: scale(calc(1 / var(--z)));
+  transform-origin: 0 0;
+  pointer-events: auto;
+}
+
+.canvas-group__header .row__input {
+  width: var(--menu-min-width);
+  font-size: var(--canvas-group-font-size);
+}
+
+.canvas-group__title {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 4px 8px;
+  border-radius: var(--radius);
+  font-weight: 600;
+  color: var(--color-text);
+  cursor: grab;
+}
+
+.canvas-group[data-dragging='true'] .canvas-group__title {
+  cursor: grabbing;
+}
+
+.canvas-group__title .icon {
+  flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+  color: var(--color-text-muted);
+}
+
+.canvas-group__name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.canvas-group__menu {
+  display: inline-flex;
+  flex-shrink: 0;
+  padding: 4px;
+  border-radius: var(--radius);
+  color: var(--color-text-muted);
+}
+
+.canvas-group__menu .icon {
+  width: 16px;
+  height: 16px;
+}
+
+.canvas-group__title:hover,
+.canvas-group__menu:hover {
+  background: color-mix(in srgb, var(--color-text) 8%, transparent);
+}
+
+.canvas-group__title:focus-visible,
+.canvas-group__menu:focus-visible {
+  outline: 2px solid var(--color-accent);
 }
 
 .canvas-screen {

@@ -54,6 +54,13 @@ Show screens (app, website, desktop UI) to the user on this chat's canvas.
                                            Screens you do not name go in a last row. Use it to
                                            group flows: one flow per row, so the canvas reads at
                                            a glance. The user can still drag screens afterwards.
+  atox canvas group "<group name>" "<screen>" "<screen>" ...
+                                           Put screens in a named frame (like "Onboarding" or
+                                           "Settings") so the user finds them at a glance. Run
+                                           arrange first so the group's screens stand together
+                                           in one row. A screen is in one group; the same name
+                                           again replaces the group's screens.
+  atox canvas group remove "<group name>"  Remove the frame; the screens stay
   atox canvas link <from> <to> [--on "Sign in"]
                                            Draw a line from one screen to another so the user
                                            sees what follows what: it starts with a dot on the
@@ -205,9 +212,13 @@ async function canvas(args: string[]): Promise<string> {
     const arrows = shown.links.map(
       ({ from, to, on }) => `${from} -> ${to}${on ? `\tfrom "${on}"` : ''}`
     )
+    const groups = shown.groups.map(
+      ({ name, screens }) => `${name}\t${screens.map((screen) => `"${screen}"`).join(', ')}`
+    )
     return [
       `Canvas "${shown.name}", ${count}. Edit a screen's file and the canvas updates by itself.`,
       ...lines,
+      ...(groups.length > 0 ? ['Groups:', ...groups] : []),
       ...(arrows.length > 0 ? ['Lines:', ...arrows] : [])
     ].join('\n')
   }
@@ -275,6 +286,25 @@ async function canvas(args: string[]): Promise<string> {
         ? [`Not named, put in the last row: ${result.rest.map((name) => `"${name}"`).join(', ')}.`]
         : [])
     ].join('\n')
+  }
+  if (group === 'group') {
+    const removing = action === 'remove'
+    const [name, ...screens] = (removing ? rest : [action, ...rest]).filter(
+      (part): part is string => part !== undefined
+    )
+    if (!name || (removing ? screens.length > 0 : screens.length === 0)) {
+      throw new UsageError(
+        removing
+          ? 'Usage: atox canvas group remove "<group name>"'
+          : 'Usage: atox canvas group "<group name>" "<screen>" "<screen>" ...'
+      )
+    }
+    if (removing) {
+      const result = await call('canvasGroupRemove', { name })
+      return `Removed the group "${result.name}". Its screens stay on the canvas.`
+    }
+    const result = await call('canvasGroupSet', { name, screens })
+    return `${result.created ? 'Created' : 'Updated'} the group "${result.name}" with ${result.screens.length === 1 ? '1 screen' : `${result.screens.length} screens`}.`
   }
   if (group === 'link') {
     const removing = action === 'remove'

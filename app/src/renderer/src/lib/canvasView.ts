@@ -1,6 +1,8 @@
 import {
   CANVAS_ZOOM,
+  GROUP_PADDING,
   SCREEN_DEVICES,
+  type CanvasGroup,
   type CanvasScreen,
   type CanvasView,
   type ScreenFrame
@@ -56,6 +58,9 @@ export function screenFrame(screen: Pick<CanvasScreen, 'device'>): ScreenFrame {
  */
 export const SCREEN_LABEL_SPACE = 32
 
+/** Место над рамкой группы под её заголовок, в пикселях окна (`--canvas-group-lift` в global.css). */
+export const GROUP_HEADER_SPACE = 56
+
 /** Экран вместе с рамкой устройства: (x, y) экрана — угол самой рамки. */
 export function screenBounds(screen: CanvasScreen, position: Point = screen): Rect {
   const insets = FRAME_INSETS[screenFrame(screen)]
@@ -65,6 +70,25 @@ export function screenBounds(screen: CanvasScreen, position: Point = screen): Re
     width: screen.width + insets.left + insets.right,
     height: screen.height + insets.top + insets.bottom
   }
+}
+
+/**
+ * Рамка группы: общий прямоугольник её экранов с полями (`GROUP_PADDING`, сверху больше — под
+ * заголовок). `null` — ни один экран группы не найден.
+ */
+export function groupBounds(
+  group: CanvasGroup,
+  screenBounds: ReadonlyMap<string, Rect>
+): Rect | null {
+  const content = unionRect(group.screens.flatMap((id) => screenBounds.get(id) ?? []))
+  return (
+    content && {
+      x: content.x - GROUP_PADDING.side,
+      y: content.y - GROUP_PADDING.top,
+      width: content.width + GROUP_PADDING.side * 2,
+      height: content.height + GROUP_PADDING.top + GROUP_PADDING.bottom
+    }
+  )
 }
 
 /** Общий прямоугольник; `null` — прямоугольников нет. */

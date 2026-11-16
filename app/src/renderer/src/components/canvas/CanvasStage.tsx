@@ -13,6 +13,8 @@ import {
 import type { Canvas, CanvasScreen, CanvasView } from '../../../../shared/canvas'
 import {
   fitView,
+  GROUP_HEADER_SPACE,
+  groupBounds,
   inflate,
   intersects,
   SCREEN_LABEL_SPACE,
@@ -27,6 +29,7 @@ import {
 import { CanvasLinks } from './CanvasLinks'
 import { CanvasMinimap } from './CanvasMinimap'
 import { FixBox } from './FixBox'
+import { GroupFrame } from './GroupFrame'
 import { ScreenFrame } from './ScreenFrame'
 import type { ViewState } from './viewState'
 
@@ -70,8 +73,11 @@ interface CanvasStageProps {
   ref?: Ref<CanvasStageHandle>
 }
 
-interface Drag extends Point {
-  screenId: string
+/** Перенос: экраны, которые тянут, и на сколько они ушли от места, где их взяли. */
+interface Drag {
+  ids: ReadonlySet<string>
+  dx: number
+  dy: number
 }
 
 /**
@@ -93,17 +99,19 @@ export function CanvasStage({
 }: CanvasStageProps) {
   const stageRef = useRef<HTMLDivElement>(null)
   const worldRef = useRef<HTMLDivElement>(null)
-  // Экран, который тянут, и экраны, отпущенные, но ещё не сохранённые в main.
+  // Экраны, которые тянут (один или все экраны группы), и отпущенные, но ещё не сохранённые в main.
   const [drag, setDrag] = useState<Drag | null>(null)
   const [dropped, setDropped] = useState<ReadonlyMap<string, Point>>(new Map())
   const [panning, setPanning] = useState(false)
   const saveTimerRef = useRef<number | undefined>(undefined)
   const flightRef = useRef<number | null>(null)
-  const { id: canvasId, screens } = canvas
+  const { id: canvasId, screens, groups } = canvas
 
   const positionOf = useCallback(
-    (screen: CanvasScreen): Point =>
-      drag?.screenId === screen.id ? drag : (dropped.get(screen.id) ?? screen),
+    (screen: CanvasScreen): Point => {
+      const base = dropped.get(screen.id) ?? screen
+      return drag?.ids.has(screen.id) ? { x: base.x + drag.dx, y: base.y + drag.dy } : base
+    },
     [drag, dropped]
   )
   const bounds = useMemo(
@@ -112,6 +120,17 @@ export function CanvasStage({
   )
   const boundsRef = useRef(bounds)
   boundsRef.current = bounds
+  // Рамки групп строятся по экранам, поэтому следуют за ними и во время переноса.
+  const groupRects = useMemo(
+    () =>
+      groups.flatMap((group) => {
+        const rect = groupBounds(group, bounds)
+        return rect ? [{ group, rect }] : []
+      }),
+    [groups, bounds]
+  )
+  const groupRectsRef = useRef(groupRects)
+  groupRectsRef.current = groupRects
 
   // Вид сохраняется после паузы; закрытая страница сохраняет его сразу.
   const saveView = useCallback(() => {
@@ -150,14 +169,14 @@ export function CanvasStage({
 
   /** Вид, в который `content` вписывается целиком вместе с подписями над экранами. */
   const viewFitting = useCallback(
-    (content: Rect): CanvasView | null => {
+    (content: Rect, extraTopSpace = 0): CanvasView | null => {
       const viewport = viewState.viewport()
       if (viewport.width === 0) {
         return null
       }
       // Подписи над экранами не масштабируются: место под них зависит от итогового масштаба.
       const first = fitView(content, viewport, FIT_MARGIN)
-      const labelSpace = SCREEN_LABEL_SPACE / first.zoom
+      const labelSpace = (SCREEN_LABEL_SPACE + extraTopSpace) / first.zoom
       return fitView(
         { ...content, y: content.y - labelSpace, height: content.height + labelSpace },
         viewport,
@@ -167,8 +186,13 @@ export function CanvasStage({
     [viewState]
   )
   const fittedView = useCallback((): CanvasView | null => {
-    const content = unionRect([...boundsRef.current.values()])
-    return content && viewFitting(content)
+    const content = unionRect([
+      ...boundsRef.current.values(),
+      ...groupRectsRef.current.map(({ rect }) => rect)
+    ])
+    return (
+      content && viewFitting(content, groupRectsRef.current.length > 0 ? GROUP_HEADER_SPACE : 0)
+    )
   }, [viewFitting])
 
   // Перелёт к виду: камера плывёт к центру нового вида, а масштаб меняется плавно (по степени),
@@ -218,6 +242,17 @@ export function CanvasStage({
       onFocusScreen(screenId)
     },
     [viewFitting, flyTo, onFocusScreen]
+  )
+
+  const focusGroup = useCallback(
+    (groupId: string) => {
+      const rect = groupRectsRef.current.find(({ group }) => group.id === groupId)?.rect
+      const view = rect && viewFitting(rect, GROUP_HEADER_SPACE)
+      if (view) {
+        flyTo(view)
+      }
+    },
+    [viewFitting, flyTo]
   )
 
   useImperativeHandle(
@@ -366,24 +401,36 @@ export function CanvasStage({
     stage.addEventListener('pointercancel', onEnd)
   }
 
-  // Экран: протяжка переносит его, клик без протяжки подводит к нему вид.
+  // Экран или заголовок группы: протяжка переносит экраны, клик без протяжки подводит к ним вид.
   const screensRef = useRef(screens)
   screensRef.current = screens
   const positionOfRef = useRef(positionOf)
   positionOfRef.current = positionOf
-  const handleScreenPointerDown = useCallback(
-    (screenId: string, event: ReactPointerEvent<HTMLElement>) => {
+  /**
+   * Переносит `ids` вместе. `save` сохраняет итоговый сдвиг (в целых пикселях) в main; `onClick`
+   * зовётся, когда мышь отпустили почти там же, где нажали.
+   */
+  const startMove = useCallback(
+    (
+      event: ReactPointerEvent<HTMLElement>,
+      ids: ReadonlySet<string>,
+      save: (dx: number, dy: number) => Promise<void>,
+      onClick: () => void
+    ) => {
       const view = viewState.view()
-      const screen = screensRef.current.find(({ id }) => id === screenId)
       // Ctrl-клик на macOS — правая кнопка: за него отвечает контекстное меню.
-      if (!view || !screen || event.button !== 0 || event.ctrlKey) {
+      if (!view || ids.size === 0 || event.button !== 0 || event.ctrlKey) {
         return
       }
       event.preventDefault()
       const target = event.currentTarget
       target.setPointerCapture(event.pointerId)
       const start = { x: event.clientX, y: event.clientY }
-      const origin = positionOfRef.current(screen)
+      const origins = new Map(
+        screensRef.current
+          .filter(({ id }) => ids.has(id))
+          .map((screen) => [screen.id, positionOfRef.current(screen)])
+      )
       let current: Point | null = null
       let frame: number | null = null
       const onMove = (move: PointerEvent) => {
@@ -392,11 +439,11 @@ export function CanvasStage({
         if (!current && Math.hypot(dx, dy) < DRAG_THRESHOLD) {
           return
         }
-        current = { x: origin.x + dx / view.zoom, y: origin.y + dy / view.zoom }
+        current = { x: dx / view.zoom, y: dy / view.zoom }
         frame ??= requestAnimationFrame(() => {
           frame = null
           if (current) {
-            setDrag({ screenId, ...current })
+            setDrag({ ids, dx: current.x, dy: current.y })
           }
         })
       }
@@ -410,32 +457,71 @@ export function CanvasStage({
         setDrag(null)
         if (!current) {
           if (end.type === 'pointerup') {
-            focusScreen(screenId)
+            onClick()
           }
           return
         }
         if (end.type === 'pointercancel') {
           return
         }
-        const position = { x: Math.round(current.x), y: Math.round(current.y) }
-        setDropped((map) => new Map(map).set(screenId, position))
-        // Сохранённое место приходит с новым состоянием холста; не сохранилось — экран
-        // возвращается туда, где был.
+        const dx = Math.round(current.x)
+        const dy = Math.round(current.y)
+        setDropped((map) => {
+          const next = new Map(map)
+          for (const [id, origin] of origins) {
+            next.set(id, { x: origin.x + dx, y: origin.y + dy })
+          }
+          return next
+        })
+        // Сохранённое место приходит с новым состоянием холста; не сохранилось — экраны
+        // возвращаются туда, где были.
         const settle = () =>
           setDropped((map) => {
             const next = new Map(map)
-            next.delete(screenId)
+            origins.forEach((_origin, id) => next.delete(id))
             return next
           })
-        void window.atox.canvas
-          .moveScreen(canvasId, screenId, position.x, position.y)
-          .then(settle, settle)
+        void save(dx, dy).then(settle, settle)
       }
       target.addEventListener('pointermove', onMove)
       target.addEventListener('pointerup', onEnd)
       target.addEventListener('pointercancel', onEnd)
     },
-    [canvasId, viewState, focusScreen]
+    [viewState]
+  )
+
+  const handleScreenPointerDown = useCallback(
+    (screenId: string, event: ReactPointerEvent<HTMLElement>) => {
+      const origin = screensRef.current.find(({ id }) => id === screenId)
+      if (!origin) {
+        return
+      }
+      const from = positionOfRef.current(origin)
+      startMove(
+        event,
+        new Set([screenId]),
+        (dx, dy) => window.atox.canvas.moveScreen(canvasId, screenId, from.x + dx, from.y + dy),
+        () => focusScreen(screenId)
+      )
+    },
+    [canvasId, startMove, focusScreen]
+  )
+
+  const groupsRef = useRef(groups)
+  groupsRef.current = groups
+  const handleGroupPointerDown = useCallback(
+    (groupId: string, event: ReactPointerEvent<HTMLElement>) => {
+      const group = groupsRef.current.find(({ id }) => id === groupId)
+      if (group) {
+        startMove(
+          event,
+          new Set(group.screens),
+          (dx, dy) => window.atox.canvas.moveGroup(canvasId, groupId, dx, dy),
+          () => focusGroup(groupId)
+        )
+      }
+    },
+    [canvasId, startMove, focusGroup]
   )
 
   const centerAt = useCallback(
@@ -464,6 +550,17 @@ export function CanvasStage({
   return (
     <div ref={stageRef} className="canvas-stage" data-panning={panning} onPointerDown={startPan}>
       <div ref={worldRef} className="canvas-stage__world">
+        {groupRects.map(({ group, rect }) => (
+          <GroupFrame
+            key={group.id}
+            canvasId={canvasId}
+            group={group}
+            rect={rect}
+            dragging={group.screens.some((id) => drag?.ids.has(id))}
+            onPointerDown={handleGroupPointerDown}
+            onFocus={focusGroup}
+          />
+        ))}
         {screens.map((screen) => (
           <ScreenFrame
             key={screen.id}
@@ -471,7 +568,7 @@ export function CanvasStage({
             screen={screen}
             position={positionOf(screen)}
             selected={screen.id === selectedScreenId}
-            dragging={drag?.screenId === screen.id}
+            dragging={drag?.ids.has(screen.id) ?? false}
             previewVersionId={preview?.screenId === screen.id ? preview.versionId : null}
             onPointerDown={handleScreenPointerDown}
             onFocus={focusScreen}

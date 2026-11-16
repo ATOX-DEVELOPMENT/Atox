@@ -14,5 +14,7 @@
     "noEmit": true,
     "allowImportingTsExtensions": true
   },
-  "include": ["electron.vite.config.ts", "scripts"]
+  "include": ["electron.vite.config.ts", "scripts"],
+  // Окно приложения для холста — React-код экрана, его собирает холст, а не этот проект.
+  "exclude": ["scripts/ui-snapshot/window"]
 }
