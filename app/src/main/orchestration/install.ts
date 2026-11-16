@@ -3,6 +3,7 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { DEFAULT_SCREEN_DEVICE, SCREEN_DEVICES, SCREEN_SIZE } from '../../shared/canvas'
+import { CANVAS_KIT_EXAMPLES, CANVAS_KIT_GUIDE } from '../../shared/canvasRuntime'
 import { CANVAS_MESSAGE_PREFIX, SCREEN_FILE_MAX_MB } from '../canvas/rules'
 import { quoteShell } from '../shellQuote'
 
@@ -91,7 +92,13 @@ description: Show UI designs to the user on the Atox canvas as live React screen
 
 The canvas is a page in Atox where the user sees the screens of this chat side by side: phone app screens, website pages, desktop app windows. Each screen is a React component in a file of the project. Atox builds it, shows it in a device frame and watches the files: every time you edit the screen or a file it imports, the canvas rebuilds by itself. The user moves, renames and zooms screens; you only write the code.
 
-Before you design, read \`kit.md\` in this skill's folder: the component kit (\`@atox/ui\`) reference and the design rules. Use the kit instead of building buttons, inputs and layouts from scratch.
+Before you design, read \`kit.md\` in this skill's folder once (about 230 lines): the component kit (\`@atox/ui\`) reference and the design rules. Use the kit instead of building buttons, inputs and layouts from scratch. \`examples.md\` next to it has three full screens; open it only when you want a complete example. For a small change to a screen you already built you do not need to read them again.
+
+Quick reference (details and props are in \`kit.md\`):
+
+- Phone: \`<Screen>\` with \`StatusBar\`, \`NavBar\`, \`ScrollArea\`, \`TabBar\`. Desktop app: \`<Screen className="flex-row">\` with \`Sidebar\` and a column of \`Topbar\` + \`ScrollArea\`. Website: \`<Screen layout="page">\` with \`SiteNav\`, \`Hero\`, \`FeatureGrid\`, \`Footer\`.
+- Controls: \`Button\`, \`IconButton\`, \`Input\`, \`Field\`, \`Select\`, \`Switch\`, \`Checkbox\`, \`SegmentedControl\`, \`Tabs\`. Display: \`Card\`, \`Stat\`, \`Badge\`, \`Avatar\`, \`List\`/\`ListItem\`, \`Table\`, \`EmptyState\`, \`Alert\`. Charts: \`LineChart\`, \`BarChart\`, \`Donut\`, \`Sparkline\`.
+- Colors: change the accent with \`<Screen accent="emerald">\` (indigo, blue, emerald, rose, amber, violet) and use the semantic classes (\`bg-accent\`, \`text-fg\`, \`bg-surface\`, \`border-border\`), not raw Tailwind colors like \`bg-green-600\`: raw colors break dark mode.
 
 ## Commands
 
@@ -107,10 +114,12 @@ atox canvas screen remove Login                                # removes the scr
 ## Workflow
 
 1. Write the screen as a .tsx file in the project, for example \`.atox/canvas/login.tsx\`, with a default-exported component: \`export default function Login() { ... }\`.
-2. Put shared parts in their own files: \`.atox/canvas/components/*.tsx\`, sample data in \`.atox/canvas/data.ts\`. Import them with relative paths (\`./components/Card\`). Keep each file small.
+2. Put shared parts in their own files: \`.atox/canvas/components/*.tsx\`, sample data in \`.atox/canvas/data.ts\`. Import them with relative paths (\`./components/Card\`). Keep each file small. Run \`atox\` commands and name files with paths relative to the project root, and do not \`cd\` into \`.atox/canvas\`.
 3. Put the screen on the canvas once: \`atox canvas screen set Login .atox/canvas/login.tsx --device iphone\`. The canvas is created for this chat if it has none. Run \`set\` again only to change the device or size, or to add another screen. Use one screen per file, and several screens for a flow (Login, Home, Settings).
 4. Check your own work: run \`atox canvas screen preview <name>\` after the first draft and after bigger changes, open the PNG it prints, and fix whatever looks wrong (broken layout, overlaps, unreadable text, empty areas) before you tell the user it is done.
 5. \`set\` and \`preview\` also report problems in plain text: "Build failed" (file:line and the error), "Errors in the running screen" (exceptions and console errors), and "Layout problems" such as "Content is 1240 px tall but the screen is 844 px: it is cut off." Fix them in the code. When the build fails, the canvas keeps the last version that built; \`atox canvas\` shows the build error of each screen.
+
+Edit files with your editor tool, not with \`sed -i\` (on macOS it differs from GNU sed and fails). A command that printed an error changed nothing: do not assume the canvas shows the new version.
 
 The user, not you, names and arranges screens. If they renamed a screen, use the new name from \`atox canvas\`.
 
@@ -164,17 +173,26 @@ const SKILL_TARGETS = [
 /**
  * Устанавливает навыки Atox тем агентам, что есть у пользователя, — так агент знает, что
  * может запускать помощников и показывать экраны на холсте. Справка по набору компонентов
- * (`kitGuidePath`) ложится рядом с навыком холста как `kit.md`. Файл перезаписывается,
- * только если его текст изменился.
+ * и примеры экранов из `kitDirectory` ложатся рядом с навыком холста как `kit.md` и
+ * `examples.md`: справку агент читает всегда, примеры — по нужде, поэтому файлы раздельные.
+ * Файл перезаписывается, только если его текст изменился.
  */
-export async function installSkills(kitGuidePath: string): Promise<void> {
+export async function installSkills(kitDirectory: string): Promise<void> {
   const home = homedir()
-  const kitGuide = await readFile(kitGuidePath, 'utf8').catch(() => null)
+  const [kitGuide, kitExamples] = await Promise.all(
+    [CANVAS_KIT_GUIDE, CANVAS_KIT_EXAMPLES].map((name) =>
+      readFile(join(kitDirectory, name), 'utf8').catch(() => null)
+    )
+  )
   const skills = [
     { name: 'atox', files: { 'SKILL.md': SKILL } },
     {
       name: 'atox-canvas',
-      files: { 'SKILL.md': CANVAS_SKILL, ...(kitGuide !== null && { 'kit.md': kitGuide }) }
+      files: {
+        'SKILL.md': CANVAS_SKILL,
+        ...(kitGuide !== null && { 'kit.md': kitGuide }),
+        ...(kitExamples !== null && { 'examples.md': kitExamples })
+      }
     }
   ]
   const targets = SKILL_TARGETS.filter(({ agentHome }) => existsSync(join(home, agentHome)))

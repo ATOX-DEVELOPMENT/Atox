@@ -11,7 +11,6 @@ import { installDesktopEntry } from './desktopEntry'
 import { GitBranchTracker } from './gitBranches'
 import {
   CANVAS_KIT_DIRECTORY,
-  CANVAS_KIT_GUIDE,
   CANVAS_VENDOR_DIRECTORY
 } from '../shared/canvasRuntime'
 import { handleImageProtocol, IMAGE_SCHEME } from './imageProtocol'
@@ -209,8 +208,8 @@ async function bootstrap(): Promise<void> {
     .start()
     .catch((error) => console.error('Failed to start orchestration', error))
   app.on('will-quit', () => orchestration.stop())
-  void installSkills(join(canvasResourcePath(CANVAS_KIT_DIRECTORY), CANVAS_KIT_GUIDE)).catch(
-    (error) => console.error('Failed to install agent skills', error)
+  void installSkills(canvasResourcePath(CANVAS_KIT_DIRECTORY)).catch((error) =>
+    console.error('Failed to install agent skills', error)
   )
   void installCodexRules().catch((error) => console.error('Failed to install Codex rules', error))
   if (app.isPackaged && appImage) {
