@@ -6,14 +6,15 @@ import {
   CANVAS_IMPORTABLE_PACKAGES,
   CANVAS_KIT_PACKAGE
 } from '../../shared/canvasRuntime'
+import { packagedEsbuildBinary } from './resources'
 import { isInsideFolder } from './rules'
 
 /**
  * Сборка экранов-React. Компилятор — нативный esbuild, а не esbuild-wasm: у wasm-версии
  * асинхронный API запускает отдельный Node (`#!/usr/bin/env node`), которого у пользователя
  * может не быть, а на главном потоке она блокировала бы приложение. Нативный бинарник
- * работает отдельным процессом; в собранном приложении он лежит в `app.asar.unpacked`
- * (`asarUnpack`), потому что исполняемый файл из архива не запустить.
+ * работает отдельным процессом; в собранном приложении он лежит среди ресурсов
+ * (`extraResources`, свой для каждой архитектуры), потому что исполняемый файл из архива не запустить.
  */
 
 /** Экран, собранный в один ES-модуль. */
@@ -212,22 +213,12 @@ export function describeBuildErrors(
   return `${describeMessage(first, screen, roots)}${more}`
 }
 
-/** Бинарник esbuild из `app.asar.unpacked`; вне архива esbuild находит его сам. */
-function unpackedBinary(): string | undefined {
-  try {
-    const binary = require.resolve(`@esbuild/${process.platform}-${process.arch}/bin/esbuild`)
-    return binary.includes('app.asar') ? binary.replace('app.asar', 'app.asar.unpacked') : undefined
-  } catch {
-    return undefined
-  }
-}
-
 let esbuildModule: typeof import('esbuild') | undefined
 
 /** esbuild читает путь к бинарнику при загрузке, поэтому подключается позже, чем он известен. */
 function loadEsbuild(): typeof import('esbuild') {
   if (!esbuildModule) {
-    const binary = unpackedBinary()
+    const binary = packagedEsbuildBinary()
     if (binary) {
       process.env['ESBUILD_BINARY_PATH'] = binary
     }

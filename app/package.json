@@ -63,8 +63,7 @@
       "out/**/*"
     ],
     "asarUnpack": [
-      "node_modules/node-pty/**",
-      "node_modules/@esbuild/**"
+      "node_modules/node-pty/**"
     ],
     "npmRebuild": false,
     "electronLanguages": [
@@ -82,12 +81,18 @@
       "files": [
         "out/**/*",
         "!node_modules/node-pty/build/**",
-        "!node_modules/node-pty/prebuilds/win32-*/**"
+        "!node_modules/node-pty/prebuilds/win32-*/**",
+        "!node_modules/@esbuild/**",
+        "!node_modules/esbuild/bin/**"
       ],
       "extraResources": [
         {
           "from": "node_modules/@anthropic-ai/claude-agent-sdk-darwin-${arch}/claude",
           "to": "claude-cli/claude"
+        },
+        {
+          "from": "node_modules/@esbuild/darwin-${arch}/bin/esbuild",
+          "to": "esbuild/esbuild"
         }
       ]
     },
@@ -107,12 +112,18 @@
         "!node_modules/node-pty/build/Release/obj.target/**",
         "!node_modules/node-pty/build/Release/.deps/**",
         "!node_modules/node-pty/build/**/*.{mk,Makefile,gypi}",
-        "!node_modules/node-pty/build/{Makefile,config.gypi,node_gyp_bins}"
+        "!node_modules/node-pty/build/{Makefile,config.gypi,node_gyp_bins}",
+        "!node_modules/@esbuild/**",
+        "!node_modules/esbuild/bin/**"
       ],
       "extraResources": [
         {
           "from": "node_modules/@anthropic-ai/claude-agent-sdk-linux-${arch}/claude",
           "to": "claude-cli/claude"
+        },
+        {
+          "from": "node_modules/@esbuild/linux-${arch}/bin/esbuild",
+          "to": "esbuild/esbuild"
         }
       ]
     },
