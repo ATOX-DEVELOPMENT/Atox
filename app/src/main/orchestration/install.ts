@@ -109,6 +109,7 @@ atox canvas screen set "Admin dashboard" .atox/canvas/admin.tsx --device web
 atox canvas screen set Widget .atox/canvas/widget.tsx --size 360x640
 atox canvas screen preview Login                               # PNG of the screen as the user sees it, plus problems
 atox canvas screen remove Login                                # removes the screen; the files stay
+atox canvas arrange "Login,Code,Sign up" "Feed,Post"          # rows of screens, left to right; rows top to bottom
 atox canvas link Login Home --on "Sign in"                     # a line from the Sign in button of Login to the Home screen
 atox canvas link Home Settings                                 # a line from the Home screen to Settings
 atox canvas link remove Login Home                             # removes the lines between two screens
@@ -127,6 +128,10 @@ atox canvas export png                                         # a folder of PNG
 5. \`set\` and \`preview\` also report problems in plain text: "Build failed" (file:line and the error), "Errors in the running screen" (exceptions and console errors), and "Layout problems" such as "Content is 1240 px tall but the screen is 844 px: it is cut off." Fix them in the code. When the build fails, the canvas keeps the last version that built; \`atox canvas\` shows the build error of each screen.
 
 Edit files with your editor tool, not with \`sed -i\` (on macOS it differs from GNU sed and fails). A command that printed an error changed nothing: do not assume the canvas shows the new version.
+
+## Arranging screens
+
+New screens are added to the right of the last one, so a long list ends up as one long row. Group them yourself: after adding the screens, run \`atox canvas arrange "<row>" "<row>"\`. Each argument is one row of screen names separated by commas, left to right; rows go top to bottom; screens you do not name go in a last row. Put one flow or one area of the app per row (the main path first: "Login,Code,Sign up", then "Feed,Post,Payment", then "Author mode"). Do it again whenever you add a group of screens. This is your job, not the user's: do not tell the user to drag screens. Never edit the canvas data files.
 
 ## Showing the flow
 

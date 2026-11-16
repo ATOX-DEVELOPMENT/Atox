@@ -315,6 +315,17 @@ export class OrchestrationServer {
       return this.services.canvas.previewScreen(caller.chat.id, name)
     },
 
+    canvasArrange: (caller, { rows }) => {
+      if (
+        !Array.isArray(rows) ||
+        rows.length === 0 ||
+        !rows.every((row) => Array.isArray(row) && row.every((name) => typeof name === 'string'))
+      ) {
+        throw new CommandError('Specify the rows: a list of screen names for each row.')
+      }
+      return this.services.canvas.arrangeScreens(caller.chat.id, rows)
+    },
+
     canvasLinkSet: (caller, { from, to, on }) => {
       if (typeof from !== 'string' || typeof to !== 'string' || !from.trim() || !to.trim()) {
         throw new CommandError('Specify the names of the two screens.')

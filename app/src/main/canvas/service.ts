@@ -32,6 +32,7 @@ import {
   SCREEN_FILE_MAX_BYTES,
   SCREEN_FILE_MAX_MB,
   appendVersion,
+  arrangeRows,
   canvasNameFromTitle,
   describeOverflow,
   findScreenByName,
@@ -110,6 +111,14 @@ export interface AgentExportRequest {
   screens?: string[]
   /** Абсолютный путь: файл для PDF и PPTX, папка для PNG. Не назван — папка «Загрузки». */
   out?: string
+}
+
+export interface AgentArrangeResult {
+  /** Сколько рядов получилось и сколько экранов в названных рядах. */
+  rows: number
+  screens: number
+  /** Экраны, которых в рядах не было: они уложены отдельным рядом внизу, в прежнем порядке. */
+  rest: string[]
 }
 
 /** Линия, которую ставит агент: экраны по именам. */
@@ -789,6 +798,49 @@ export class CanvasService implements ScreenDocumentSource {
     })
     if (changed && canvas.links.some((link) => links.includes(link))) {
       this.changed()
+    }
+  }
+
+  /**
+   * Раскладывает экраны рядами по просьбе агента: каждый ряд — список имён слева направо, ряды
+   * идут сверху вниз. Не названные экраны уходят отдельным рядом вниз: ни один не пропадает и
+   * не накладывается на другой. Так агент собирает потоки (вход → код → регистрация) в ряды.
+   */
+  arrangeScreens(chatId: string, rows: readonly (readonly string[])[]): AgentArrangeResult {
+    const canvas = this.activeCanvasOf(chatId)
+    if (!canvas) {
+      throw new CanvasError('This chat has no canvas.')
+    }
+    const placed = new Set<StoredScreen>()
+    const named = rows
+      .map((names) =>
+        names.map((name) => {
+          const screen = this.screenNamed(canvas, name)
+          if (placed.has(screen)) {
+            throw new CanvasError(`The screen "${screen.name}" is listed twice.`)
+          }
+          placed.add(screen)
+          return screen
+        })
+      )
+      .filter((row) => row.length > 0)
+    if (named.length === 0) {
+      throw new CanvasError('Name at least one screen to arrange.')
+    }
+    const rest = canvas.screens
+      .filter((screen) => !placed.has(screen))
+      .toSorted((a, b) => a.y - b.y || a.x - b.x)
+    const places = arrangeRows(rest.length > 0 ? [...named, rest] : named)
+    for (const [screen, { x, y }] of places) {
+      screen.x = x
+      screen.y = y
+    }
+    canvas.updatedAt = Date.now()
+    this.changed()
+    return {
+      rows: named.length + (rest.length > 0 ? 1 : 0),
+      screens: placed.size,
+      rest: rest.map(({ name }) => name)
     }
   }
 
