@@ -61,8 +61,8 @@ export interface SidebarItemProps {
   icon?: LucideIcon
   label: string
   active?: boolean
-  /** Счётчик справа. */
-  count?: number
+  /** Счётчик справа: число или уже отформатированная строка ("1,204"). */
+  count?: number | string
   shortcut?: string[]
   /** Цветная точка вместо иконки: проекты, каналы. */
   dot?: string

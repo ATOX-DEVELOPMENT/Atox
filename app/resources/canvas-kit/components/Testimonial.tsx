@@ -18,7 +18,7 @@ export function Testimonial({ quote, name, role, rating, className }: Testimonia
       {rating !== undefined && (
         <div className="flex gap-0.5 text-warning" aria-label={`${rating} out of 5`}>
           {Array.from({ length: 5 }, (_, index) => (
-            <Star key={index} aria-hidden size={16} strokeWidth={0} fill={index < rating ? 'currentColor' : 'var(--color-muted-strong)'} />
+            <Star key={index} aria-hidden size={16} strokeWidth={0} fill={index < rating ? 'currentColor' : 'var(--atox-muted-strong)'} />
           ))}
         </div>
       )}

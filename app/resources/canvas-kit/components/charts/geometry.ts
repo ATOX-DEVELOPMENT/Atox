@@ -5,23 +5,23 @@ export interface Point {
   y: number
 }
 
-/** Цвета серий по порядку: первая всегда акцент, дальше палитра графиков из токенов. */
+/** Цвета серий по порядку: первая всегда акцент. Переменные --atox-* берутся напрямую, чтобы учитывать тему и акцент ветки. */
 export const seriesColor = [
-  'var(--color-chart-1)',
-  'var(--color-chart-2)',
-  'var(--color-chart-3)',
-  'var(--color-chart-4)',
-  'var(--color-chart-5)'
+  'var(--atox-accent)',
+  'var(--atox-chart-2)',
+  'var(--atox-chart-3)',
+  'var(--atox-chart-4)',
+  'var(--atox-chart-5)'
 ]
 
 /** Цвет по тону набора для одиночных графиков. */
 export const toneColor = {
-  accent: 'var(--color-accent)',
-  success: 'var(--color-success)',
-  warning: 'var(--color-warning)',
-  danger: 'var(--color-danger)',
-  info: 'var(--color-info)',
-  neutral: 'var(--color-fg-subtle)'
+  accent: 'var(--atox-accent)',
+  success: 'var(--atox-success)',
+  warning: 'var(--atox-warning)',
+  danger: 'var(--atox-danger)',
+  info: 'var(--atox-info)',
+  neutral: 'var(--atox-fg-subtle)'
 } as const
 
 export type ChartTone = keyof typeof toneColor

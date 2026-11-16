@@ -48,7 +48,7 @@ export function Donut({
     >
       <div className="relative shrink-0" style={{ width: size, height: size }}>
         <svg viewBox="0 0 100 100" className="size-full -rotate-90">
-          <circle cx="50" cy="50" r={radius} fill="none" stroke="var(--color-muted)" strokeWidth={stroke} />
+          <circle cx="50" cy="50" r={radius} fill="none" stroke="var(--atox-muted)" strokeWidth={stroke} />
           {data.map((item, index) => {
             const share = (item.value / total) * 100
             const dash = Math.max(share - gap, 0)
