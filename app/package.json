@@ -12,15 +12,17 @@
   "private": true,
   "main": "out/main/index.js",
   "scripts": {
-    "dev": "electron-vite dev",
-    "build": "electron-vite build",
+    "dev": "npm run build:vendor && electron-vite dev",
+    "build": "npm run build:vendor && electron-vite build",
     "preview": "electron-vite preview",
     "typecheck": "tsc -p tsconfig.json && tsc -p src/main && tsc -p src/cli && tsc -p src/preload && tsc -p src/renderer",
     "postinstall": "install-electron --no && chmod +x node_modules/node-pty/prebuilds/*/spawn-helper",
-    "package": "electron-vite build && electron-builder",
-    "release:manifest": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/release-manifest.ts"
+    "package": "npm run build:vendor && electron-vite build && electron-builder",
+    "release:manifest": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/release-manifest.ts",
+    "build:vendor": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/build-canvas-vendor.ts"
   },
   "dependencies": {
+    "esbuild": "^0.25.12",
     "node-pty": "^1.1.0"
   },
   "devDependencies": {
@@ -29,6 +31,7 @@
     "@dnd-kit/modifiers": "^9.0.0",
     "@dnd-kit/sortable": "^10.0.0",
     "@dnd-kit/utilities": "^3.2.2",
+    "@tailwindcss/browser": "^4.3.5",
     "@types/node": "^26.6.3",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
