@@ -295,7 +295,8 @@ const api: AtoxApi = {
       ipcRenderer.invoke(IpcChannel.CanvasRequest, canvasId, text, screenId),
     history: (canvasId, screenId) => ipcRenderer.invoke(IpcChannel.CanvasHistory, canvasId, screenId),
     restore: (canvasId, screenId, versionId) =>
-      ipcRenderer.invoke(IpcChannel.CanvasRestore, canvasId, screenId, versionId)
+      ipcRenderer.invoke(IpcChannel.CanvasRestore, canvasId, screenId, versionId),
+    export: (canvasId, format) => ipcRenderer.invoke(IpcChannel.CanvasExport, canvasId, format)
   }
 }
 

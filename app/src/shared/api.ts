@@ -7,7 +7,13 @@ import type {
   BoardState,
   TaskStart
 } from './board'
-import type { CanvasState, CanvasView, ScreenVersion } from './canvas'
+import type {
+  CanvasExportFormat,
+  CanvasExportResult,
+  CanvasState,
+  CanvasView,
+  ScreenVersion
+} from './canvas'
 import type { ChangesResult, FileDiff } from './changes'
 import type { AppCommand } from './commands'
 import type { GitHubAccount } from './github'
@@ -318,6 +324,11 @@ export interface AtoxApi {
     history(canvasId: string, screenId: string): Promise<ScreenVersion[]>
     /** Записывает снимок версии в файл экрана; агент и холст видят его как обычную правку. */
     restore(canvasId: string, screenId: string, versionId: string): Promise<void>
+    /**
+     * Выгружает все экраны холста в PDF, PNG (папка) или PPTX. Место спрашивает системный
+     * диалог; `null` — пользователь передумал. После выгрузки показывает файл в Finder.
+     */
+    export(canvasId: string, format: CanvasExportFormat): Promise<CanvasExportResult | null>
   }
 }
 
@@ -418,5 +429,6 @@ export const IpcChannel = {
   CanvasRemove: 'canvas:remove',
   CanvasRequest: 'canvas:request',
   CanvasHistory: 'canvas:history',
-  CanvasRestore: 'canvas:restore'
+  CanvasRestore: 'canvas:restore',
+  CanvasExport: 'canvas:export'
 } as const

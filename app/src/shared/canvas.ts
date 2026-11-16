@@ -22,7 +22,10 @@ export const SCREEN_DEVICES = {
   android: { name: 'Android', width: 412, height: 915, frame: 'phone' },
   tablet: { name: 'Tablet', width: 820, height: 1180, frame: 'tablet' },
   desktop: { name: 'Desktop app', width: 1100, height: 700, frame: 'window' },
-  web: { name: 'Website', width: 1280, height: 800, frame: 'browser' }
+  web: { name: 'Website', width: 1280, height: 800, frame: 'browser' },
+  // Для презентаций и документов: без рамки, чтобы экран был ровно страницей.
+  slide: { name: 'Slide', width: 1920, height: 1080, frame: 'none' },
+  a4: { name: 'A4 page', width: 794, height: 1123, frame: 'none' }
 } as const satisfies Record<string, DevicePreset>
 
 export type ScreenDeviceId = keyof typeof SCREEN_DEVICES
@@ -146,4 +149,29 @@ export function canvasScreenUrl(
 ): string {
   const version = versionId ? `&v=${encodeURIComponent(versionId)}` : ''
   return `${CANVAS_PROTOCOL}://screen/${canvasId}/${screenId}?r=${revision}${version}`
+}
+
+/** Во что выгружаются экраны холста. */
+export const CANVAS_EXPORT_FORMATS = ['pdf', 'png', 'pptx'] as const
+
+export type CanvasExportFormat = (typeof CANVAS_EXPORT_FORMATS)[number]
+
+export function isCanvasExportFormat(value: unknown): value is CanvasExportFormat {
+  return typeof value === 'string' && (CANVAS_EXPORT_FORMATS as readonly string[]).includes(value)
+}
+
+/** Расширение файла выгрузки: PNG выгружается папкой, у неё расширения нет. */
+export const CANVAS_EXPORT_EXTENSIONS: Record<CanvasExportFormat, string> = {
+  pdf: '.pdf',
+  png: '',
+  pptx: '.pptx'
+}
+
+/** Результат выгрузки: куда легли файлы и сколько экранов в них вошло. */
+export interface CanvasExportResult {
+  /** Файл (PDF, PPTX) или папка с PNG. */
+  path: string
+  screens: number
+  /** Экраны, которые вошли в выгрузку не в том виде: не собрались или потеряли файл. */
+  warnings: string[]
 }

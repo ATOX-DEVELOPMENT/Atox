@@ -60,6 +60,39 @@ export function placeNewScreen(
   }
 }
 
+/**
+ * Порядок страниц выгрузки: ряды холста сверху вниз, в ряду слева направо. Экраны одного ряда
+ * стоят на одной высоте (с запасом, если человек сдвинул экран чуть выше или ниже).
+ */
+export function orderForExport<Screen extends Pick<CanvasScreen, 'x' | 'y' | 'height'>>(
+  screens: readonly Screen[]
+): Screen[] {
+  const rows: Screen[][] = []
+  for (const screen of screens.toSorted((a, b) => a.y - b.y || a.x - b.x)) {
+    const row = rows.at(-1)
+    const first = row?.[0]
+    if (row && first && screen.y - first.y < first.height / 2) {
+      row.push(screen)
+    } else {
+      rows.push([screen])
+    }
+  }
+  return rows.flatMap((row) => row.toSorted((a, b) => a.x - b.x))
+}
+
+/** Имя файла из имени холста или экрана: без знаков, которые не годятся для пути. */
+export function exportFileName(name: string, fallback: string): string {
+  const cleaned = name
+    // eslint-disable-next-line no-control-regex
+    .replace(/[\u0000-\u001f\\/:*?"<>|]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .replace(/^\.+/, '')
+    .slice(0, 80)
+    .trim()
+  return cleaned || fallback
+}
+
 /** Экран по имени: агент называет его как угодно по регистру и с пробелами по краям. */
 export function findScreenByName<Screen extends Pick<CanvasScreen, 'name'>>(
   screens: readonly Screen[],

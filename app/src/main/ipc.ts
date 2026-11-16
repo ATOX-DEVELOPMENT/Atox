@@ -27,7 +27,7 @@ import {
   type BoardState,
   type TaskStart
 } from '../shared/board'
-import type { CanvasState } from '../shared/canvas'
+import { isCanvasExportFormat, type CanvasState } from '../shared/canvas'
 import type { GitHubCounts, GitHubKind, ListState } from '../shared/repository'
 import type { Settings } from '../shared/settings'
 import type { UpdateState } from '../shared/update'
@@ -35,7 +35,7 @@ import { findAgent, isAgentId, type AgentId } from '../shared/agents'
 import type { AgentDetector } from './agents'
 import type { WorkingTreeReader } from './changes'
 import type { ConversationManager } from './conversations/manager'
-import { confirm, describeWorkingAgents } from './dialogs'
+import { chooseExportTarget, confirm, describeWorkingAgents, inform } from './dialogs'
 import type { GitBranchTracker } from './gitBranches'
 import type { SettingsStore } from './settings'
 import type { ProjectStore } from './store'
@@ -589,6 +589,41 @@ export function registerIpcHandlers({
     if (confirmed) {
       await canvas.remove(id)
     }
+  })
+  ipcMain.handle(IpcChannel.CanvasExport, async (event, canvasId: unknown, format: unknown) => {
+    const id = requireId(canvasId)
+    if (!isCanvasExportFormat(format)) {
+      throw new Error('Invalid export format')
+    }
+    const target = canvas.state().canvases.find((other) => other.id === id)
+    if (!target) {
+      throw new Error('The canvas was not found.')
+    }
+    const window = BrowserWindow.fromWebContents(event.sender)
+    const path = await chooseExportTarget(window, target.name, format)
+    if (!path) {
+      return null
+    }
+    let result
+    try {
+      result = await canvas.exportCanvas(id, format, path)
+    } catch (error) {
+      await inform(window, {
+        type: 'error',
+        message: 'Could not export the canvas',
+        detail: error instanceof Error ? error.message : String(error)
+      })
+      return null
+    }
+    shell.showItemInFolder(path)
+    if (result.warnings.length > 0) {
+      await inform(window, {
+        type: 'warning',
+        message: 'Exported, but some screens are not up to date',
+        detail: result.warnings.join('\n')
+      })
+    }
+    return result
   })
   ipcMain.handle(
     IpcChannel.CanvasRequest,
