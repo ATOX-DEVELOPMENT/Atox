@@ -18,7 +18,7 @@ export function Kbd({ keys, tone = 'default', className }: KbdProps) {
             'inline-grid h-5 min-w-5 place-items-center rounded px-1 font-sans text-2xs font-semibold',
             tone === 'default'
               ? 'border border-border bg-surface text-fg-muted shadow-[0_1px_0_var(--atox-border)]'
-              : 'bg-white/15 text-inverse-fg'
+              : 'bg-inverse-fg/15 text-inverse-fg'
           )}
         >
           {key}

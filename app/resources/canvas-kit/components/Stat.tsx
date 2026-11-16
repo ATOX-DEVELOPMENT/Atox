@@ -56,7 +56,7 @@ export function Stat({
                   )}
                 >
                   <Arrow aria-hidden size={14} strokeWidth={2} />
-                  {Math.abs(delta).toFixed(1)}%
+                  {Math.abs(delta).toFixed(1).replace(/\.0$/, '')}%
                 </span>
               )}
               {hint && <span className="text-fg-subtle">{hint}</span>}
