@@ -23,15 +23,18 @@ export async function showCanvasMenu(
   anchor: MenuAnchor,
   { withOpen, chatAvailable, renameLabel = 'Rename', navigation, onRename }: CanvasMenuOptions
 ): Promise<void> {
+  const chat: MenuItem<CanvasAction> = {
+    action: 'chat',
+    label: 'Go to chat',
+    icon: <MessageCircle />,
+    enabled: chatAvailable
+  }
+  const rename: MenuItem<CanvasAction> = { action: 'rename', label: renameLabel, icon: <Pencil /> }
+  // В списке и в сайдбаре холст сначала открывают; на его странице первым идёт переименование.
   const items: MenuItem<CanvasAction>[] = [
-    ...(withOpen ? [{ action: 'open' as const, label: 'Open', icon: <ArrowUpRight /> }] : []),
-    {
-      action: 'chat',
-      label: 'Go to chat',
-      icon: <MessageCircle />,
-      enabled: chatAvailable
-    },
-    { action: 'rename', label: renameLabel, icon: <Pencil /> },
+    ...(withOpen
+      ? [{ action: 'open' as const, label: 'Open', icon: <ArrowUpRight /> }, chat, rename]
+      : [rename, chat]),
     { type: 'separator' },
     canvas.archived
       ? { action: 'archive', label: 'Unarchive', icon: <ArchiveRestore /> }

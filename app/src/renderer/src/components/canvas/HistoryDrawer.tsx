@@ -16,12 +16,13 @@ const CAUSE_DESCRIPTIONS: Record<ScreenVersion['cause'], string> = {
   restore: 'An older version restored'
 }
 
-const TIME = new Intl.DateTimeFormat('en', { hour: '2-digit', minute: '2-digit' })
+const TIME = new Intl.DateTimeFormat('en', { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' })
 const DATE_TIME = new Intl.DateTimeFormat('en', {
   month: 'short',
   day: 'numeric',
   hour: '2-digit',
-  minute: '2-digit'
+  minute: '2-digit',
+  hourCycle: 'h23'
 })
 
 /** Сегодняшняя версия — только время, более старая — с датой. */

@@ -148,11 +148,18 @@ export function wheelZoomFactor(deltaY: number, sensitivity: number): number {
   return Math.exp(-deltaY * sensitivity)
 }
 
+/** Площадь пересечения двух прямоугольников. */
+export function overlapArea(a: Rect, b: Rect): number {
+  const width = Math.min(a.x + a.width, b.x + b.width) - Math.max(a.x, b.x)
+  const height = Math.min(a.y + a.height, b.y + b.height) - Math.max(a.y, b.y)
+  return width > 0 && height > 0 ? width * height : 0
+}
+
 /**
  * Где поставить всплывающее окно размера `box` рядом с `target` (всё в пикселях окна): под ним,
- * справа, слева или над ним — первое место, которое помещается в `viewport` и не закрывает
- * другие экраны (`obstacles`). Если такого нет — первое, что помещается; если ничего не
- * помещается — под целью, прижатое к краям окна.
+ * справа, слева или над ним, по левому или по правому краю цели. Берётся первое место, которое
+ * помещается в `viewport` и не закрывает другие экраны (`obstacles`); если свободного нет —
+ * то, что закрывает их меньше всех; если ничего не помещается — под целью, прижатое к краям.
  */
 export function placeBeside(
   target: Rect,
@@ -166,26 +173,30 @@ export function placeBeside(
     Math.max(margin, Math.min(x, viewport.width - margin - box.width))
   const clampY = (y: number) =>
     Math.max(margin, Math.min(y, viewport.height - margin - box.height))
+  const startX = clampX(target.x)
+  const endX = clampX(target.x + target.width - box.width)
+  const below = target.y + target.height + gap
+  const above = target.y - gap - box.height
   const candidates: Point[] = [
-    { x: clampX(target.x), y: target.y + target.height + gap },
+    { x: startX, y: below },
+    { x: endX, y: below },
     { x: target.x + target.width + gap, y: clampY(target.y) },
     { x: target.x - gap - box.width, y: clampY(target.y) },
-    { x: clampX(target.x), y: target.y - gap - box.height }
+    { x: startX, y: above },
+    { x: endX, y: above }
   ]
   const fits = ({ x, y }: Point) =>
     x >= margin &&
     y >= margin &&
     x + box.width <= viewport.width - margin &&
     y + box.height <= viewport.height - margin
-  const free = (point: Point) =>
-    !obstacles.some((rect) => intersects({ ...point, ...box }, rect))
+  const covered = (point: Point) =>
+    obstacles.reduce((sum, rect) => sum + overlapArea({ ...point, ...box }, rect), 0)
   const inside = candidates.filter(fits)
-  const best = inside.find(free) ?? inside[0]
-  if (best) {
-    return best
+  if (inside.length > 0) {
+    return inside.reduce((best, point) => (covered(point) < covered(best) ? point : best))
   }
-  const below = candidates[0]
-  return { x: clampX(below.x), y: clampY(below.y) }
+  return { x: startX, y: clampY(below) }
 }
 
 /** Масштаб для подписи: «60%». */
