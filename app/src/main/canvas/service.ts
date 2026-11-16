@@ -15,7 +15,7 @@ import {
 import type { ConversationManager } from '../conversations/manager'
 import { JsonFileWriter, readVersionedJson } from '../jsonFile'
 import type { ChatLocation, ProjectStore } from '../store'
-import { captureScreen } from './capture'
+import { captureScreen, measureScreen, type ScreenRender } from './capture'
 import type { ScreenDocumentSource } from './protocol'
 import {
   CanvasError,
@@ -23,6 +23,7 @@ import {
   SCREEN_FILE_MAX_MB,
   appendVersion,
   canvasNameFromTitle,
+  describeOverflow,
   findScreenByName,
   formatCanvasMessage,
   formatFixMessage,
@@ -72,6 +73,15 @@ export interface AgentScreenResult {
   width: number
   height: number
   file: string
+  /** Что не так с раскладкой экрана; пусто — всё помещается или измерить не удалось. */
+  layout: string[]
+}
+
+export interface AgentScreenPreview {
+  screen: string
+  /** Абсолютный путь к PNG экрана. */
+  path: string
+  layout: string[]
 }
 
 export interface AgentCanvasView {
@@ -249,11 +259,7 @@ export class CanvasService implements ScreenDocumentSource {
       return
     }
     const { screen } = this.getScreen(canvasId, screenId)
-    const screenshot = await captureScreen(
-      canvasScreenUrl(canvas.id, screen.id, screen.revision),
-      screen.width,
-      screen.height
-    )
+    const screenshot = (await this.render(canvas, screen))?.path ?? null
     const previousFix = screen.pendingFix
     screen.pendingFix = message
     this.persist()
@@ -403,6 +409,11 @@ export class CanvasService implements ScreenDocumentSource {
     this.changed()
     this.watcher.watch(screenKey(canvas.id, screen.id), file)
     await this.queueCheck(screenKey(canvas.id, screen.id))
+    const content = await measureScreen(
+      canvasScreenUrl(canvas.id, screen.id, screen.revision),
+      screen.width,
+      screen.height
+    )
     return {
       canvas: canvas.name,
       screen: screen.name,
@@ -411,7 +422,35 @@ export class CanvasService implements ScreenDocumentSource {
       device: screen.device,
       width: screen.width,
       height: screen.height,
-      file: screen.file
+      file: screen.file,
+      layout: describeOverflow(screen, content)
+    }
+  }
+
+  /**
+   * Снимает экран так, как он выглядит на холсте, чтобы агент проверил свою работу, и
+   * измеряет раскладку.
+   */
+  async previewScreen(chatId: string, name: string): Promise<AgentScreenPreview> {
+    const canvas = this.activeCanvasOf(chatId)
+    if (!canvas) {
+      throw new CanvasError('This chat has no canvas.')
+    }
+    const screen = findScreenByName(canvas.screens, name)
+    if (!screen) {
+      const names = canvas.screens.map((other) => `"${other.name}"`).join(', ') || 'none'
+      throw new CanvasError(`There is no screen "${name.trim()}" on the canvas. Screens: ${names}.`)
+    }
+    const rendered = await this.render(canvas, screen)
+    if (!rendered) {
+      throw new CanvasError(
+        `Could not render the screen "${screen.name}". Check that ${screen.file} exists and opens without errors.`
+      )
+    }
+    return {
+      screen: screen.name,
+      path: rendered.path,
+      layout: describeOverflow(screen, rendered.size)
     }
   }
 
@@ -442,6 +481,14 @@ export class CanvasService implements ScreenDocumentSource {
 
   dispose(): void {
     this.watcher.dispose()
+  }
+
+  private render(canvas: StoredCanvas, screen: StoredScreen): Promise<ScreenRender | null> {
+    return captureScreen(
+      canvasScreenUrl(canvas.id, screen.id, screen.revision),
+      screen.width,
+      screen.height
+    )
   }
 
   private addCanvas({ project, chat }: ChatLocation): StoredCanvas {
