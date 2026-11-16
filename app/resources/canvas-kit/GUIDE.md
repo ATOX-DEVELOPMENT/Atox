@@ -24,6 +24,8 @@ No network, no `fetch`, no CDN, no web fonts, no external images. Images may onl
 | Tablet | 820 x 1180 | `<Screen>` with `Sidebar` (collapsed) or `NavBar` + content |
 | Desktop app | 1100 x 700 | `<Screen className="flex-row">` + `Sidebar` + column (`Topbar` + `ScrollArea`) |
 | Website | 1280 x 800 | `<Screen layout="page">` + `SiteNav` + sections + `Footer` |
+| Slide | 1920 x 1080 | `<Screen>` with your own layout, no chrome; see section 8 |
+| A4 page | 794 x 1123 | `<Screen mode="light">` with your own layout; see section 8 |
 
 `Screen` fills the frame. `layout="app"` (default) keeps the frame height: header and bottom bar stay put and only `ScrollArea` scrolls. `layout="page"` lets a website grow downward. Never use `h-screen` or `100vh`.
 
@@ -248,3 +250,50 @@ Run `atox canvas screen preview`, look at the screenshot, and check every line. 
 - [ ] Borders are subtle; heavy shadows only on floating elements.
 - [ ] Dark mode: preview with the dark theme; no raw `bg-white`, `text-black` or `gray-*` breaks it.
 - [ ] Numbers line up (`tabular-nums`, right aligned in tables).
+
+## 8. Slides, proposals and documents
+
+For presentations, commercial proposals, reports and handouts. One screen is one slide or one page; the user exports the canvas with the Export button (or you run `atox canvas export pdf`). Pages go out in canvas order: rows top to bottom, left to right. `screen set` places new screens to the right of the last one, so add them in reading order: title first. Never reorder by changing names.
+
+Setup:
+
+- Slides: `--device slide` (1920 x 1080). Documents: `--device a4` (794 x 1123). Use one device for the whole deck. For a different page, `--size WxH`.
+- Root is `<Screen className="...">` with `h-full w-full`, as always. Nothing scrolls: a slide has to fit. Check every page with `screen preview`; "Layout problems" means cut-off content.
+- Pages are static: no hover states, no scroll areas, no buttons that look clickable. A link-like element should look like text.
+- Print-friendly: for a document the user will print or send, use `<Screen mode="light">`. Dark pages are fine for slides on a screen. Ask which when the user did not say.
+- Share parts in files: `components/SlideFrame.tsx` (page number, footer, logo) and `data.ts` so every page looks the same. Same accent, same margins, same title position on every slide.
+- No external images or fonts. Logos and charts are inline SVG or the kit's charts.
+
+Slide (1920 x 1080) type scale: cover title 120 to 144 px, slide title 64 to 80 px, body 32 to 40 px, captions never below 24 px. Margins 120 px at the sides, 96 px top and bottom. Use arbitrary sizes like `text-[72px]` here: the phone type scale does not apply to slides.
+
+- One idea per slide: a title that states the point ("Revenue grew 38% in Q3"), then at most 3 to 5 short lines, one chart or one image. Move details to an appendix slide.
+- Layouts that work: cover, big number plus caption, two columns (text and chart), three cards (features, plans, steps), timeline, table (at most 6 rows), quote, closing with contact and next step.
+- Charts get a clear takeaway in the title; label values directly instead of using legends when you can.
+- Closing slide always has a next step: a date, a person, a contact.
+
+A4 page (794 x 1123) type scale: title 28 to 36 px, section heading 18 to 22 px, body 13 to 15 px, footnotes 11 px. Margins 56 px; header with logo and document name, footer with page number ("2 / 5").
+
+- Commercial proposal (КП): page 1 cover or short summary (who it is for, what is offered, total price, validity date); then the problem and the solution, scope of work, timeline, price table (line items, quantities, subtotal, total, currency), terms, about us, contacts and next step. Numbers right aligned with `tabular-nums`; one total, visually biggest.
+- Keep the same blocks (header, footer, margins) in the same place on every page. A section that does not fit moves to the next page: make another screen.
+- Use real specifics from the user: names, company, amounts, dates, language of the user. Ask for what is missing instead of inventing prices.
+
+```tsx
+// components/SlideFrame.tsx
+import type { ReactNode } from 'react'
+import { Screen } from '@atox/ui'
+
+export function SlideFrame({ title, page, children }: { title: string; page: number; children: ReactNode }) {
+  return (
+    <Screen className="flex h-full w-full flex-col px-[120px] py-[96px]">
+      <h2 className="font-display text-[72px] font-semibold leading-tight text-fg">{title}</h2>
+      <div className="mt-12 min-h-0 flex-1 text-[36px] text-fg-muted">{children}</div>
+      <div className="flex justify-between text-[24px] text-fg-subtle">
+        <span>Fern</span>
+        <span className="tabular-nums">{page}</span>
+      </div>
+    </Screen>
+  )
+}
+```
+
+Delivering: when the user asks for a PDF, run `atox canvas export pdf` (add `--out /absolute/path.pdf` for a specific place, `--screens "Cover,Price"` for a part). PDF keeps real, selectable text. `pptx` makes one image slide per screen (not editable text), `png` a folder of images. The command prints the path: tell the user where the file is.
