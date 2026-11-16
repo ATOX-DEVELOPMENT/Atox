@@ -13,14 +13,13 @@ import {
 import type { Canvas, CanvasScreen, CanvasView } from '../../../../shared/canvas'
 import {
   fitView,
-  GROUP_HEADER_SPACE,
   groupBounds,
   inflate,
   intersects,
-  SCREEN_LABEL_SPACE,
   screenBounds,
   unionRect,
   visibleArea,
+  withLabel,
   wheelZoomFactor,
   zoomAround,
   type Point,
@@ -167,32 +166,20 @@ export function CanvasStage({
     [saveView, stopFlight]
   )
 
-  /** Вид, в который `content` вписывается целиком вместе с подписями над экранами. */
+  /** Вид, в который `content` вписывается целиком. */
   const viewFitting = useCallback(
-    (content: Rect, extraTopSpace = 0): CanvasView | null => {
+    (content: Rect): CanvasView | null => {
       const viewport = viewState.viewport()
-      if (viewport.width === 0) {
-        return null
-      }
-      // Подписи над экранами не масштабируются: место под них зависит от итогового масштаба.
-      const first = fitView(content, viewport, FIT_MARGIN)
-      const labelSpace = (SCREEN_LABEL_SPACE + extraTopSpace) / first.zoom
-      return fitView(
-        { ...content, y: content.y - labelSpace, height: content.height + labelSpace },
-        viewport,
-        FIT_MARGIN
-      )
+      return viewport.width === 0 ? null : fitView(content, viewport, FIT_MARGIN)
     },
     [viewState]
   )
   const fittedView = useCallback((): CanvasView | null => {
     const content = unionRect([
-      ...boundsRef.current.values(),
+      ...[...boundsRef.current.values()].map(withLabel),
       ...groupRectsRef.current.map(({ rect }) => rect)
     ])
-    return (
-      content && viewFitting(content, groupRectsRef.current.length > 0 ? GROUP_HEADER_SPACE : 0)
-    )
+    return content && viewFitting(content)
   }, [viewFitting])
 
   // Перелёт к виду: камера плывёт к центру нового вида, а масштаб меняется плавно (по степени),
@@ -235,7 +222,7 @@ export function CanvasStage({
   const focusScreen = useCallback(
     (screenId: string) => {
       const rect = boundsRef.current.get(screenId)
-      const view = rect && viewFitting(rect)
+      const view = rect && viewFitting(withLabel(rect))
       if (view) {
         flyTo(view)
       }
@@ -247,7 +234,7 @@ export function CanvasStage({
   const focusGroup = useCallback(
     (groupId: string) => {
       const rect = groupRectsRef.current.find(({ group }) => group.id === groupId)?.rect
-      const view = rect && viewFitting(rect, GROUP_HEADER_SPACE)
+      const view = rect && viewFitting(rect)
       if (view) {
         flyTo(view)
       }

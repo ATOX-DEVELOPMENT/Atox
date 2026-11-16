@@ -94,16 +94,14 @@
   --canvas-pill-height: 30px;
   --canvas-button-height: 28px;
   --canvas-chip-height: 26px;
-  /* Подпись над экраном и рамка выбора — в пикселях окна при любом масштабе. */
-  --canvas-label-height: 22px;
-  --canvas-label-gap: 8px;
-  --canvas-label-font-size: 13px;
-  --canvas-group-radius: 40px;
+  /* Подпись над экраном и название группы — в пикселях холста: стоят на месте и растут с ним. Сумма высоты и зазора подписи — SCREEN_LABEL_HEIGHT. */
+  --canvas-label-height: 48px;
+  --canvas-label-gap: 16px;
+  --canvas-label-font-size: 32px;
+  --canvas-group-radius: 48px;
+  --canvas-group-font-size: 56px;
+  /* Рамка выбора и толщина линий — в пикселях окна при любом масштабе. */
   --canvas-group-border-width: 1.5px;
-  --canvas-group-font-size: 15px;
-  /* Сколько рамка группы добирает сверху под заголовок и подписи экранов: в пикселях окна, но не больше предела в пикселях холста. */
-  --canvas-group-lift: 90px;
-  --canvas-group-lift-max: 300px;
   --canvas-link-width: 2px;
   --canvas-link-dot: 5px;
   --canvas-link-dot-ring: var(--color-menu);
@@ -157,6 +155,8 @@
   --canvas-ghost-border: light-dark(rgba(50, 40, 100, 0.24), rgba(255, 255, 255, 0.22));
   --canvas-field-background: light-dark(rgba(50, 40, 100, 0.04), rgba(0, 0, 0, 0.25));
   --canvas-card-background: light-dark(#ffffff, rgba(255, 255, 255, 0.035));
+  --canvas-group-background: light-dark(#dfdee8, #202023);
+  --canvas-group-border: light-dark(rgba(50, 40, 100, 0.14), rgba(255, 255, 255, 0.1));
   --canvas-screen-shadow-color: light-dark(rgba(40, 30, 90, 0.16), rgba(0, 0, 0, 0.5));
   --canvas-screen-background: #ffffff;
   --canvas-device-bezel: #101114;
@@ -5721,26 +5721,22 @@ ul {
   vector-effect: non-scaling-stroke;
 }
 
-/* Группа: рамка под экранами; мышь ловит только заголовок, по остальному холст двигается. */
+/* Группа: сплошная рамка под экранами с названием в левом верхнем углу. Размеры в пикселях холста; мышь ловят только название и «⋮», по остальному холст двигается. */
 .canvas-group {
-  --group-lift: min(calc(var(--canvas-group-lift) / var(--z)), var(--canvas-group-lift-max));
   position: absolute;
   left: 0;
-  top: calc(var(--group-lift) * -1);
-  height: calc(var(--group-height) * 1px + var(--group-lift));
-  pointer-events: none;
-  border: calc(var(--canvas-group-border-width) / var(--z)) solid
-    color-mix(in srgb, var(--color-text) 12%, transparent);
-  border-radius: var(--canvas-group-radius);
-  background: color-mix(in srgb, var(--color-text) 3.5%, transparent);
+  top: 0;
   box-sizing: border-box;
+  border: calc(var(--canvas-group-border-width) / var(--z)) solid var(--canvas-group-border);
+  border-radius: var(--canvas-group-radius);
+  background: var(--canvas-group-background);
+  pointer-events: none;
 }
 
 .canvas-group[data-dragging='true'] {
   z-index: 1;
 }
 
-/* Заголовок не масштабируется вместе с холстом и не шире своей рамки. */
 .canvas-group__header {
   position: absolute;
   left: 0;
@@ -5748,31 +5744,29 @@ ul {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: var(--status-gap);
-  width: calc(var(--group-width) * var(--z) * 1px);
-  padding: 14px 16px;
+  gap: 0.5em;
+  width: 100%;
+  padding: 0.5em 0.9em;
   box-sizing: border-box;
   font-size: var(--canvas-group-font-size);
-  line-height: 1.4;
-  transform: scale(calc(1 / var(--z)));
-  transform-origin: 0 0;
-  pointer-events: auto;
+  line-height: 1.3;
 }
 
 .canvas-group__header .row__input {
-  width: var(--menu-min-width);
-  font-size: var(--canvas-group-font-size);
+  --row-height: calc(var(--canvas-group-font-size) * 1.5);
+  width: 12em;
+  flex: none;
+  margin-left: 0;
+  font-size: inherit;
 }
 
 .canvas-group__title {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
   min-width: 0;
-  padding: 4px 8px;
-  border-radius: var(--radius);
+  padding: 0.1em 0.3em;
+  border-radius: 0.2em;
   font-weight: 600;
   color: var(--color-text);
+  pointer-events: auto;
   cursor: grab;
 }
 
@@ -5780,15 +5774,8 @@ ul {
   cursor: grabbing;
 }
 
-.canvas-group__title .icon {
-  flex-shrink: 0;
-  width: 16px;
-  height: 16px;
-  color: var(--color-text-muted);
-}
-
 .canvas-group__name {
-  min-width: 0;
+  display: block;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -5797,14 +5784,15 @@ ul {
 .canvas-group__menu {
   display: inline-flex;
   flex-shrink: 0;
-  padding: 4px;
-  border-radius: var(--radius);
+  padding: 0.1em;
+  border-radius: 0.2em;
   color: var(--color-text-muted);
+  pointer-events: auto;
 }
 
 .canvas-group__menu .icon {
-  width: 16px;
-  height: 16px;
+  width: 0.8em;
+  height: 0.8em;
 }
 
 .canvas-group__title:hover,
@@ -5814,7 +5802,7 @@ ul {
 
 .canvas-group__title:focus-visible,
 .canvas-group__menu:focus-visible {
-  outline: 2px solid var(--color-accent);
+  outline: calc(2px / var(--z)) solid var(--color-accent);
 }
 
 .canvas-screen {
@@ -5848,16 +5836,16 @@ ul {
   z-index: 1;
 }
 
-/* Подпись не масштабируется вместе с холстом и не шире своего экрана. */
+/* Подпись стоит над экраном на месте и масштабируется вместе с холстом; не шире своего экрана. */
 .canvas-screen__label {
   position: absolute;
   left: 0;
   bottom: 100%;
   display: flex;
   align-items: center;
-  gap: var(--status-gap);
+  gap: 0.5em;
   height: calc(var(--canvas-label-height) + var(--canvas-label-gap));
-  width: calc(var(--frame-width) * var(--z) * 1px);
+  width: calc(var(--frame-width) * 1px);
   container-type: inline-size;
   padding-bottom: var(--canvas-label-gap);
   font-size: var(--canvas-label-font-size);
@@ -5865,8 +5853,6 @@ ul {
   line-height: 1.4;
   color: var(--color-text-muted);
   white-space: nowrap;
-  transform: scale(calc(1 / var(--z)));
-  transform-origin: 0 100%;
 }
 
 /* Имя экрана сжимается последним: сначала уступает подпись устройства. */
@@ -5887,15 +5873,15 @@ ul {
   text-overflow: ellipsis;
 }
 
-@container (min-width: 240px) {
+@container (min-width: 560px) {
   .canvas-screen__device {
     display: block;
   }
 }
 
 .canvas-screen__label .row__input {
-  --row-height: calc(var(--canvas-label-height) + 6px);
-  width: var(--menu-min-width);
+  --row-height: calc(var(--canvas-label-height) + 8px);
+  width: 10em;
   flex: none;
   margin-left: 0;
   font-size: var(--canvas-label-font-size);
@@ -5904,7 +5890,7 @@ ul {
 .canvas-screen__note {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: 0.3em;
   min-width: 0;
 }
 
@@ -5915,26 +5901,26 @@ ul {
 }
 
 .canvas-screen__note .icon {
-  width: 12px;
-  height: 12px;
+  width: 0.9em;
+  height: 0.9em;
   color: var(--color-attention);
 }
 
 /* Сборка React-экрана не удалась: экран показывает последнюю удачную; текст ошибки — в подсказке. */
 .canvas-screen__badge {
   flex-shrink: 0;
-  padding: 3px 8px;
+  padding: 0.2em 0.6em;
   border-radius: 999px;
-  font-size: 11px;
+  font-size: 0.85em;
   color: var(--color-danger);
   background: var(--color-danger-background);
 }
 
 .canvas-screen__tag {
   flex-shrink: 0;
-  padding: 3px 8px;
+  padding: 0.2em 0.6em;
   border-radius: 999px;
-  font-size: 11px;
+  font-size: 0.85em;
   color: var(--color-on-accent);
   background: var(--color-accent);
 }
