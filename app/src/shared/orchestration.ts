@@ -82,10 +82,14 @@ export interface OrchestrationMethods {
   workers: { params: Record<string, never>; result: WorkerInfo[] }
   /** Останавливает помощников и убирает их чаты из списка. */
   remove: { params: { chatIds: string[] }; result: { removed: string[] } }
-  /** Холст чата и его экраны; `null` — холста у чата нет. */
+  /** Холст чата, его экраны и стрелки между ними; `null` — холста у чата нет. */
   canvas: {
     params: Record<string, never>
-    result: { name: string; screens: CanvasScreenInfo[] } | null
+    result: {
+      name: string
+      screens: CanvasScreenInfo[]
+      links: { from: string; to: string; label: string | null; on: string | null }[]
+    } | null
   }
   /**
    * Ставит на холст чата экран из файла (HTML или React-компонент) или обновляет экран с тем же именем (без учёта
@@ -120,6 +124,26 @@ export interface OrchestrationMethods {
       buildError: string | null
       runtimeErrors: string[]
     }
+  }
+  /**
+   * Ставит стрелку между двумя экранами (по именам): что за чем идёт. С `on` стрелка начинается
+   * у кнопки экрана `from` (её текст или CSS-селектор). Та же пара и кнопка обновляют подпись.
+   */
+  canvasLinkSet: {
+    params: { from: string; to: string; label?: string; on?: string }
+    result: {
+      from: string
+      to: string
+      label: string | null
+      on: string | null
+      created: boolean
+      elementMissing: boolean
+    }
+  }
+  /** Убирает стрелки между экранами; с `on` — только от этой кнопки. */
+  canvasLinkRemove: {
+    params: { from: string; to: string; on?: string }
+    result: { removed: number }
   }
   /** Убирает экран с холста; HTML-файл остаётся. */
   canvasScreenRemove: { params: { name: string }; result: { screen: string } }

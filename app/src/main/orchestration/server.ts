@@ -315,6 +315,32 @@ export class OrchestrationServer {
       return this.services.canvas.previewScreen(caller.chat.id, name)
     },
 
+    canvasLinkSet: (caller, { from, to, label, on }) => {
+      if (typeof from !== 'string' || typeof to !== 'string' || !from.trim() || !to.trim()) {
+        throw new CommandError('Specify the names of the two screens.')
+      }
+      return this.services.canvas.setLink(caller.chat.id, {
+        from,
+        to,
+        ...(typeof label === 'string' && { label }),
+        ...(typeof on === 'string' && { on })
+      })
+    },
+
+    canvasLinkRemove: (caller, { from, to, on }) => {
+      if (typeof from !== 'string' || typeof to !== 'string' || !from.trim() || !to.trim()) {
+        throw new CommandError('Specify the names of the two screens.')
+      }
+      return {
+        removed: this.services.canvas.removeLink(
+          caller.chat.id,
+          from,
+          to,
+          typeof on === 'string' ? on : undefined
+        )
+      }
+    },
+
     canvasExport: async (caller, { format, screens, out }) => {
       if (typeof format !== 'string') {
         throw new CommandError('Specify the format: pdf, png or pptx.')
