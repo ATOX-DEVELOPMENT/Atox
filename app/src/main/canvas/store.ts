@@ -18,6 +18,7 @@ import {
   type ScreenVersion
 } from '../../shared/canvas'
 import { DEFAULT_CANVAS_NAME, isScreenDimension, isScreenFileName } from './rules'
+import { shareUrl, type ShareCredentials } from './share'
 
 export const CANVAS_FILE_VERSION = 1
 
@@ -33,8 +34,14 @@ export interface StoredScreen extends CanvasScreen {
   pendingFix?: string
 }
 
-export interface StoredCanvas extends Omit<Canvas, 'screens'> {
+/** Публикация холста: адрес ссылки и секрет, по которому её обновляют и закрывают. */
+export interface StoredShare extends ShareCredentials {
+  publishedAt: number
+}
+
+export interface StoredCanvas extends Omit<Canvas, 'screens' | 'share'> {
   screens: StoredScreen[]
+  share: StoredShare | null
 }
 
 export interface CanvasFile {
@@ -55,10 +62,11 @@ export function isCanvasId(value: unknown): value is string {
 }
 
 /** Холст или экран без внутренних полей — то, что видит окно. */
-export function publicCanvas({ screens, ...canvas }: StoredCanvas): Canvas {
+export function publicCanvas({ screens, share, ...canvas }: StoredCanvas): Canvas {
   return {
     ...canvas,
-    screens: screens.map(({ versions: _versions, pendingFix: _pendingFix, ...screen }) => screen)
+    screens: screens.map(({ versions: _versions, pendingFix: _pendingFix, ...screen }) => screen),
+    share: share && { url: shareUrl(share.id), publishedAt: share.publishedAt }
   }
 }
 
@@ -116,6 +124,7 @@ function normalizeCanvas(raw: unknown, now: number): StoredCanvas | null {
     screens,
     links: normalizeLinks(value['links'], screenIds),
     groups: normalizeGroups(value['groups'], screenIds),
+    share: normalizeShare(value['share'], now),
     archived: value['archived'] === true,
     view: normalizeView(value['view']),
     createdAt: timestamp(value['createdAt'], now),
@@ -153,6 +162,16 @@ function normalizeLinks(raw: unknown, screenIds: ReadonlySet<string>): CanvasLin
     }
   }
   return links
+}
+
+function normalizeShare(raw: unknown, now: number): StoredShare | null {
+  const { id, token, publishedAt } = record(raw)
+  return typeof id === 'string' &&
+    /^[\w-]{16,64}$/.test(id) &&
+    typeof token === 'string' &&
+    /^\S{20,200}$/.test(token)
+    ? { id, token, publishedAt: timestamp(publishedAt, now) }
+    : null
 }
 
 /** Группы из файла: экран входит не больше чем в одну, пустые группы и повторы имён отпадают. */

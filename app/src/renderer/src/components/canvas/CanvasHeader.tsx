@@ -1,12 +1,14 @@
 import { useSyncExternalStore, type MouseEvent } from 'react'
 import {
   ArrowUpRight,
+  Check,
   Download,
   Ellipsis,
   History,
   LayoutDashboard,
   LoaderCircle,
-  Scan
+  Scan,
+  Share2
 } from 'lucide-react'
 import { CANVAS_NAME_MAX_LENGTH, type Canvas } from '../../../../shared/canvas'
 import { chatLabel, type CanvasOwner } from '../../lib/canvasOwner'
@@ -27,6 +29,10 @@ interface CanvasHeaderProps {
   /** Выгрузка экранов идёт: кнопка занята. */
   exporting: boolean
   onExport(event: MouseEvent<HTMLButtonElement>): void
+  /** Ссылка публикуется сейчас, и ссылка только что скопирована в буфер. */
+  publishing: boolean
+  linkCopied: boolean
+  onShare(event: MouseEvent<HTMLButtonElement>): void
   onOpenMenu(event: MouseEvent<HTMLButtonElement>): void
 }
 
@@ -44,6 +50,9 @@ export function CanvasHeader({
   onOpenChat,
   exporting,
   onExport,
+  publishing,
+  linkCopied,
+  onShare,
   onOpenMenu
 }: CanvasHeaderProps) {
   const hasScreens = canvas.screens.length > 0
@@ -115,6 +124,31 @@ export function CanvasHeader({
                 <LoaderCircle className="icon canvas-header__export-spinner" />
               ) : (
                 <Download className="icon" />
+              )}
+            </button>
+            <button
+              type="button"
+              className="workspace-toolbar__button"
+              data-active={canvas.share !== null}
+              disabled={publishing}
+              aria-label="Share"
+              title={
+                publishing
+                  ? 'Publishing…'
+                  : linkCopied
+                    ? 'Link copied'
+                    : canvas.share
+                      ? 'Shared: copy the link, update or stop sharing'
+                      : 'Share a link to view this canvas in a browser'
+              }
+              onClick={onShare}
+            >
+              {publishing ? (
+                <LoaderCircle className="icon canvas-header__export-spinner" />
+              ) : linkCopied ? (
+                <Check className="icon" />
+              ) : (
+                <Share2 className="icon" />
               )}
             </button>
             <button

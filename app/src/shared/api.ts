@@ -11,6 +11,7 @@ import type {
   CanvasExportFormat,
   CanvasExportResult,
   CanvasState,
+  CanvasShare,
   CanvasView,
   ScreenVersion
 } from './canvas'
@@ -310,6 +311,13 @@ export interface AtoxApi {
     renameGroup(canvasId: string, groupId: string, name: string): Promise<void>
     /** Человек отпустил заголовок группы: все её экраны сдвигаются на это расстояние. */
     moveGroup(canvasId: string, groupId: string, dx: number, dy: number): Promise<void>
+    /**
+     * Публикует снимок холста на сайте и возвращает ссылку для просмотра. Уже опубликованный
+     * холст обновляется по той же ссылке. `null` — не вышло: причину человек уже увидел.
+     */
+    share(canvasId: string): Promise<CanvasShare | null>
+    /** Закрывает ссылку: страница по ней больше не открывается. */
+    stopSharing(canvasId: string): Promise<void>
     /** Распускает группу: рамка исчезает, экраны остаются. */
     ungroup(canvasId: string, groupId: string): Promise<void>
     /** Запоминает сдвиг и масштаб холста; окно зовёт редко (после паузы), не на каждый кадр. */
@@ -437,6 +445,8 @@ export const IpcChannel = {
   CanvasRenameGroup: 'canvas:rename-group',
   CanvasMoveGroup: 'canvas:move-group',
   CanvasUngroup: 'canvas:ungroup',
+  CanvasShare: 'canvas:share',
+  CanvasStopSharing: 'canvas:stop-sharing',
   CanvasSetView: 'canvas:set-view',
   CanvasArchive: 'canvas:archive',
   CanvasRemove: 'canvas:remove',

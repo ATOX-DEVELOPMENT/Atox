@@ -370,6 +370,16 @@ export class OrchestrationServer {
       return { name: this.services.canvas.removeGroup(caller.chat.id, name) }
     },
 
+    canvasShare: async (caller) => {
+      const { url } = await this.services.canvas.shareForAgent(caller.chat.id)
+      return { url }
+    },
+
+    canvasShareStop: async (caller) => {
+      await this.services.canvas.unshareForAgent(caller.chat.id)
+      return {}
+    },
+
     canvasExport: async (caller, { format, screens, out }) => {
       if (typeof format !== 'string') {
         throw new CommandError('Specify the format: pdf, png or pptx.')

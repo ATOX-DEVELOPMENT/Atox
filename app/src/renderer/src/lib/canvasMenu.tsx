@@ -2,12 +2,15 @@ import {
   Archive,
   ArchiveRestore,
   ArrowUpRight,
+  Copy,
   FileImage,
   FileText,
   MessageCircle,
   Pencil,
   Presentation,
-  Trash2
+  RefreshCw,
+  Trash2,
+  Unlink
 } from 'lucide-react'
 import type { Canvas, CanvasExportFormat } from '../../../shared/canvas'
 import type { CanvasNavigation } from '../hooks/CanvasesContext'
@@ -33,6 +36,20 @@ export async function showExportMenu(anchor: MenuAnchor): Promise<CanvasExportFo
     { action: 'pdf', label: 'PDF document', icon: <FileText /> },
     { action: 'pptx', label: 'PowerPoint presentation', icon: <Presentation /> },
     { action: 'png', label: 'PNG images', icon: <FileImage /> }
+  ]
+  return showMenu(items, anchor)
+}
+
+type ShareAction = 'copy' | 'open' | 'update' | 'stop'
+
+/** Меню опубликованного холста: ссылка, обновление снимка, закрытие. */
+export async function showShareMenu(anchor: MenuAnchor): Promise<ShareAction | null> {
+  const items: MenuItem<ShareAction>[] = [
+    { action: 'copy', label: 'Copy link', icon: <Copy /> },
+    { action: 'open', label: 'Open in browser', icon: <ArrowUpRight /> },
+    { action: 'update', label: 'Update shared version', icon: <RefreshCw /> },
+    { type: 'separator' },
+    { action: 'stop', label: 'Stop sharing', icon: <Unlink />, destructive: true }
   ]
   return showMenu(items, anchor)
 }

@@ -292,6 +292,8 @@ const api: AtoxApi = {
       ipcRenderer.invoke(IpcChannel.CanvasRenameGroup, canvasId, groupId, name),
     moveGroup: (canvasId, groupId, dx, dy) =>
       ipcRenderer.invoke(IpcChannel.CanvasMoveGroup, canvasId, groupId, dx, dy),
+    share: (canvasId) => ipcRenderer.invoke(IpcChannel.CanvasShare, canvasId),
+    stopSharing: (canvasId) => ipcRenderer.invoke(IpcChannel.CanvasStopSharing, canvasId),
     ungroup: (canvasId, groupId) => ipcRenderer.invoke(IpcChannel.CanvasUngroup, canvasId, groupId),
     setView: (canvasId, view) => ipcRenderer.invoke(IpcChannel.CanvasSetView, canvasId, view),
     archive: (canvasId, archived) => ipcRenderer.invoke(IpcChannel.CanvasArchive, canvasId, archived),

@@ -12,10 +12,12 @@ import {
   canvasScreenUrl,
   isCanvasExportFormat,
   isScreenDeviceId,
+  screenFrameOf,
   screenSourceKind,
   type CanvasExportFormat,
   type CanvasExportResult,
   type CanvasGroup,
+  type CanvasShare,
   type CanvasState,
   type ScreenDevice,
   type ScreenDeviceId,
@@ -60,6 +62,15 @@ import {
   type StoredScreen,
   type StoredVersion
 } from './store'
+import {
+  newShareCredentials,
+  pageForSharing,
+  publishShare,
+  readVendorBundle,
+  shareUrl,
+  unpublishShare,
+  type SharedCanvas
+} from './share'
 import { ScreenFileWatcher } from './watcher'
 
 export interface CanvasServices {
@@ -67,6 +78,8 @@ export interface CanvasServices {
   conversations: ConversationManager
   /** Папка кита `@atox/ui` и токенов темы: из неё собираются экраны-React. */
   kitDirectory: string
+  /** Папка общих файлов экранов (react, Tailwind): их получает и сайт, где открывается ссылка. */
+  vendorDirectory: string
   onChange(state: CanvasState): void
 }
 
@@ -152,6 +165,8 @@ export interface AgentGroupResult {
 
 export interface AgentCanvasView {
   name: string
+  /** Адрес страницы для просмотра; `null` — холст не опубликован. */
+  share: string | null
   groups: { name: string; screens: string[] }[]
   links: { from: string; to: string; on: string | null }[]
   screens: {
@@ -189,6 +204,8 @@ export class CanvasService implements ScreenDocumentSource {
   private readonly builds = new Map<string, ScreenBuild>()
   /** Хеш того, что показывает экран сейчас: у HTML — файл, у React — результат сборки. */
   private readonly outputs = new Map<string, string>()
+  /** Холсты, которые публикуются сейчас: повторное нажатие не должно слать второй запрос. */
+  private readonly sharing = new Set<string>()
 
   private constructor(
     private readonly services: CanvasServices,
@@ -301,6 +318,12 @@ export class CanvasService implements ScreenDocumentSource {
   /** Удаляет холст и снимки его версий; HTML-файлы экранов остаются в проекте. */
   async remove(canvasId: string): Promise<void> {
     const canvas = this.getCanvas(canvasId)
+    // Ссылка закрывается вместе с холстом; без сети холст всё равно удаляется.
+    if (canvas.share) {
+      await unpublishShare(canvas.share).catch((error) =>
+        console.error('Failed to close the link of a deleted canvas', error)
+      )
+    }
     this.unwatchCanvas(canvas)
     this.canvases = this.canvases.filter((other) => other !== canvas)
     this.changed()
@@ -478,6 +501,7 @@ export class CanvasService implements ScreenDocumentSource {
     return canvas
       ? {
           name: canvas.name,
+          share: canvas.share && shareUrl(canvas.share.id),
           groups: canvas.groups.map(({ name, screens }) => ({
             name,
             screens: screens.flatMap(
@@ -1001,6 +1025,71 @@ export class CanvasService implements ScreenDocumentSource {
     return screen.name
   }
 
+  /**
+   * Публикует снимок холста по ссылке: страницы экранов в нынешнем виде, их места, группы и
+   * линии. Повторный вызов обновляет ту же ссылку.
+   */
+  async share(canvasId: string): Promise<CanvasShare> {
+    return this.publish(this.getCanvas(canvasId))
+  }
+
+  async shareForAgent(chatId: string): Promise<CanvasShare> {
+    const canvas = this.activeCanvasOf(chatId)
+    if (!canvas) {
+      throw new CanvasError('This chat has no canvas.')
+    }
+    return this.publish(canvas)
+  }
+
+  private async publish(canvas: StoredCanvas): Promise<CanvasShare> {
+    if (canvas.screens.length === 0) {
+      throw new CanvasError('Put at least one screen on the canvas before sharing it.')
+    }
+    if (this.sharing.has(canvas.id)) {
+      throw new CanvasError('This canvas is being shared right now.')
+    }
+    this.sharing.add(canvas.id)
+    try {
+      const vendor = await readVendorBundle(this.services.vendorDirectory)
+      const docs: Record<string, string> = {}
+      for (const screen of canvas.screens) {
+        const document = await this.screenDocument(canvas.id, screen.id)
+        if (!document) {
+          throw new CanvasError(`Could not read the screen "${screen.name}".`)
+        }
+        docs[screen.id] = pageForSharing(document.html, vendor.hash)
+      }
+      const credentials = canvas.share ?? newShareCredentials()
+      await publishShare(credentials, { canvas: sharedCanvas(canvas), docs, vendor })
+      canvas.share = { ...credentials, publishedAt: Date.now() }
+      this.changed()
+      return { url: shareUrl(canvas.share.id), publishedAt: canvas.share.publishedAt }
+    } finally {
+      this.sharing.delete(canvas.id)
+    }
+  }
+
+  /** Закрывает ссылку: страница по ней перестаёт открываться. Не вышло закрыть — ссылка остаётся. */
+  async unshare(canvasId: string): Promise<void> {
+    await this.closeShare(this.getCanvas(canvasId))
+  }
+
+  async unshareForAgent(chatId: string): Promise<void> {
+    const canvas = this.activeCanvasOf(chatId)
+    if (!canvas) {
+      throw new CanvasError('This chat has no canvas.')
+    }
+    await this.closeShare(canvas)
+  }
+
+  private async closeShare(canvas: StoredCanvas): Promise<void> {
+    if (canvas.share) {
+      await unpublishShare(canvas.share)
+      canvas.share = null
+      this.changed()
+    }
+  }
+
   /** Убирает экран с холста по просьбе человека; файл экрана остаётся в проекте. */
   async removeScreenById(canvasId: string, screenId: string): Promise<void> {
     const { canvas, screen } = this.getScreen(canvasId, screenId)
@@ -1069,6 +1158,7 @@ export class CanvasService implements ScreenDocumentSource {
       screens: [],
       links: [],
       groups: [],
+      share: null,
       archived: false,
       view: null,
       createdAt: now,
@@ -1311,6 +1401,26 @@ export class CanvasService implements ScreenDocumentSource {
 }
 
 /** Элемент линии: пробелы по краям убираются, пустое — «не задано». */
+/** Холст для страницы просмотра: что видно на нём, без путей к файлам. */
+function sharedCanvas(canvas: StoredCanvas): SharedCanvas {
+  return {
+    name: canvas.name,
+    screens: canvas.screens.map((screen) => ({
+      id: screen.id,
+      name: screen.name,
+      device: screen.device,
+      frame: screenFrameOf(screen.device),
+      width: screen.width,
+      height: screen.height,
+      x: screen.x,
+      y: screen.y,
+      revision: screen.revision
+    })),
+    groups: canvas.groups,
+    links: canvas.links.map(({ id, from, to, anchor }) => ({ id, from, to, anchor }))
+  }
+}
+
 function linkText(value: string | undefined, max: number, subject: string): string | null {
   const text = value?.trim() ?? ''
   if (text.length > max) {

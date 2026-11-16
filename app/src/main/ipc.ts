@@ -1,11 +1,5 @@
 import { basename } from 'node:path'
-import {
-  app,
-  BrowserWindow,
-  dialog,
-  ipcMain,
-  shell
-} from 'electron'
+import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron'
 import { IpcChannel, type GitBranches, type TerminalSize } from '../shared/api'
 import {
   isChatCommand,
@@ -21,12 +15,7 @@ import type { PlanLimitsState } from '../shared/planLimits'
 import type { TokenSpendSummary } from '../shared/tokenSpend'
 import { isProjectColor } from '../shared/projectColors'
 import { isProjectIcon } from '../shared/projectIcons'
-import {
-  isBoardColumn,
-  parseTaskAgent,
-  type BoardState,
-  type TaskStart
-} from '../shared/board'
+import { isBoardColumn, parseTaskAgent, type BoardState, type TaskStart } from '../shared/board'
 import { isCanvasExportFormat, type CanvasState } from '../shared/canvas'
 import type { GitHubCounts, GitHubKind, ListState } from '../shared/repository'
 import type { Settings } from '../shared/settings'
@@ -579,6 +568,30 @@ export function registerIpcHandlers({
   ipcMain.handle(IpcChannel.CanvasUngroup, (_event, canvasId: unknown, groupId: unknown) =>
     canvas.ungroup(requireId(canvasId), requireId(groupId))
   )
+  // Не вышло опубликовать или закрыть ссылку (нет сети, служба отказала) — человек видит причину.
+  ipcMain.handle(IpcChannel.CanvasShare, async (event, canvasId: unknown) => {
+    try {
+      return await canvas.share(requireId(canvasId))
+    } catch (error) {
+      await inform(BrowserWindow.fromWebContents(event.sender), {
+        type: 'error',
+        message: 'Could not share the canvas',
+        detail: error instanceof Error ? error.message : String(error)
+      })
+      return null
+    }
+  })
+  ipcMain.handle(IpcChannel.CanvasStopSharing, async (event, canvasId: unknown) => {
+    try {
+      await canvas.unshare(requireId(canvasId))
+    } catch (error) {
+      await inform(BrowserWindow.fromWebContents(event.sender), {
+        type: 'error',
+        message: 'Could not stop sharing the canvas',
+        detail: error instanceof Error ? error.message : String(error)
+      })
+    }
+  })
   ipcMain.handle(IpcChannel.CanvasSetView, (_event, canvasId: unknown, view: unknown) =>
     canvas.setView(requireId(canvasId), view)
   )
@@ -603,25 +616,28 @@ export function registerIpcHandlers({
       await canvas.remove(id)
     }
   })
-  ipcMain.handle(IpcChannel.CanvasRemoveScreen, async (event, canvasId: unknown, screenId: unknown) => {
-    const id = requireId(canvasId)
-    const screen = requireId(screenId)
-    const target = canvas
-      .state()
-      .canvases.find((other) => other.id === id)
-      ?.screens.find((other) => other.id === screen)
-    if (!target) {
-      throw new Error('The screen was not found.')
+  ipcMain.handle(
+    IpcChannel.CanvasRemoveScreen,
+    async (event, canvasId: unknown, screenId: unknown) => {
+      const id = requireId(canvasId)
+      const screen = requireId(screenId)
+      const target = canvas
+        .state()
+        .canvases.find((other) => other.id === id)
+        ?.screens.find((other) => other.id === screen)
+      if (!target) {
+        throw new Error('The screen was not found.')
+      }
+      const confirmed = await confirm(BrowserWindow.fromWebContents(event.sender), {
+        message: `Remove “${target.name}” from the canvas?`,
+        detail: 'The screen file stays in the project.',
+        confirmLabel: 'Remove'
+      })
+      if (confirmed) {
+        await canvas.removeScreenById(id, screen)
+      }
     }
-    const confirmed = await confirm(BrowserWindow.fromWebContents(event.sender), {
-      message: `Remove “${target.name}” from the canvas?`,
-      detail: 'The screen file stays in the project.',
-      confirmLabel: 'Remove'
-    })
-    if (confirmed) {
-      await canvas.removeScreenById(id, screen)
-    }
-  })
+  )
   ipcMain.handle(IpcChannel.CanvasExport, async (event, canvasId: unknown, format: unknown) => {
     const id = requireId(canvasId)
     if (!isCanvasExportFormat(format)) {
@@ -678,7 +694,6 @@ export function registerIpcHandlers({
   ipcMain.on(IpcChannel.ShortcutsRecording, (_event, recording: boolean) =>
     menu.setRecordingShortcut(recording === true)
   )
-
 }
 
 /** Id чата, холста, экрана или версии из окна: непустая строка. */

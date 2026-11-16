@@ -161,6 +161,7 @@ async function bootstrap(): Promise<void> {
       store,
       conversations,
       kitDirectory: canvasResourcePath(CANVAS_KIT_DIRECTORY),
+      vendorDirectory: canvasResourcePath(CANVAS_VENDOR_DIRECTORY),
       onChange: broadcastCanvas
     },
     join(userData, CANVAS_FILE_NAME),

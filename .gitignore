@@ -15,9 +15,10 @@ dist/
 .env
 .env.*
 
-# Сайт и админка живут только локально и деплоятся в Railway через `railway up`
+# Сайт, админка и сервер ссылок «Share» живут только локально и деплоятся в Railway через `railway up`
 /web/
 /admin/
+/share/
 
 # Собранные файлы холста: `npm run build:vendor`
 /app/resources/canvas-vendor/
