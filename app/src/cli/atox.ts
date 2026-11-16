@@ -1,9 +1,12 @@
 /**
  * Команда `atox` для агентов в терминалах Atox: запустить помощника в соседнем чате,
- * написать ему или своему агенту, отчитаться о работе. Запускается бинарником Electron
+ * написать ему или своему агенту, отчитаться о работе, показать экраны на холсте чата.
+ * Запускается бинарником Electron
  * в режиме Node и передаёт команду приложению через его локальный сокет.
  */
 import { createConnection } from 'node:net'
+import { resolve } from 'node:path'
+import { SCREEN_DEVICES } from '../shared/canvas'
 import {
   OrchestrationEnv,
   PARENT_ADDRESS,
@@ -11,6 +14,8 @@ import {
   type OrchestrationMethods,
   type OrchestrationResponse
 } from '../shared/orchestration'
+
+const DEVICE_IDS = Object.keys(SCREEN_DEVICES).join('|')
 
 const USAGE = `Usage: atox <command>
 
@@ -28,6 +33,15 @@ Delegate work to another agent in a new Atox chat in the same folder.
   atox send <chat-id|${PARENT_ADDRESS}> <message>     Message one of your workers, or your parent agent
   atox remove <chat-id> [<chat-id>...]     Stop workers and remove their chats
   atox report <summary>                    Worker: report the result to the parent agent
+
+Show screens (app, website, desktop UI) to the user on this chat's canvas.
+
+  atox canvas                              Show this chat's canvas and its screens
+  atox canvas screen set <name> <file.html> [--device ${DEVICE_IDS}] [--size WxH]
+                                           Put an HTML file on the canvas as a screen, or
+                                           update the screen with that name. Then just edit
+                                           the file: the canvas updates by itself.
+  atox canvas screen remove <name>         Remove a screen from the canvas (the file stays)
 
 Works only for agents running in Atox chats.`
 
@@ -110,6 +124,8 @@ async function main(args: string[]): Promise<string> {
       await call('report', { summary: await readText(rest, 'summary') })
       return 'Report sent to the parent agent. Your task is complete; stop here.'
     }
+    case 'canvas':
+      return canvas(rest)
     case undefined:
     case 'help':
     case '--help':
@@ -118,6 +134,62 @@ async function main(args: string[]): Promise<string> {
     default:
       throw new UsageError(`Unknown command: ${command}\n\n${USAGE}`)
   }
+}
+
+const CANVAS_SET_COMMAND = 'atox canvas screen set <name> <file.html> [--device <device>]'
+
+const CANVAS_SET_USAGE = `Usage: ${CANVAS_SET_COMMAND} [--size WxH]. Quote names with spaces.`
+
+/** `atox canvas …`: холст чата и его экраны. */
+async function canvas(args: string[]): Promise<string> {
+  const [group, action, ...rest] = args
+  if (group === undefined) {
+    const shown = await call('canvas', {})
+    if (!shown) {
+      return `This chat has no canvas yet. Add a screen with: ${CANVAS_SET_COMMAND}`
+    }
+    const count = shown.screens.length === 1 ? '1 screen' : `${shown.screens.length} screens`
+    const lines = shown.screens.map(
+      ({ name, device, width, height, file, missing }) =>
+        `${name}\t${device} ${width}x${height}\t${file}${missing ? '\tfile missing' : ''}`
+    )
+    return [
+      `Canvas "${shown.name}", ${count}. Edit a screen's file and the canvas updates by itself.`,
+      ...lines
+    ].join('\n')
+  }
+  if (group === 'screen' && action === 'set') {
+    const { values, positional } = parseFlags(rest, ['device', 'size'])
+    const [name, file] = positional
+    if (!name || !file || positional.length > 2) {
+      throw new UsageError(CANVAS_SET_USAGE)
+    }
+    const result = await call('canvasScreenSet', {
+      name,
+      // Путь считается от папки, в которой агент запустил команду.
+      file: resolve(file),
+      ...(values['device'] !== undefined && { device: values['device'] }),
+      ...(values['size'] !== undefined && { size: values['size'] })
+    })
+    const look = `${result.device}, ${result.width}x${result.height}`
+    const done = result.created
+      ? `Added the screen "${result.screen}" (${look}) to the canvas "${result.canvas}". The user sees it now.`
+      : `Updated the screen "${result.screen}" (${look}) on the canvas "${result.canvas}".`
+    return [
+      ...(result.canvasCreated ? [`Created the canvas "${result.canvas}" for this chat.`] : []),
+      done,
+      `From now on just edit ${result.file}: the canvas updates by itself. Run this command again only to change the device or size.`
+    ].join(' ')
+  }
+  if (group === 'screen' && action === 'remove') {
+    const name = rest.join(' ')
+    if (!name.trim()) {
+      throw new UsageError('Usage: atox canvas screen remove <name>')
+    }
+    const { screen } = await call('canvasScreenRemove', { name })
+    return `Removed the screen "${screen}" from the canvas. Its file stays in the project.`
+  }
+  throw new UsageError(`Unknown canvas command.\n\n${USAGE}`)
 }
 
 /** «, opus, high» — модель и эффорт помощника, если они заданы. */

@@ -14,6 +14,8 @@ import {
   type OrchestrationResponse
 } from '../../shared/orchestration'
 import type { AgentDetector } from '../agents'
+import { CanvasError } from '../canvas/rules'
+import type { CanvasService } from '../canvas/service'
 import { errorMessage } from '../conversations/display'
 import type { ConversationManager } from '../conversations/manager'
 import type { ChatLocation, ProjectStore } from '../store'
@@ -35,6 +37,7 @@ interface OrchestrationServices {
   store: ProjectStore
   conversations: ConversationManager
   agents: AgentDetector
+  canvas: CanvasService
   /** Путь к сокету, через который команда `atox` обращается к приложению. */
   socketPath: string
   /** Путь к команде `atox`, которую получают агенты. */
@@ -150,9 +153,9 @@ export class OrchestrationServer {
       }
       return { ok: true, result: (await handler(caller, request.params)) as never }
     } catch (error) {
-      const message =
-        error instanceof CommandError ? error.message : 'Atox could not run the command.'
-      if (!(error instanceof CommandError)) {
+      const understood = error instanceof CommandError || error instanceof CanvasError
+      const message = understood ? error.message : 'Atox could not run the command.'
+      if (!understood) {
         console.error('Orchestration command failed', error)
       }
       return { ok: false, error: message }
@@ -289,6 +292,27 @@ export class OrchestrationServer {
       }
       this.services.onProjectsChanged()
       return { removed: workers.map(({ id }) => id) }
+    },
+
+    canvas: (caller) => this.services.canvas.describe(caller.chat.id),
+
+    canvasScreenSet: (caller, { name, file, device, size }) => {
+      if (typeof name !== 'string' || typeof file !== 'string') {
+        throw new CommandError('Specify the screen name and its HTML file.')
+      }
+      return this.services.canvas.setScreen(caller, {
+        name,
+        file,
+        ...(typeof device === 'string' && { device }),
+        ...(typeof size === 'string' && { size })
+      })
+    },
+
+    canvasScreenRemove: async (caller, { name }) => {
+      if (typeof name !== 'string' || !name.trim()) {
+        throw new CommandError('Specify the name of the screen to remove.')
+      }
+      return { screen: await this.services.canvas.removeScreen(caller.chat.id, name) }
     },
 
     workers: (caller) =>
