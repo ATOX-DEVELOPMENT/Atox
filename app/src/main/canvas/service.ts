@@ -513,8 +513,9 @@ export class CanvasService implements ScreenDocumentSource {
       const names = canvas.screens.map((other) => `"${other.name}"`).join(', ') || 'none'
       throw new CanvasError(`There is no screen "${name.trim()}" on the canvas. Screens: ${names}.`)
     }
-    // Сначала дописывается идущая проверка: снимок покажет то, что агент только что записал.
-    await this.checks.get(screenKey(canvas.id, screen.id))
+    // Файл сверяется заново, не дожидаясь слежения: агент мог записать его только что, и снимок
+    // без этого показал бы прежнюю сборку. Неизменившийся файл ревизию не меняет.
+    await this.queueCheck(screenKey(canvas.id, screen.id))
     const rendered = await this.render(canvas, screen)
     if (!rendered) {
       throw new CanvasError(
