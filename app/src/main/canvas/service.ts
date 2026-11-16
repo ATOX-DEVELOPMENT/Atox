@@ -279,7 +279,8 @@ export class CanvasService implements ScreenDocumentSource {
     const { screen } = this.getScreen(canvasId, screenId)
     const screenshot = (await this.render(canvas, screen))?.path ?? null
     const previousFix = screen.pendingFix
-    screen.pendingFix = message
+    // Вторая просьба до правки файла не заменяет первую: версия получит обе.
+    screen.pendingFix = previousFix === undefined ? message : `${previousFix}\n${message}`
     this.persist()
     try {
       await this.services.conversations.send(
