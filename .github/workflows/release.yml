@@ -95,6 +95,28 @@ jobs:
             test -x "$DIR/claude"
           done
 
+      # Так же с esbuild, который собирает экраны холста: в приложение кладётся бинарник
+      # своей архитектуры, а npm на Intel-раннере ставит только darwin-x64.
+      - if: matrix.platform == 'mac'
+        run: |
+          set -eu
+          VER=$(node -p "require('esbuild/package.json').version")
+          for ARCH in arm64 x64; do
+            DIR="node_modules/@esbuild/darwin-$ARCH"
+            if [ ! -x "$DIR/bin/esbuild" ]; then
+              TGZ=$(npm pack "@esbuild/darwin-$ARCH@$VER" --pack-destination /tmp --silent)
+              rm -rf "$DIR"
+              mkdir -p "$DIR"
+              tar -xzf "/tmp/$TGZ" --strip-components=1 -C "$DIR"
+              chmod +x "$DIR/bin/esbuild"
+            fi
+            test -x "$DIR/bin/esbuild"
+          done
+
+      # Зависимости холста (react, lucide-react) собираются в resources/canvas-vendor,
+      # без этой папки экраны-React в приложении не открываются.
+      - run: npm run build:vendor
+
       - run: npm run typecheck
 
       - run: npx electron-vite build
@@ -108,8 +130,16 @@ jobs:
           set -eu
           test -x dist/mac-arm64/Atox.app/Contents/Resources/claude-cli/claude
           test -x dist/mac/Atox.app/Contents/Resources/claude-cli/claude
+          for APP in dist/mac-arm64 dist/mac; do
+            test -x "$APP/Atox.app/Contents/Resources/esbuild/esbuild"
+            test -d "$APP/Atox.app/Contents/Resources/canvas-vendor"
+          done
       - if: matrix.platform == 'linux'
-        run: test -x dist/linux-unpacked/resources/claude-cli/claude
+        run: |
+          set -eu
+          test -x dist/linux-unpacked/resources/claude-cli/claude
+          test -x dist/linux-unpacked/resources/esbuild/esbuild
+          test -d dist/linux-unpacked/resources/canvas-vendor
 
       - name: Sign update manifest
         run: npm run release:manifest -- dist "$VERSION" ${{ matrix.platform }}
