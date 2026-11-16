@@ -20,6 +20,7 @@ import type { ScreenDocumentSource } from './protocol'
 import {
   CanvasError,
   SCREEN_FILE_MAX_BYTES,
+  SCREEN_FILE_MAX_MB,
   appendVersion,
   canvasNameFromTitle,
   findScreenByName,
@@ -683,7 +684,7 @@ async function verifyScreenFile(file: string, folders: readonly string[]): Promi
   }
   if (info.size > SCREEN_FILE_MAX_BYTES) {
     throw new CanvasError(
-      `${file} is larger than ${SCREEN_FILE_MAX_BYTES / (1024 * 1024)} MB. Keep the screen light: inline SVG instead of embedded photos.`
+      `${file} is larger than ${SCREEN_FILE_MAX_MB} MB. Keep the screen light: inline SVG instead of embedded photos.`
     )
   }
   const roots = await Promise.all(folders.map((folder) => realpath(folder).catch(() => null)))
