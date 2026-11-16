@@ -15,6 +15,7 @@ import {
   fitView,
   inflate,
   intersects,
+  SCREEN_LABEL_SPACE,
   screenBounds,
   unionRect,
   visibleArea,
@@ -30,8 +31,6 @@ import type { ViewState } from './viewState'
 
 /** Отступ от краёв, когда все экраны вписываются в окно, в пикселях окна. */
 const FIT_MARGIN = 56
-/** Место над экранами для их подписей, в пикселях окна. */
-const LABEL_SPACE = 32
 /** На сколько пикселей нужно сдвинуть мышь, чтобы клик по экрану стал перетаскиванием. */
 const DRAG_THRESHOLD = 4
 /** Чувствительность масштаба к колесу и щипку трекпада. */
@@ -140,7 +139,7 @@ export function CanvasStage({
     }
     // Подписи над экранами не масштабируются: место под них зависит от итогового масштаба.
     const first = fitView(content, viewport, FIT_MARGIN)
-    const labelSpace = LABEL_SPACE / first.zoom
+    const labelSpace = SCREEN_LABEL_SPACE / first.zoom
     return fitView(
       { ...content, y: content.y - labelSpace, height: content.height + labelSpace },
       viewport,
