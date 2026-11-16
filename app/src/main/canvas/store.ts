@@ -1,12 +1,17 @@
 import { isAbsolute } from 'node:path'
 import {
+  CANVAS_LINKS_MAX,
   CANVAS_NAME_MAX_LENGTH,
   CANVAS_ZOOM,
+  LINK_LABEL_MAX_LENGTH,
+  LINK_ON_MAX_LENGTH,
   SCREEN_DEVICES,
   SCREEN_HISTORY_LIMIT,
   isScreenDeviceId,
   type Canvas,
+  type CanvasLink,
   type CanvasScreen,
+  type LinkAnchor,
   type CanvasView,
   type ScreenDevice,
   type ScreenVersion
@@ -108,11 +113,60 @@ function normalizeCanvas(raw: unknown, now: number): StoredCanvas | null {
     chatId: value['chatId'],
     projectId: value['projectId'],
     screens,
+    links: normalizeLinks(value['links'], screenIds),
     archived: value['archived'] === true,
     view: normalizeView(value['view']),
     createdAt: timestamp(value['createdAt'], now),
     updatedAt: timestamp(value['updatedAt'], now)
   }
+}
+
+function normalizeLinks(raw: unknown, screenIds: ReadonlySet<string>): CanvasLink[] {
+  const links: CanvasLink[] = []
+  const ids = new Set<string>()
+  for (const item of Array.isArray(raw) ? raw : []) {
+    const value = record(item)
+    const { id, from, to } = value
+    if (
+      !isCanvasId(id) ||
+      ids.has(id) ||
+      typeof from !== 'string' ||
+      typeof to !== 'string' ||
+      from === to ||
+      !screenIds.has(from) ||
+      !screenIds.has(to)
+    ) {
+      continue
+    }
+    ids.add(id)
+    links.push({
+      id,
+      from,
+      to,
+      label: boundedText(value['label'], LINK_LABEL_MAX_LENGTH),
+      on: boundedText(value['on'], LINK_ON_MAX_LENGTH),
+      anchor: normalizeAnchor(value['anchor'])
+    })
+    if (links.length >= CANVAS_LINKS_MAX) {
+      break
+    }
+  }
+  return links
+}
+
+function boundedText(value: unknown, max: number): string | null {
+  const text = typeof value === 'string' ? value.trim() : ''
+  return text ? text.slice(0, max) : null
+}
+
+function normalizeAnchor(raw: unknown): LinkAnchor | null {
+  const value = record(raw)
+  const { x, y, width, height } = value
+  return [x, y, width, height].every((part) => typeof part === 'number' && Number.isFinite(part)) &&
+    (width as number) > 0 &&
+    (height as number) > 0
+    ? { x: x as number, y: y as number, width: width as number, height: height as number }
+    : null
 }
 
 function normalizeScreen(raw: unknown, now: number): StoredScreen | null {

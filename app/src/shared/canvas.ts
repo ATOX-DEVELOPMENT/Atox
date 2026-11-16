@@ -99,6 +99,36 @@ export interface CanvasScreen {
   updatedAt: number
 }
 
+/** Прямоугольник элемента внутри экрана, в пикселях экрана (от его левого верхнего угла). */
+export interface LinkAnchor {
+  x: number
+  y: number
+  width: number
+  height: number
+}
+
+/**
+ * Стрелка от одного экрана к другому: что за чем идёт. Ставит и убирает только агент.
+ * Начинается у кнопки (`on`) на экране-источнике или у края экрана, если кнопки нет.
+ */
+export interface CanvasLink {
+  id: string
+  /** Экран, откуда идёт стрелка, и экран, куда она приходит (id). */
+  from: string
+  to: string
+  /** Подпись на стрелке: что делает человек («Tap Sign in»). */
+  label: string | null
+  /** Кнопка или другой элемент экрана-источника: её текст или CSS-селектор. */
+  on: string | null
+  /** Где этот элемент на экране; `null` — не нашли, стрелка идёт от края экрана. */
+  anchor: LinkAnchor | null
+}
+
+/** Длиннее подпись стрелки не помещается; число стрелок на холсте ограничено ради порядка. */
+export const LINK_LABEL_MAX_LENGTH = 40
+export const LINK_ON_MAX_LENGTH = 120
+export const CANVAS_LINKS_MAX = 200
+
 /** Сдвиг и масштаб холста: окно возвращает человека туда, где он остановился. */
 export interface CanvasView {
   x: number
@@ -114,6 +144,8 @@ export interface Canvas {
   projectId: string
   screens: CanvasScreen[]
   archived: boolean
+  /** Стрелки между экранами. */
+  links: CanvasLink[]
   /** Сохранённый вид; нет — окно вписывает все экраны само. */
   view: CanvasView | null
   createdAt: number

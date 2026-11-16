@@ -238,6 +238,71 @@ export function renderScreenImage(url: string, width: number, height: number): P
   })
 }
 
+/**
+ * Страница ищет элементы по запросам и отвечает прямоугольниками в пикселях окна. Запрос — текст
+ * кнопки или ссылки (точный, потом частичный), подпись `aria-label`, листовой элемент с таким
+ * текстом или CSS-селектор. Невидимые элементы не считаются.
+ */
+const FIND_ELEMENTS_SCRIPT = (queries: readonly string[]): string => `((queries) => {
+  const normalize = (text) => text.replace(/\\s+/g, ' ').trim().toLowerCase()
+  const visible = (element) => {
+    const box = element.getBoundingClientRect()
+    const style = getComputedStyle(element)
+    return box.width > 0 && box.height > 0 && style.visibility !== 'hidden' && style.display !== 'none'
+  }
+  const interactive = 'button, a, [role="button"], [role="tab"], [role="link"], [role="menuitem"], input[type="submit"], input[type="button"], summary, label, select'
+  const labelOf = (element) => normalize(element.innerText || element.value || '')
+  const ariaOf = (element) => normalize(element.getAttribute('aria-label') || '')
+  const rectOf = (element) => {
+    const box = element.getBoundingClientRect()
+    return { x: box.left, y: box.top, width: box.width, height: box.height }
+  }
+  return queries.map((query) => {
+    const wanted = normalize(query)
+    const pool = [...document.querySelectorAll(interactive)].filter(visible)
+    let found =
+      pool.find((element) => labelOf(element) === wanted) ||
+      pool.find((element) => ariaOf(element) === wanted) ||
+      pool.find((element) => labelOf(element).includes(wanted))
+    if (!found) {
+      const leaf = [...document.body.querySelectorAll('*')].find(
+        (element) => element.children.length === 0 && visible(element) && normalize(element.textContent || '') === wanted
+      )
+      found = leaf ? leaf.closest(interactive) || leaf : null
+    }
+    if (!found) {
+      try {
+        const bySelector = document.querySelector(query)
+        found = bySelector && visible(bySelector) ? bySelector : null
+      } catch {
+        found = null
+      }
+    }
+    return found ? rectOf(found) : null
+  })
+})(${JSON.stringify(queries)})`
+
+/** Прямоугольник элемента на экране; `null` — не нашли. */
+export type ElementRect = { x: number; y: number; width: number; height: number } | null
+
+/**
+ * Где на экране находятся элементы из запросов (по порядку). `null` — экран не открылся,
+ * ответить нечего; `null` внутри списка — такого элемента нет.
+ */
+export function findScreenElements(
+  url: string,
+  width: number,
+  height: number,
+  queries: readonly string[]
+): Promise<ElementRect[] | null> {
+  return inScreenWindow(url, width, height, async (window) => {
+    const found: unknown = await window.webContents
+      .executeJavaScript(FIND_ELEMENTS_SCRIPT(queries))
+      .catch(() => null)
+    return Array.isArray(found) ? (found as ElementRect[]) : queries.map(() => null)
+  })
+}
+
 /** Только проверка, без снимка: для экрана, который агент только что поставил. */
 export function inspectScreen(
   url: string,

@@ -3,7 +3,10 @@ import { mkdir, open, readFile, realpath, rename, stat } from 'node:fs/promises'
 import { basename, dirname, isAbsolute, join } from 'node:path'
 import { app } from 'electron'
 import {
+  CANVAS_LINKS_MAX,
   DEFAULT_SCREEN_DEVICE,
+  LINK_LABEL_MAX_LENGTH,
+  LINK_ON_MAX_LENGTH,
   SCREEN_DEVICES,
   SCREEN_HISTORY_LIMIT,
   canvasScreenUrl,
@@ -22,7 +25,7 @@ import type { ConversationManager } from '../conversations/manager'
 import { JsonFileWriter, readVersionedJson } from '../jsonFile'
 import type { ChatLocation, ProjectStore } from '../store'
 import { ScreenBuildError, buildScreen, type ScreenBuild } from './build'
-import { captureScreen, inspectScreen, type ScreenRender } from './capture'
+import { captureScreen, findScreenElements, inspectScreen, type ScreenRender } from './capture'
 import { checkExportTarget, exportScreens, freeExportPath } from './export'
 import type { ScreenDocument, ScreenDocumentSource } from './protocol'
 import {
@@ -110,8 +113,30 @@ export interface AgentExportRequest {
   out?: string
 }
 
+/** Стрелка, которую ставит агент: экраны по именам. */
+export interface AgentLinkRequest {
+  from: string
+  to: string
+  /** Подпись на стрелке. */
+  label?: string
+  /** Кнопка (или другой элемент) экрана `from`: текст или CSS-селектор. */
+  on?: string
+}
+
+export interface AgentLinkResult {
+  from: string
+  to: string
+  label: string | null
+  on: string | null
+  /** Стрелка новая, а не обновлённая. */
+  created: boolean
+  /** `on` задан, но такого элемента на экране не нашли: стрелка идёт от края экрана. */
+  elementMissing: boolean
+}
+
 export interface AgentCanvasView {
   name: string
+  links: { from: string; to: string; label: string | null; on: string | null }[]
   screens: {
     name: string
     device: ScreenDevice
@@ -136,6 +161,8 @@ interface ScreenLocation {
  * только читает, а пишет лишь при восстановлении версии по просьбе человека.
  */
 export class CanvasService implements ScreenDocumentSource {
+  /** Расстановка стрелок по экранам: на один экран одновременно идёт одна. */
+  private readonly anchorJobs = new Map<string, Promise<void>>()
   private readonly watcher = new ScreenFileWatcher((key) => void this.queueCheck(key))
   /** Проверки файлов идут по одной на экран: иначе одно изменение стало бы двумя версиями. */
   private readonly checks = new Map<string, Promise<void>>()
@@ -428,6 +455,11 @@ export class CanvasService implements ScreenDocumentSource {
     return canvas
       ? {
           name: canvas.name,
+          links: canvas.links.flatMap(({ from, to, label, on }) => {
+            const source = canvas.screens.find(({ id }) => id === from)
+            const target = canvas.screens.find(({ id }) => id === to)
+            return source && target ? [{ from: source.name, to: target.name, label, on }] : []
+          }),
           screens: canvas.screens.map(
             ({ name, device, width, height, file, missing, buildError }) => ({
               name,
@@ -497,6 +529,10 @@ export class CanvasService implements ScreenDocumentSource {
     const key = screenKey(canvas.id, screen.id)
     this.watcher.watch(key, [file])
     await this.queueCheck(key)
+    if (!created && look) {
+      // Другой размер экрана сдвигает кнопки: стрелки от них находят их заново.
+      void this.refreshAnchors(canvas, screen)
+    }
     const inspection = await this.inspect(canvas, screen)
     return {
       canvas: canvas.name,
@@ -630,6 +666,140 @@ export class CanvasService implements ScreenDocumentSource {
     return { path: target, screens: ordered.length, warnings }
   }
 
+  /**
+   * Ставит стрелку `from` → `to` на холст чата. Та же пара экранов и та же кнопка — обновляют
+   * подпись. С `on` стрелка начинается у этой кнопки: приложение находит её на экране и
+   * помнит, где она, пока экран меняется.
+   */
+  async setLink(chatId: string, request: AgentLinkRequest): Promise<AgentLinkResult> {
+    const canvas = this.activeCanvasOf(chatId)
+    if (!canvas) {
+      throw new CanvasError('This chat has no canvas. Put the screens on it first.')
+    }
+    const from = this.screenNamed(canvas, request.from)
+    const to = this.screenNamed(canvas, request.to)
+    if (from === to) {
+      throw new CanvasError('An arrow needs two different screens.')
+    }
+    const label = linkText(request.label, LINK_LABEL_MAX_LENGTH, 'label')
+    const on = linkText(request.on, LINK_ON_MAX_LENGTH, 'element')
+    let link = canvas.links.find(
+      (other) =>
+        other.from === from.id &&
+        other.to === to.id &&
+        (other.on ?? '').toLowerCase() === (on ?? '').toLowerCase()
+    )
+    const created = link === undefined
+    if (!link) {
+      if (canvas.links.length >= CANVAS_LINKS_MAX) {
+        throw new CanvasError(`A canvas has at most ${CANVAS_LINKS_MAX} arrows.`)
+      }
+      link = { id: randomUUID(), from: from.id, to: to.id, label, on, anchor: null }
+      canvas.links.push(link)
+    } else {
+      link.label = label
+    }
+    canvas.updatedAt = Date.now()
+    this.changed()
+    if (on) {
+      await this.refreshAnchors(canvas, from)
+    }
+    return {
+      from: from.name,
+      to: to.name,
+      label: link.label,
+      on: link.on,
+      created,
+      elementMissing: on !== null && link.anchor === null
+    }
+  }
+
+  /** Убирает стрелки между экранами; с `on` — только те, что начинаются у этой кнопки. */
+  removeLink(chatId: string, fromName: string, toName: string, on?: string): number {
+    const canvas = this.activeCanvasOf(chatId)
+    if (!canvas) {
+      throw new CanvasError('This chat has no canvas.')
+    }
+    const from = this.screenNamed(canvas, fromName)
+    const to = this.screenNamed(canvas, toName)
+    const wanted = linkText(on, LINK_ON_MAX_LENGTH, 'element')?.toLowerCase()
+    const before = canvas.links.length
+    canvas.links = canvas.links.filter(
+      (link) =>
+        link.from !== from.id ||
+        link.to !== to.id ||
+        (wanted !== undefined && (link.on ?? '').toLowerCase() !== wanted)
+    )
+    const removed = before - canvas.links.length
+    if (removed > 0) {
+      canvas.updatedAt = Date.now()
+      this.changed()
+    }
+    return removed
+  }
+
+  private screenNamed(canvas: StoredCanvas, name: string): StoredScreen {
+    const screen = findScreenByName(canvas.screens, name)
+    if (!screen) {
+      const names = canvas.screens.map((other) => `"${other.name}"`).join(', ') || 'none'
+      throw new CanvasError(`There is no screen "${name.trim()}" on the canvas. Screens: ${names}.`)
+    }
+    return screen
+  }
+
+  /**
+   * Находит на экране кнопки, от которых начинаются стрелки, и запоминает, где они. Зовётся,
+   * когда стрелку поставили и когда экран изменился. Экран, который не открылся, оставляет
+   * прежние места: стрелки не прыгают из-за случайного сбоя.
+   */
+  private async refreshAnchors(canvas: StoredCanvas, screen: StoredScreen): Promise<void> {
+    const key = screenKey(canvas.id, screen.id)
+    const previous = this.anchorJobs.get(key) ?? Promise.resolve()
+    const job = previous.then(() => this.measureAnchors(canvas, screen)).catch((error) => {
+      console.error('Failed to place the arrows of a screen', error)
+    })
+    this.anchorJobs.set(key, job)
+    try {
+      await job
+    } finally {
+      if (this.anchorJobs.get(key) === job) {
+        this.anchorJobs.delete(key)
+      }
+    }
+  }
+
+  private async measureAnchors(canvas: StoredCanvas, screen: StoredScreen): Promise<void> {
+    const links = canvas.links.filter((link) => link.from === screen.id && link.on !== null)
+    if (links.length === 0) {
+      return
+    }
+    const key = screenKey(canvas.id, screen.id)
+    if (screenSourceKind(screen.file) === 'react' && !this.builds.has(key)) {
+      return
+    }
+    const found = await findScreenElements(
+      canvasScreenUrl(canvas.id, screen.id, screen.revision),
+      screen.width,
+      screen.height,
+      links.map((link) => link.on as string)
+    )
+    if (!found || !this.canvases.includes(canvas) || !canvas.screens.includes(screen)) {
+      return
+    }
+    let changed = false
+    links.forEach((link, index) => {
+      const rect = found[index] ?? null
+      const next = rect && { x: rect.x, y: rect.y, width: rect.width, height: rect.height }
+      if (JSON.stringify(next) !== JSON.stringify(link.anchor)) {
+        link.anchor = next
+        changed = true
+      }
+    })
+    if (changed && canvas.links.some((link) => links.includes(link))) {
+      this.changed()
+    }
+  }
+
   /** Убирает экран с холста чата по имени; файл экрана остаётся в проекте. */
   async removeScreen(chatId: string, name: string): Promise<string> {
     const canvas = this.activeCanvasOf(chatId)
@@ -644,6 +814,7 @@ export class CanvasService implements ScreenDocumentSource {
     this.watcher.unwatch(screenKey(canvas.id, screen.id))
     this.forgetOutput(screenKey(canvas.id, screen.id))
     canvas.screens = canvas.screens.filter((other) => other !== screen)
+    canvas.links = canvas.links.filter(({ from, to }) => from !== screen.id && to !== screen.id)
     canvas.updatedAt = Date.now()
     this.changed()
     await this.snapshots
@@ -694,6 +865,7 @@ export class CanvasService implements ScreenDocumentSource {
       chatId: chat.id,
       projectId: project.id,
       screens: [],
+      links: [],
       archived: false,
       view: null,
       createdAt: now,
@@ -904,6 +1076,8 @@ export class CanvasService implements ScreenDocumentSource {
     screen.updatedAt = now
     canvas.updatedAt = now
     this.changed()
+    // Экран изменился — кнопки могли сдвинуться, и стрелки от них идут по новым местам.
+    void this.refreshAnchors(canvas, screen)
     const kept = new Set(screen.versions.map(({ hash }) => hash))
     const unused = new Set(dropped.map(({ hash }) => hash).filter((hash) => !kept.has(hash)))
     if (unused.size > 0) {
@@ -928,6 +1102,15 @@ export class CanvasService implements ScreenDocumentSource {
     this.persist()
     this.services.onChange(this.state())
   }
+}
+
+/** Подпись или элемент стрелки: пробелы по краям убираются, пустое — «не задано». */
+function linkText(value: string | undefined, max: number, subject: string): string | null {
+  const text = value?.trim() ?? ''
+  if (text.length > max) {
+    throw new CanvasError(`The arrow ${subject} is longer than ${max} characters.`)
+  }
+  return text || null
 }
 
 function screenKey(canvasId: string, screenId: string): string {
