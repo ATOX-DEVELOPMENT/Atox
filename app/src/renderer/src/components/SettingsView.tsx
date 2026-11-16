@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react'
 import {
   Archive,
   ChartNoAxesColumn,
+  LayoutGrid,
+  List,
   Monitor,
   Moon,
   Plug,
@@ -16,7 +18,12 @@ import { isIntegrationKind, type IntegrationKind } from '../../../shared/integra
 import { useProjectsContext } from '../hooks/ProjectsContext'
 import { useSettings } from '../hooks/SettingsContext'
 import { useUserProfile } from '../hooks/useUserProfile'
-import { ACCENTS, PROFILE_NAME_MAX_LENGTH, type ThemeMode } from '../../../shared/settings'
+import {
+  ACCENTS,
+  PROFILE_NAME_MAX_LENGTH,
+  type SidebarButtonStyle,
+  type ThemeMode
+} from '../../../shared/settings'
 import { useIntegrationLists } from '../hooks/useIntegrationLists'
 import { playChime } from '../lib/chime'
 import { AgentIntegrations } from './AgentIntegrations'
@@ -52,12 +59,21 @@ const THEME_OPTIONS: ReadonlyArray<{ id: ThemeMode; label: string; icon: LucideI
   { id: 'dark', label: 'Dark', icon: Moon }
 ]
 
+const SIDEBAR_BUTTON_OPTIONS: ReadonlyArray<{
+  id: SidebarButtonStyle
+  label: string
+  icon: LucideIcon
+}> = [
+  { id: 'list', label: 'List', icon: List },
+  { id: 'icons', label: 'Icons', icon: LayoutGrid }
+]
+
 interface SettingsViewProps {
   onClose(): void
 }
 
 export function SettingsView({ onClose }: SettingsViewProps) {
-  const { shareUsageStats, playSounds, profileName, theme, accent } = useSettings()
+  const { shareUsageStats, playSounds, profileName, theme, accent, sidebarButtons } = useSettings()
   const profile = useUserProfile()
   const { projects, currentProjectId } = useProjectsContext()
   const project = projects.find(({ id }) => id === currentProjectId) ?? null
@@ -190,6 +206,29 @@ export function SettingsView({ onClose }: SettingsViewProps) {
                         aria-checked={theme === id}
                         className="segmented__item"
                         onClick={() => void atox.settings.update({ theme: id })}
+                      >
+                        <Icon className="segmented__icon" />
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div className="settings__row">
+                  <span className="settings__label">
+                    <span>Sidebar buttons</span>
+                    <span className="settings__description">
+                      Show the buttons above the projects as rows with labels or as a row of icons.
+                    </span>
+                  </span>
+                  <div className="segmented" role="radiogroup" aria-label="Sidebar buttons">
+                    {SIDEBAR_BUTTON_OPTIONS.map(({ id, label, icon: Icon }) => (
+                      <button
+                        key={id}
+                        type="button"
+                        role="radio"
+                        aria-checked={sidebarButtons === id}
+                        className="segmented__item"
+                        onClick={() => void atox.settings.update({ sidebarButtons: id })}
                       >
                         <Icon className="segmented__icon" />
                         {label}
