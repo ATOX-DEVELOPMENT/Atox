@@ -109,6 +109,9 @@ atox canvas screen set "Admin dashboard" .atox/canvas/admin.tsx --device web
 atox canvas screen set Widget .atox/canvas/widget.tsx --size 360x640
 atox canvas screen preview Login                               # PNG of the screen as the user sees it, plus problems
 atox canvas screen remove Login                                # removes the screen; the files stay
+atox canvas link Login Home --on "Sign in"                     # a line from the Sign in button of Login to the Home screen
+atox canvas link Home Settings                                 # a line from the Home screen to Settings
+atox canvas link remove Login Home                             # removes the lines between two screens
 atox canvas export pdf                                         # all screens to a PDF (selectable text) in the Downloads folder
 atox canvas export pdf --screens "Cover,Price" --out /abs/path/offer.pdf
 atox canvas export pptx                                        # PowerPoint, one image slide per screen
@@ -124,6 +127,10 @@ atox canvas export png                                         # a folder of PNG
 5. \`set\` and \`preview\` also report problems in plain text: "Build failed" (file:line and the error), "Errors in the running screen" (exceptions and console errors), and "Layout problems" such as "Content is 1240 px tall but the screen is 844 px: it is cut off." Fix them in the code. When the build fails, the canvas keeps the last version that built; \`atox canvas\` shows the build error of each screen.
 
 Edit files with your editor tool, not with \`sed -i\` (on macOS it differs from GNU sed and fails). A command that printed an error changed nothing: do not assume the canvas shows the new version.
+
+## Showing the flow
+
+When screens follow each other (a user flow, onboarding, checkout), connect them with lines so the user sees what leads where: \`atox canvas link <from> <to> --on "<button text>"\`. A line starts with a dot at the button (or at the screen when you leave \`--on\` out) and ends at the target screen: the dot shows the direction. Use the exact visible text of the button, link or tab that causes the transition (or a CSS selector); if it is not found, the command warns and the line starts at the screen. Draw only real transitions, one line per button, and add the lines after the screens exist. The lines follow the buttons when the screens change. Lines carry no labels: name the screens well instead ("Login", "Home", "Order confirmed"). The user cannot edit lines; to change them, run \`link\` and \`link remove\`.
 
 ## Presentations and documents
 
@@ -155,7 +162,7 @@ ${CANVAS_DEVICES}
 
 ## "${CANVAS_MESSAGE_PREFIX} Fix the screen ..." messages
 
-The user clicked a screen and asked for a change. The message has the request, \`File:\` with the screen's file, usually \`Screenshot:\` with a PNG of how it looks now, and sometimes \`Build error:\` when the screen does not build right now.
+The user right-clicked a screen, chose Fix and asked for a change. The message has the request, \`File:\` with the screen's file, usually \`Screenshot:\` with a PNG of how it looks now, and sometimes \`Build error:\` when the screen does not build right now.
 
 - Open the File, look at the Screenshot, make the change in the code. The canvas rebuilds by itself. If there is a Build error, fix it first.
 - Do not run \`atox canvas screen set\` again unless the device or size must change.

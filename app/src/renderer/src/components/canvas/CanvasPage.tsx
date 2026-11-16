@@ -61,6 +61,12 @@ export function CanvasPage({ canvasId, onClose }: CanvasPageProps) {
     }
   }, [])
 
+  // Клик по экрану подводит к нему вид, закрывает «Fix» и переключает историю на этот экран.
+  const focusScreen = useCallback((screenId: string) => {
+    setSelectedScreenId(null)
+    setHistoryScreenId(screenId)
+  }, [])
+
   if (!canvas) {
     return <section className="canvas-page" aria-label="Canvas" />
   }
@@ -127,13 +133,14 @@ export function CanvasPage({ canvasId, onClose }: CanvasPageProps) {
             viewState={viewState}
             selectedScreenId={selectedScreenId}
             onSelectScreen={selectScreen}
+            onFocusScreen={focusScreen}
             preview={shownPreview}
             chatTitle={chatTitle}
           >
             <p className="canvas-hint" data-canvas-ui>
               <MousePointerClick className="icon" aria-hidden />
               <span className="canvas-hint__text">
-                Click a screen to fix it · Drag to move · Double-click a name to rename
+                Click a screen to go to it · Right-click for Fix, Rename, Remove · Drag to move
               </span>
             </p>
             {owner.chat && (

@@ -1,5 +1,5 @@
-import { memo, useState, type CSSProperties, type PointerEvent } from 'react'
-import { TriangleAlert } from 'lucide-react'
+import { memo, useState, type CSSProperties, type MouseEvent, type PointerEvent } from 'react'
+import { Pencil, Trash2, TriangleAlert, Wrench } from 'lucide-react'
 import {
   CANVAS_NAME_MAX_LENGTH,
   canvasScreenUrl,
@@ -8,7 +8,10 @@ import {
   type ScreenFrame as FrameKind
 } from '../../../../shared/canvas'
 import { FRAME_INSETS, screenFrame, type Point } from '../../lib/canvasView'
+import { showMenu } from '../../lib/menu'
 import { InlineRename } from '../InlineRename'
+
+type ScreenAction = 'fix' | 'rename' | 'remove'
 
 interface ScreenFrameProps {
   canvasId: string
@@ -21,8 +24,10 @@ interface ScreenFrameProps {
   /** Версия из истории, которую показывает экран вместо текущей. */
   previewVersionId: string | null
   onPointerDown(screenId: string, event: PointerEvent<HTMLElement>): void
-  /** Открывает «Fix» у экрана — с клавиатуры; мышью это решает `onPointerDown`. */
-  onSelect(screenId: string): void
+  /** Подводит холст к экрану — с клавиатуры; мышью это решает `onPointerDown`. */
+  onFocus(screenId: string): void
+  /** «Fix» из меню экрана: открывает окно просьбы к агенту. */
+  onFix(screenId: string): void
 }
 
 /** Подпись устройства: «iPhone 390 × 844», у своего размера — «Custom 500 × 300». */
@@ -33,7 +38,8 @@ export function describeDevice(screen: Pick<CanvasScreen, 'device' | 'width' | '
 
 /**
  * Экран на холсте: подпись над ним, рамка устройства и сам HTML в iframe. Поверх iframe лежит
- * прозрачный слой: человек не нажимает кнопки дизайна, а двигает экран и открывает «Fix».
+ * прозрачный слой: человек не нажимает кнопки дизайна, а двигает экран, подходит к нему кликом
+ * и по правой кнопке выбирает «Fix», переименование или удаление.
  */
 export const ScreenFrame = memo(function ScreenFrame({
   canvasId,
@@ -43,7 +49,8 @@ export const ScreenFrame = memo(function ScreenFrame({
   dragging,
   previewVersionId,
   onPointerDown,
-  onSelect
+  onFocus,
+  onFix
 }: ScreenFrameProps) {
   const [renaming, setRenaming] = useState(false)
   const frame = screenFrame(screen)
@@ -61,6 +68,26 @@ export const ScreenFrame = memo(function ScreenFrame({
   const rename = (name: string) => {
     setRenaming(false)
     void window.atox.canvas.renameScreen(canvasId, screen.id, name.slice(0, CANVAS_NAME_MAX_LENGTH))
+  }
+
+  const openMenu = async (event: MouseEvent<HTMLElement>) => {
+    event.preventDefault()
+    const action = await showMenu<ScreenAction>(
+      [
+        { action: 'fix', label: 'Fix…', icon: <Wrench /> },
+        { action: 'rename', label: 'Rename', icon: <Pencil /> },
+        { type: 'separator' },
+        { action: 'remove', label: 'Remove from canvas…', icon: <Trash2 />, destructive: true }
+      ],
+      event
+    )
+    if (action === 'fix') {
+      onFix(screen.id)
+    } else if (action === 'rename') {
+      setRenaming(true)
+    } else if (action === 'remove') {
+      void window.atox.canvas.removeScreen(canvasId, screen.id)
+    }
   }
 
   return (
@@ -113,11 +140,12 @@ export const ScreenFrame = memo(function ScreenFrame({
       <button
         type="button"
         className="canvas-screen__overlay"
-        aria-label={`Fix ${screen.name}`}
-        aria-expanded={selected}
+        aria-label={`Go to ${screen.name}`}
+        aria-haspopup="menu"
         onPointerDown={(event) => onPointerDown(screen.id, event)}
+        onContextMenu={(event) => void openMenu(event)}
         // Клик мышью уже обработан протяжкой; здесь — Enter и пробел (у них `detail` равен 0).
-        onClick={(event) => event.detail === 0 && onSelect(screen.id)}
+        onClick={(event) => event.detail === 0 && onFocus(screen.id)}
       />
       {selected && <div className="canvas-screen__ring" aria-hidden />}
     </div>

@@ -24,6 +24,7 @@ import {
   type Point,
   type Rect
 } from '../../lib/canvasView'
+import { CanvasLinks } from './CanvasLinks'
 import { CanvasMinimap } from './CanvasMinimap'
 import { FixBox } from './FixBox'
 import { ScreenFrame } from './ScreenFrame'
@@ -41,6 +42,8 @@ const WHEEL_ZOOM_DELTA_LIMIT = 40
 const WHEEL_LINE_HEIGHT = 16
 /** Пауза, после которой вид сохраняется: не на каждом кадре жеста. */
 const VIEW_SAVE_DELAY = 600
+/** Сколько длится перелёт к экрану после клика, мс. */
+const FOCUS_DURATION = 380
 /** Экраны дальше этого расстояния от окна (в его размерах) не рисуются. */
 const OFFSCREEN_MARGIN = 0.5
 
@@ -55,7 +58,10 @@ interface CanvasStageProps {
   canvas: Canvas
   viewState: ViewState
   selectedScreenId: string | null
+  /** Открывает «Fix» у экрана; `null` — закрывает. */
   onSelectScreen(screenId: string | null): void
+  /** Клик по экрану: холст подвёл к нему вид. */
+  onFocusScreen(screenId: string): void
   /** Версия из истории, которую показывает один из экранов. */
   preview: { screenId: string; versionId: string } | null
   chatTitle: string
@@ -79,6 +85,7 @@ export function CanvasStage({
   viewState,
   selectedScreenId,
   onSelectScreen,
+  onFocusScreen,
   preview,
   chatTitle,
   children,
@@ -91,6 +98,7 @@ export function CanvasStage({
   const [dropped, setDropped] = useState<ReadonlyMap<string, Point>>(new Map())
   const [panning, setPanning] = useState(false)
   const saveTimerRef = useRef<number | undefined>(undefined)
+  const flightRef = useRef<number | null>(null)
   const { id: canvasId, screens } = canvas
 
   const positionOf = useCallback(
@@ -114,38 +122,103 @@ export function CanvasStage({
       void window.atox.canvas.setView(canvasId, view)
     }
   }, [canvasId, viewState])
+  const stopFlight = useCallback(() => {
+    if (flightRef.current !== null) {
+      cancelAnimationFrame(flightRef.current)
+      flightRef.current = null
+    }
+  }, [])
   const commitView = useCallback(
     (view: CanvasView) => {
+      // Колесо или протяжка во время перелёта забирают вид себе.
+      stopFlight()
       viewState.set(view)
       window.clearTimeout(saveTimerRef.current)
       saveTimerRef.current = window.setTimeout(saveView, VIEW_SAVE_DELAY)
     },
-    [viewState, saveView]
+    [viewState, saveView, stopFlight]
   )
   useEffect(
     () => () => {
+      stopFlight()
       if (saveTimerRef.current !== undefined) {
         saveView()
       }
     },
-    [saveView]
+    [saveView, stopFlight]
   )
 
+  /** Вид, в который `content` вписывается целиком вместе с подписями над экранами. */
+  const viewFitting = useCallback(
+    (content: Rect): CanvasView | null => {
+      const viewport = viewState.viewport()
+      if (viewport.width === 0) {
+        return null
+      }
+      // Подписи над экранами не масштабируются: место под них зависит от итогового масштаба.
+      const first = fitView(content, viewport, FIT_MARGIN)
+      const labelSpace = SCREEN_LABEL_SPACE / first.zoom
+      return fitView(
+        { ...content, y: content.y - labelSpace, height: content.height + labelSpace },
+        viewport,
+        FIT_MARGIN
+      )
+    },
+    [viewState]
+  )
   const fittedView = useCallback((): CanvasView | null => {
     const content = unionRect([...boundsRef.current.values()])
-    const viewport = viewState.viewport()
-    if (!content || viewport.width === 0) {
-      return null
-    }
-    // Подписи над экранами не масштабируются: место под них зависит от итогового масштаба.
-    const first = fitView(content, viewport, FIT_MARGIN)
-    const labelSpace = SCREEN_LABEL_SPACE / first.zoom
-    return fitView(
-      { ...content, y: content.y - labelSpace, height: content.height + labelSpace },
-      viewport,
-      FIT_MARGIN
-    )
-  }, [viewState])
+    return content && viewFitting(content)
+  }, [viewFitting])
+
+  // Перелёт к виду: камера плывёт к центру нового вида, а масштаб меняется плавно (по степени),
+  // а не прыжком. Без анимации (настройка системы) вид меняется сразу.
+  const flyTo = useCallback(
+    (target: CanvasView) => {
+      const from = viewState.view()
+      const { width, height } = viewState.viewport()
+      if (!from || window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+        commitView(target)
+        return
+      }
+      stopFlight()
+      const centerOf = (view: CanvasView): Point => ({
+        x: (width / 2 - view.x) / view.zoom,
+        y: (height / 2 - view.y) / view.zoom
+      })
+      const a = centerOf(from)
+      const b = centerOf(target)
+      const startedAt = performance.now()
+      const step = (now: number) => {
+        const progress = Math.min(1, (now - startedAt) / FOCUS_DURATION)
+        if (progress >= 1) {
+          flightRef.current = null
+          commitView(target)
+          return
+        }
+        const eased = 1 - (1 - progress) ** 3
+        const zoom = from.zoom * (target.zoom / from.zoom) ** eased
+        const x = a.x + (b.x - a.x) * eased
+        const y = a.y + (b.y - a.y) * eased
+        viewState.set({ x: width / 2 - x * zoom, y: height / 2 - y * zoom, zoom })
+        flightRef.current = requestAnimationFrame(step)
+      }
+      flightRef.current = requestAnimationFrame(step)
+    },
+    [viewState, commitView, stopFlight]
+  )
+
+  const focusScreen = useCallback(
+    (screenId: string) => {
+      const rect = boundsRef.current.get(screenId)
+      const view = rect && viewFitting(rect)
+      if (view) {
+        flyTo(view)
+      }
+      onFocusScreen(screenId)
+    },
+    [viewFitting, flyTo, onFocusScreen]
+  )
 
   useImperativeHandle(
     ref,
@@ -293,7 +366,7 @@ export function CanvasStage({
     stage.addEventListener('pointercancel', onEnd)
   }
 
-  // Экран: протяжка переносит его, клик без протяжки открывает «Fix».
+  // Экран: протяжка переносит его, клик без протяжки подводит к нему вид.
   const screensRef = useRef(screens)
   screensRef.current = screens
   const positionOfRef = useRef(positionOf)
@@ -302,7 +375,8 @@ export function CanvasStage({
     (screenId: string, event: ReactPointerEvent<HTMLElement>) => {
       const view = viewState.view()
       const screen = screensRef.current.find(({ id }) => id === screenId)
-      if (!view || !screen || event.button !== 0) {
+      // Ctrl-клик на macOS — правая кнопка: за него отвечает контекстное меню.
+      if (!view || !screen || event.button !== 0 || event.ctrlKey) {
         return
       }
       event.preventDefault()
@@ -336,7 +410,7 @@ export function CanvasStage({
         setDrag(null)
         if (!current) {
           if (end.type === 'pointerup') {
-            onSelectScreen(screenId)
+            focusScreen(screenId)
           }
           return
         }
@@ -361,7 +435,7 @@ export function CanvasStage({
       target.addEventListener('pointerup', onEnd)
       target.addEventListener('pointercancel', onEnd)
     },
-    [canvasId, viewState, onSelectScreen]
+    [canvasId, viewState, focusScreen]
   )
 
   const centerAt = useCallback(
@@ -400,9 +474,11 @@ export function CanvasStage({
             dragging={drag?.screenId === screen.id}
             previewVersionId={preview?.screenId === screen.id ? preview.versionId : null}
             onPointerDown={handleScreenPointerDown}
-            onSelect={onSelectScreen}
+            onFocus={focusScreen}
+            onFix={onSelectScreen}
           />
         ))}
+        <CanvasLinks links={canvas.links} screens={screens} bounds={bounds} />
       </div>
       {children}
       <CanvasMinimap viewState={viewState} rects={allBounds} onCenter={centerAt} />

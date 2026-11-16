@@ -291,6 +291,8 @@ const api: AtoxApi = {
     setView: (canvasId, view) => ipcRenderer.invoke(IpcChannel.CanvasSetView, canvasId, view),
     archive: (canvasId, archived) => ipcRenderer.invoke(IpcChannel.CanvasArchive, canvasId, archived),
     remove: (canvasId) => ipcRenderer.invoke(IpcChannel.CanvasRemove, canvasId),
+    removeScreen: (canvasId, screenId) =>
+      ipcRenderer.invoke(IpcChannel.CanvasRemoveScreen, canvasId, screenId),
     request: (canvasId, text, screenId) =>
       ipcRenderer.invoke(IpcChannel.CanvasRequest, canvasId, text, screenId),
     history: (canvasId, screenId) => ipcRenderer.invoke(IpcChannel.CanvasHistory, canvasId, screenId),

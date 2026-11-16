@@ -3,7 +3,6 @@ import {
   CANVAS_LINKS_MAX,
   CANVAS_NAME_MAX_LENGTH,
   CANVAS_ZOOM,
-  LINK_LABEL_MAX_LENGTH,
   LINK_ON_MAX_LENGTH,
   SCREEN_DEVICES,
   SCREEN_HISTORY_LIMIT,
@@ -143,7 +142,6 @@ function normalizeLinks(raw: unknown, screenIds: ReadonlySet<string>): CanvasLin
       id,
       from,
       to,
-      label: boundedText(value['label'], LINK_LABEL_MAX_LENGTH),
       on: boundedText(value['on'], LINK_ON_MAX_LENGTH),
       anchor: normalizeAnchor(value['anchor'])
     })
