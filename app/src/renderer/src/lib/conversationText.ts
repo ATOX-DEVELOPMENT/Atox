@@ -49,7 +49,7 @@ export function formatDuration(ms: number): string {
   return `${Math.floor(minutes / 60)}h ${minutes % 60}m`
 }
 
-/** «950», «16k», «1.2M» — токены коротко, как у агентов. */
+/** «950», «16k», «1.2M», «1.4B» — токены коротко, как у агентов. */
 export function formatTokens(tokens: number): string {
   if (tokens < 1000) {
     return String(tokens)
@@ -57,7 +57,10 @@ export function formatTokens(tokens: number): string {
   if (tokens < 1_000_000) {
     return `${Number((tokens / 1000).toFixed(tokens < 10_000 ? 1 : 0))}k`
   }
-  return `${Number((tokens / 1_000_000).toFixed(1))}M`
+  if (tokens < 1_000_000_000) {
+    return `${Number((tokens / 1_000_000).toFixed(1))}M`
+  }
+  return `${Number((tokens / 1_000_000_000).toFixed(1))}B`
 }
 
 /** Подпись сжатия разговора: что происходит и сколько контекста освободилось. */
