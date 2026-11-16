@@ -5777,6 +5777,16 @@ ul {
   color: var(--color-attention);
 }
 
+/* Сборка React-экрана не удалась: экран показывает последнюю удачную; текст ошибки — в подсказке. */
+.canvas-screen__badge {
+  flex-shrink: 0;
+  padding: 3px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  color: var(--color-danger);
+  background: var(--color-danger-background);
+}
+
 .canvas-screen__tag {
   flex-shrink: 0;
   padding: 3px 8px;
@@ -6128,6 +6138,22 @@ ul {
   margin: 8px 0 0;
   font-size: var(--font-size-small);
   color: var(--color-danger);
+  user-select: text;
+}
+
+/* Ошибка сборки выбранного экрана: приглушённая красная строка, чтобы человек знал, почему экран старый. */
+.request-box__notice {
+  display: -webkit-box;
+  max-height: calc(var(--canvas-request-field-height) * 1.5);
+  margin: 8px 0 0;
+  overflow: hidden;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+  color: color-mix(in srgb, var(--color-danger) 75%, var(--color-text-muted));
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 4;
   user-select: text;
 }
 

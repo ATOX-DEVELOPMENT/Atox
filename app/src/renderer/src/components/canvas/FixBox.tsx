@@ -11,6 +11,8 @@ interface FixBoxProps {
   viewState: ViewState
   screenId: string
   screenName: string
+  /** Ошибка сборки экрана; `null` — сборка в порядке. */
+  buildError: string | null
   /** Экран в координатах холста — вместе с рамкой устройства. */
   target: Rect
   /** Остальные экраны: окно старается их не закрывать. */
@@ -28,6 +30,7 @@ export function FixBox({
   viewState,
   screenId,
   screenName,
+  buildError,
   target,
   obstacles,
   chatTitle,
@@ -80,6 +83,7 @@ export function FixBox({
         subtitle={`Screen: ${screenName}`}
         context={[`screen: ${screenName}`, 'screenshot']}
         placeholder="What should change on this screen?"
+        notice={buildError}
         chatTitle={chatTitle}
         onSend={onSend}
         onClose={onClose}
