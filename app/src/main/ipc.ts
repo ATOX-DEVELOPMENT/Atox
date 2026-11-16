@@ -581,11 +581,22 @@ export function registerIpcHandlers({
       return null
     }
   })
+  // Закрытую ссылку не вернуть: у новой будет другой адрес. Поэтому — только после подтверждения.
   ipcMain.handle(IpcChannel.CanvasStopSharing, async (event, canvasId: unknown) => {
+    const id = requireId(canvasId)
+    const window = BrowserWindow.fromWebContents(event.sender)
+    const confirmed = await confirm(window, {
+      message: 'Stop sharing this canvas?',
+      detail: 'The link stops working for everyone who has it. Sharing again creates a new link.',
+      confirmLabel: 'Stop sharing'
+    })
+    if (!confirmed) {
+      return
+    }
     try {
-      await canvas.unshare(requireId(canvasId))
+      await canvas.unshare(id)
     } catch (error) {
-      await inform(BrowserWindow.fromWebContents(event.sender), {
+      await inform(window, {
         type: 'error',
         message: 'Could not stop sharing the canvas',
         detail: error instanceof Error ? error.message : String(error)
