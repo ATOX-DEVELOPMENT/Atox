@@ -5779,11 +5779,6 @@ ul {
   --frame-radius: var(--canvas-plain-radius);
 }
 
-/* Экраны далеко за краем окна не рисуются: их iframe остаются загруженными. */
-.canvas-screen[data-offscreen='true'] {
-  visibility: hidden;
-}
-
 .canvas-screen[data-selected='true'],
 .canvas-screen[data-dragging='true'] {
   z-index: 1;
