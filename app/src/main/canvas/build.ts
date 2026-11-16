@@ -5,9 +5,11 @@ import { CANVAS_IMPORTABLE_PACKAGES, CANVAS_KIT_PACKAGE } from '../../shared/can
 import { isInsideFolder } from './rules'
 
 /**
- * Сборка экранов-React. Компилятор — esbuild: он быстрее и надёжнее, чем esbuild-wasm, и не
- * блокирует процесс приложения (работает отдельным процессом). В собранном приложении его
- * бинарник лежит в `app.asar.unpacked`: из архива исполняемый файл не запустить.
+ * Сборка экранов-React. Компилятор — нативный esbuild, а не esbuild-wasm: у wasm-версии
+ * асинхронный API запускает отдельный Node (`#!/usr/bin/env node`), которого у пользователя
+ * может не быть, а на главном потоке она блокировала бы приложение. Нативный бинарник
+ * работает отдельным процессом; в собранном приложении он лежит в `app.asar.unpacked`
+ * (`asarUnpack`), потому что исполняемый файл из архива не запустить.
  */
 
 /** Экран, собранный в один ES-модуль. */
@@ -216,23 +218,23 @@ function unpackedBinary(): string | undefined {
   }
 }
 
-let esbuildModule: Promise<typeof import('esbuild')> | undefined
+let esbuildModule: typeof import('esbuild') | undefined
 
 /** esbuild читает путь к бинарнику при загрузке, поэтому подключается позже, чем он известен. */
-function loadEsbuild(): Promise<typeof import('esbuild')> {
-  esbuildModule ??= (async () => {
+function loadEsbuild(): typeof import('esbuild') {
+  if (!esbuildModule) {
     const binary = unpackedBinary()
     if (binary) {
       process.env['ESBUILD_BINARY_PATH'] = binary
     }
-    return import('esbuild')
-  })()
+    esbuildModule = require('esbuild') as typeof import('esbuild')
+  }
   return esbuildModule
 }
 
 /** Собирает экран и всё, что он импортирует, в один ES-модуль. */
 export async function buildScreen(request: BuildRequest): Promise<ScreenBuild> {
-  const { build } = await loadEsbuild()
+  const { build } = loadEsbuild()
   const roots = await realFolders(request.roots)
   const [kitRoot] = await realFolders([dirname(request.kit)])
   const screen = await realpath(request.file).catch(() => resolve(request.file))
