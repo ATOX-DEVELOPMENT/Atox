@@ -84,35 +84,43 @@ const CANVAS_DEVICES = Object.entries(SCREEN_DEVICES)
 
 const CANVAS_SKILL = `---
 name: atox-canvas
-description: Show UI designs to the user on the Atox canvas. Use inside Atox (the ATOX_CHAT_ID environment variable is set) when the user asks to design, draw, show, mock up, prototype or preview screens, a UI, a page, a website or an app screen, and whenever a message starts with "${CANVAS_MESSAGE_PREFIX}".
+description: Show UI designs to the user on the Atox canvas as live React screens. Use inside Atox (the ATOX_CHAT_ID environment variable is set) when the user asks to design, draw, show, mock up, prototype or preview screens, a UI, a page, a website, a dashboard, a landing page or an app screen, and whenever a message starts with "${CANVAS_MESSAGE_PREFIX}".
 ---
 
 # Atox canvas
 
-The canvas is a page in Atox where the user sees the screens of this chat side by side: phone app screens, website pages, desktop app windows. Each screen is one HTML file in the project. Atox watches the file, so the canvas updates by itself every time you edit it. The user moves, renames and zooms screens; you only write the HTML.
+The canvas is a page in Atox where the user sees the screens of this chat side by side: phone app screens, website pages, desktop app windows. Each screen is a React component in a file of the project. Atox builds it, shows it in a device frame and watches the files: every time you edit the screen or a file it imports, the canvas rebuilds by itself. The user moves, renames and zooms screens; you only write the code.
+
+Before you design, read \`kit.md\` in this skill's folder: the component kit (\`@atox/ui\`) reference and the design rules. Use the kit instead of building buttons, inputs and layouts from scratch.
 
 ## Commands
 
 \`\`\`sh
-atox canvas                                                    # this chat's canvas: screens with device, size and file
-atox canvas screen set Login .atox/canvas/login.html --device iphone
-atox canvas screen set "Admin dashboard" .atox/canvas/admin.html --device web
-atox canvas screen set Widget .atox/canvas/widget.html --size 360x640
-atox canvas screen preview Login                               # PNG of the screen as the user sees it, plus layout problems
-atox canvas screen remove Login                                # removes the screen; the file stays
+atox canvas                                                    # this chat's canvas: screens with device, size, file and build status
+atox canvas screen set Login .atox/canvas/login.tsx --device iphone
+atox canvas screen set "Admin dashboard" .atox/canvas/admin.tsx --device web
+atox canvas screen set Widget .atox/canvas/widget.tsx --size 360x640
+atox canvas screen preview Login                               # PNG of the screen as the user sees it, plus problems
+atox canvas screen remove Login                                # removes the screen; the files stay
 \`\`\`
 
 ## Workflow
 
-1. Write the screen as an HTML file inside the project, for example \`.atox/canvas/login.html\`.
-2. Put it on the canvas once: \`atox canvas screen set Login .atox/canvas/login.html --device iphone\`. The canvas is created for this chat if it has none.
-3. From then on just edit the file. Do not run \`set\` again unless the device or size changes; \`set\` with the name of an existing screen updates it and keeps its name and place.
-4. One file per screen. Add several screens for a flow (Login, Home, Settings).
-5. Check your own work: run \`atox canvas screen preview <name>\` after the first draft and after bigger changes, open the PNG it prints, and fix whatever looks wrong (broken layout, overlaps, unreadable text, empty areas) before you tell the user it is done.
-
-\`set\` and \`preview\` also print "Layout problems" when the content does not fit the screen, for example "Content is 1240 px tall but the screen is 844 px: it is cut off." Fix these in the HTML: shrink the layout to the screen, or scroll inside an inner element. No output about layout means it fits.
+1. Write the screen as a .tsx file in the project, for example \`.atox/canvas/login.tsx\`, with a default-exported component: \`export default function Login() { ... }\`.
+2. Put shared parts in their own files: \`.atox/canvas/components/*.tsx\`, sample data in \`.atox/canvas/data.ts\`. Import them with relative paths (\`./components/Card\`). Keep each file small.
+3. Put the screen on the canvas once: \`atox canvas screen set Login .atox/canvas/login.tsx --device iphone\`. The canvas is created for this chat if it has none. Run \`set\` again only to change the device or size, or to add another screen. Use one screen per file, and several screens for a flow (Login, Home, Settings).
+4. Check your own work: run \`atox canvas screen preview <name>\` after the first draft and after bigger changes, open the PNG it prints, and fix whatever looks wrong (broken layout, overlaps, unreadable text, empty areas) before you tell the user it is done.
+5. \`set\` and \`preview\` also report problems in plain text: "Build failed" (file:line and the error), "Errors in the running screen" (exceptions and console errors), and "Layout problems" such as "Content is 1240 px tall but the screen is 844 px: it is cut off." Fix them in the code. When the build fails, the canvas keeps the last version that built; \`atox canvas\` shows the build error of each screen.
 
 The user, not you, names and arranges screens. If they renamed a screen, use the new name from \`atox canvas\`.
+
+## What you can use
+
+- \`react\` (hooks, state: the screen is interactive), \`lucide-react\` for icons, \`@atox/ui\` for the component kit.
+- Tailwind CSS v4 utility classes, inline styles, and \`import "./styles.css"\`.
+- Relative imports of .tsx, .ts, .json, .css files and small images or fonts (they are embedded). Files must stay inside the project folder.
+- Nothing else: any other package fails the build with "Package "x" is not available on a canvas". There is no network: fetch, CDNs, web fonts and remote images are blocked. Images only as inline SVG, \`data:\` URIs or small imported files. No localStorage and no routing: the page is sandboxed.
+- A self-contained .html file also works as a screen, but prefer React.
 
 ## Devices
 
@@ -121,22 +129,21 @@ ${CANVAS_DEVICES}
 
 \`--size WxH\` sets a custom size without a device frame (each side ${SCREEN_SIZE.min} to ${SCREEN_SIZE.max}).
 
-## HTML rules
+## Design rules
 
-- One self-contained file: inline \`<style>\` and \`<script>\`, no other files.
-- No external requests: CDNs, web fonts, remote images, fetch and forms are blocked. Images only as inline SVG or \`data:\` URIs.
-- Design for the exact device size: the page is shown at that width and height. Fill it, with no outer scrollbars (\`html, body { margin: 0; height: 100%; overflow: hidden }\`); scroll inside the layout if the content is long.
-- System font stack: \`font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif\`.
-- Realistic content: real labels, names, numbers and states, not lorem ipsum.
-- Light inline JS for tabs, toggles or hover states is fine; the page runs sandboxed, without network or storage.
+- Design for the exact size of the device. The component fills the frame: give the root element \`h-full w-full\`. Never use \`100vh\`, \`100dvh\` or \`h-screen\`: use \`h-full\`. No outer scrollbars: if the content is longer, scroll inside an inner element (\`overflow-y-auto\`), the way a real app does.
+- Realistic content: real names, numbers, labels and states (loading, empty, error), not lorem ipsum.
+- Follow the design rules in kit.md: spacing, hierarchy, contrast, touch targets of at least 44 px on phones.
+- No external requests of any kind.
 
 ## "${CANVAS_MESSAGE_PREFIX} Fix the screen ..." messages
 
-The user clicked a screen and asked for a change. The message has the request, \`File:\` with the screen's HTML file and usually \`Screenshot:\` with a PNG of how it looks now.
+The user clicked a screen and asked for a change. The message has the request, \`File:\` with the screen's file, usually \`Screenshot:\` with a PNG of how it looks now, and sometimes \`Build error:\` when the screen does not build right now.
 
-- Open the File, look at the Screenshot, make the change in the file. The canvas updates by itself.
+- Open the File, look at the Screenshot, make the change in the code. The canvas rebuilds by itself. If there is a Build error, fix it first.
 - Do not run \`atox canvas screen set\` again unless the device or size must change.
 - Do not ask the user for screenshots or which file: both are in the message.
+- After a bigger change run \`atox canvas screen preview <name>\` to check the result.
 - Answer in one or two lines with what you changed.
 
 Other "${CANVAS_MESSAGE_PREFIX} ..." messages are requests about the canvas as a whole, for example a new screen.
@@ -145,14 +152,8 @@ Other "${CANVAS_MESSAGE_PREFIX} ..." messages are requests about the canvas as a
 
 - \`atox\` not found: run "$ATOX_CLI" with the same arguments.
 - Blocked by a sandbox or permissions: run it again with elevated permissions; it only talks to the local Atox app.
-- The file must be inside the project folder, an .html file, at most ${SCREEN_FILE_MAX_MB} MB.
+- The file must be inside the project folder, a .tsx, .jsx or .html file, at most ${SCREEN_FILE_MAX_MB} MB.
 `
-
-/** Навыки Atox для агентов: имя папки навыка и текст. */
-const SKILLS = [
-  { name: 'atox', content: SKILL },
-  { name: 'atox-canvas', content: CANVAS_SKILL }
-]
 
 /** Каталоги навыков агентов: Claude Code читает свой, Codex — общий для агентов ~/.agents. */
 const SKILL_TARGETS = [
@@ -162,23 +163,33 @@ const SKILL_TARGETS = [
 
 /**
  * Устанавливает навыки Atox тем агентам, что есть у пользователя, — так агент знает, что
- * может запускать помощников и показывать экраны на холсте. Файл перезаписывается, только
- * если его текст изменился.
+ * может запускать помощников и показывать экраны на холсте. Справка по набору компонентов
+ * (`kitGuidePath`) ложится рядом с навыком холста как `kit.md`. Файл перезаписывается,
+ * только если его текст изменился.
  */
-export async function installSkills(): Promise<void> {
+export async function installSkills(kitGuidePath: string): Promise<void> {
   const home = homedir()
+  const kitGuide = await readFile(kitGuidePath, 'utf8').catch(() => null)
+  const skills = [
+    { name: 'atox', files: { 'SKILL.md': SKILL } },
+    {
+      name: 'atox-canvas',
+      files: { 'SKILL.md': CANVAS_SKILL, ...(kitGuide !== null && { 'kit.md': kitGuide }) }
+    }
+  ]
   const targets = SKILL_TARGETS.filter(({ agentHome }) => existsSync(join(home, agentHome)))
   await Promise.all(
     targets.flatMap(({ skillsDirectory }) =>
-      SKILLS.map(async ({ name, content }) => {
-        const directory = join(home, ...skillsDirectory, name)
-        const file = join(directory, 'SKILL.md')
-        const current = await readFile(file, 'utf8').catch(() => null)
-        if (current !== content) {
-          await mkdir(directory, { recursive: true })
-          await writeFile(file, content)
-        }
-      })
+      skills.flatMap(({ name, files }) =>
+        Object.entries(files).map(async ([fileName, content]) => {
+          const directory = join(home, ...skillsDirectory, name)
+          const file = join(directory, fileName)
+          if ((await readFile(file, 'utf8').catch(() => null)) !== content) {
+            await mkdir(directory, { recursive: true })
+            await writeFile(file, content)
+          }
+        })
+      )
     )
   )
 }
