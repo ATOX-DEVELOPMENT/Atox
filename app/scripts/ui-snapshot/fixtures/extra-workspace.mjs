@@ -396,7 +396,8 @@ function canvasDefinitions(filesRoot) {
       links: [
         { id: 'l-cart-pay', from: 's-cart', to: 's-pay', on: 'Checkout', anchor: { x: 20, y: 366, width: 350, height: 52 } },
         { id: 'l-pay-done', from: 's-pay', to: 's-done', on: 'Pay now', anchor: { x: 20, y: 296, width: 350, height: 52 } }
-      ]
+      ],
+      groups: [{ id: 'g-flow', name: 'Checkout flow', screens: ['s-cart', 's-pay', 's-done'] }]
     },
     {
       id: 'cv-onboarding',
@@ -483,6 +484,7 @@ async function writeCanvases(context, now) {
       archived: definition.archived,
       screens,
       links: definition.links,
+      groups: definition.groups ?? [],
       view: null,
       createdAt: now - definition.createdAgo,
       updatedAt: now - definition.updatedAgo
