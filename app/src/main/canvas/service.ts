@@ -1,13 +1,17 @@
 import { randomUUID } from 'node:crypto'
 import { mkdir, open, readFile, realpath, rename, stat } from 'node:fs/promises'
 import { basename, dirname, isAbsolute, join } from 'node:path'
+import { app } from 'electron'
 import {
   DEFAULT_SCREEN_DEVICE,
   SCREEN_DEVICES,
   SCREEN_HISTORY_LIMIT,
   canvasScreenUrl,
+  isCanvasExportFormat,
   isScreenDeviceId,
   screenSourceKind,
+  type CanvasExportFormat,
+  type CanvasExportResult,
   type CanvasState,
   type ScreenDevice,
   type ScreenDeviceId,
@@ -19,6 +23,7 @@ import { JsonFileWriter, readVersionedJson } from '../jsonFile'
 import type { ChatLocation, ProjectStore } from '../store'
 import { ScreenBuildError, buildScreen, type ScreenBuild } from './build'
 import { captureScreen, inspectScreen, type ScreenRender } from './capture'
+import { checkExportTarget, exportScreens, freeExportPath } from './export'
 import type { ScreenDocument, ScreenDocumentSource } from './protocol'
 import {
   CanvasError,
@@ -32,6 +37,7 @@ import {
   formatFixMessage,
   isInsideFolder,
   isScreenFileName,
+  orderForExport,
   parseName,
   parseScreenSize,
   placeNewScreen
@@ -94,6 +100,14 @@ export interface AgentScreenPreview {
   layout: string[]
   buildError: string | null
   runtimeErrors: string[]
+}
+
+/** Выгрузка, которую просит агент: экраны по именам (все, если не названы) и путь к файлу. */
+export interface AgentExportRequest {
+  format: string
+  screens?: string[]
+  /** Абсолютный путь: файл для PDF и PPTX, папка для PNG. Не назван — папка «Загрузки». */
+  out?: string
 }
 
 export interface AgentCanvasView {
@@ -529,6 +543,91 @@ export class CanvasService implements ScreenDocumentSource {
       buildError: screen.buildError,
       runtimeErrors: rendered.errors
     }
+  }
+
+  /**
+   * Выгружает экраны холста в PDF, PNG или PPTX. Экраны идут в порядке холста: ряды сверху вниз,
+   * в ряду слева направо. Без `screenIds` выгружаются все.
+   */
+  async exportCanvas(
+    canvasId: string,
+    format: CanvasExportFormat,
+    target: string,
+    screenIds?: readonly string[]
+  ): Promise<CanvasExportResult> {
+    const canvas = this.getCanvas(canvasId)
+    const screens = screenIds
+      ? screenIds.map((id) => this.getScreen(canvasId, id).screen)
+      : canvas.screens
+    return this.runExport(canvas, screens, format, target)
+  }
+
+  /** Выгрузка по просьбе агента из `atox canvas export`. */
+  async exportForAgent(chatId: string, request: AgentExportRequest): Promise<CanvasExportResult> {
+    const canvas = this.activeCanvasOf(chatId)
+    if (!canvas) {
+      throw new CanvasError('This chat has no canvas.')
+    }
+    const { format, screens: names, out } = request
+    if (!isCanvasExportFormat(format)) {
+      throw new CanvasError('The format must be pdf, png or pptx.')
+    }
+    const screens = names
+      ? names.map((name) => {
+          const screen = findScreenByName(canvas.screens, name)
+          if (!screen) {
+            const known = canvas.screens.map((other) => `"${other.name}"`).join(', ') || 'none'
+            throw new CanvasError(`There is no screen "${name.trim()}" on the canvas. Screens: ${known}.`)
+          }
+          return screen
+        })
+      : canvas.screens
+    if (out !== undefined && !isAbsolute(out)) {
+      throw new CanvasError('The output path must be absolute.')
+    }
+    const target = out ?? (await freeExportPath(app.getPath('downloads'), canvas.name, format))
+    checkExportTarget(format, target)
+    return this.runExport(canvas, screens, format, target)
+  }
+
+  private async runExport(
+    canvas: StoredCanvas,
+    screens: readonly StoredScreen[],
+    format: CanvasExportFormat,
+    target: string
+  ): Promise<CanvasExportResult> {
+    if (screens.length === 0) {
+      throw new CanvasError('The canvas has no screens to export.')
+    }
+    // Файлы сверяются заново, не дожидаясь слежения: агент мог записать их только что.
+    await Promise.all(screens.map((screen) => this.queueCheck(screenKey(canvas.id, screen.id))))
+    const warnings: string[] = []
+    for (const screen of screens) {
+      const key = screenKey(canvas.id, screen.id)
+      if (screenSourceKind(screen.file) === 'react' && !this.builds.has(key)) {
+        throw new CanvasError(
+          `The screen "${screen.name}" does not build, so it cannot be exported: ${screen.buildError ?? 'no build'}`
+        )
+      }
+      if (screen.buildError) {
+        warnings.push(`"${screen.name}": the last build failed, the last good version is exported.`)
+      } else if (screen.missing) {
+        warnings.push(`"${screen.name}": the file is missing, the last saved version is exported.`)
+      }
+    }
+    const ordered = orderForExport(screens)
+    await exportScreens(
+      format,
+      ordered.map((screen) => ({
+        name: screen.name,
+        url: canvasScreenUrl(canvas.id, screen.id, screen.revision),
+        width: screen.width,
+        height: screen.height
+      })),
+      target,
+      canvas.name
+    )
+    return { path: target, screens: ordered.length, warnings }
   }
 
   /** Убирает экран с холста чата по имени; файл экрана остаётся в проекте. */

@@ -315,6 +315,21 @@ export class OrchestrationServer {
       return this.services.canvas.previewScreen(caller.chat.id, name)
     },
 
+    canvasExport: async (caller, { format, screens, out }) => {
+      if (typeof format !== 'string') {
+        throw new CommandError('Specify the format: pdf, png or pptx.')
+      }
+      if (screens !== undefined && !(Array.isArray(screens) && screens.every((name) => typeof name === 'string'))) {
+        throw new CommandError('The screens must be a list of names.')
+      }
+      const result = await this.services.canvas.exportForAgent(caller.chat.id, {
+        format,
+        ...(screens !== undefined && { screens }),
+        ...(typeof out === 'string' && { out })
+      })
+      return { ...result, format }
+    },
+
     canvasScreenRemove: async (caller, { name }) => {
       if (typeof name !== 'string' || !name.trim()) {
         throw new CommandError('Specify the name of the screen to remove.')

@@ -48,6 +48,12 @@ Show screens (app, website, desktop UI) to the user on this chat's canvas.
                                            build errors, runtime errors and content that does
                                            not fit the screen.
   atox canvas screen remove <name>         Remove a screen from the canvas (the file stays)
+  atox canvas export <pdf|png|pptx> [--screens "Name,Name"] [--out <path>]
+                                           Export the screens to a file for the user to send or
+                                           print: pdf (one page per screen, real text), pptx
+                                           (one slide per screen, as images) or png (a folder
+                                           of images). Pages go in canvas order: rows top to
+                                           bottom, left to right. Default: the Downloads folder.
 
 Works only for agents running in Atox chats.`
 
@@ -229,6 +235,33 @@ async function canvas(args: string[]): Promise<string> {
     }
     const { screen } = await call('canvasScreenRemove', { name })
     return `Removed the screen "${screen}" from the canvas. Its file stays in the project.`
+  }
+  if (group === 'export') {
+    const { values, positional } = parseFlags([action, ...rest].filter((part) => part !== undefined), [
+      'screens',
+      'out'
+    ])
+    const [format] = positional
+    if (!format || positional.length > 1) {
+      throw new UsageError('Usage: atox canvas export <pdf|png|pptx> [--screens "Name,Name"] [--out <path>]')
+    }
+    const names = values['screens']
+      ?.split(',')
+      .map((name) => name.trim())
+      .filter(Boolean)
+    const result = await call('canvasExport', {
+      format,
+      ...(names && names.length > 0 && { screens: names }),
+      // Путь считается от папки, в которой агент запустил команду.
+      ...(values['out'] !== undefined && { out: resolve(values['out']) })
+    })
+    const count = result.screens === 1 ? '1 screen' : `${result.screens} screens`
+    const what = result.format === 'png' ? 'folder' : 'file'
+    return [
+      `Exported ${count} as ${result.format.toUpperCase()}: ${result.path}`,
+      `Tell the user where the ${what} is; Atox does not open it.`,
+      ...result.warnings.map((warning) => `Warning: ${warning}`)
+    ].join('\n')
   }
   throw new UsageError(`Unknown canvas command.\n\n${USAGE}`)
 }

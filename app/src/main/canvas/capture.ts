@@ -192,6 +192,50 @@ export async function captureScreen(
   }
 }
 
+/** Пикселей CSS в дюйме: в таких единицах PDF задаёт размер страницы. */
+const CSS_PIXELS_PER_INCH = 96
+
+/** Узкие экраны (телефон, сайт) снимаются вдвое чётче; широкие, вроде слайда 1920 px, и так крупные. */
+const EXPORT_SHARP_BELOW_WIDTH = 1600
+
+/**
+ * Экран как PDF-страница ровно его размера, с настоящим текстом и векторной графикой. То, что
+ * не поместилось по высоте, обрезается: лишних страниц у экрана не бывает.
+ */
+export function renderScreenPdf(url: string, width: number, height: number): Promise<Buffer | null> {
+  return inScreenWindow(url, width, height, (window) =>
+    window.webContents.printToPDF({
+      pageSize: { width: width / CSS_PIXELS_PER_INCH, height: height / CSS_PIXELS_PER_INCH },
+      margins: { top: 0, bottom: 0, left: 0, right: 0 },
+      printBackground: true,
+      pageRanges: '1'
+    })
+  )
+}
+
+/** Экран как PNG для выгрузки: двойной плотности, если он не очень широкий. */
+export function renderScreenImage(url: string, width: number, height: number): Promise<Buffer | null> {
+  return inScreenWindow(url, width, height, async (window) => {
+    const devtools = window.webContents.debugger
+    devtools.attach('1.3')
+    try {
+      const { data } = (await devtools.sendCommand('Page.captureScreenshot', {
+        format: 'png',
+        clip: {
+          x: 0,
+          y: 0,
+          width,
+          height,
+          scale: width < EXPORT_SHARP_BELOW_WIDTH ? 2 : 1
+        }
+      })) as { data: string }
+      return Buffer.from(data, 'base64')
+    } finally {
+      devtools.detach()
+    }
+  })
+}
+
 /** Только проверка, без снимка: для экрана, который агент только что поставил. */
 export function inspectScreen(
   url: string,

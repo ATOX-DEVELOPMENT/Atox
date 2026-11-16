@@ -123,6 +123,14 @@ export interface OrchestrationMethods {
   }
   /** Убирает экран с холста; HTML-файл остаётся. */
   canvasScreenRemove: { params: { name: string }; result: { screen: string } }
+  /**
+   * Выгружает экраны холста в PDF, PNG (папка) или PPTX: ряды сверху вниз, в ряду слева направо.
+   * `screens` — имена; не заданы — все. `out` — абсолютный путь; не задан — папка «Загрузки».
+   */
+  canvasExport: {
+    params: { format: string; screens?: string[]; out?: string }
+    result: { path: string; format: string; screens: number; warnings: string[] }
+  }
 }
 
 export type OrchestrationMethod = keyof OrchestrationMethods
