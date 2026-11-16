@@ -37,13 +37,16 @@ Delegate work to another agent in a new Atox chat in the same folder.
 Show screens (app, website, desktop UI) to the user on this chat's canvas.
 
   atox canvas                              Show this chat's canvas and its screens
-  atox canvas screen set <name> <file.html> [--device ${DEVICE_IDS}] [--size WxH]
-                                           Put an HTML file on the canvas as a screen, or
-                                           update the screen with that name. Then just edit
-                                           the file: the canvas updates by itself.
+  atox canvas screen set <name> <file.tsx|.jsx|.html> [--device ${DEVICE_IDS}] [--size WxH]
+                                           Put a React component (default export) or an HTML
+                                           file on the canvas as a screen, or update the screen
+                                           with that name. Then just edit the files: the canvas
+                                           rebuilds by itself. Prints build errors, runtime
+                                           errors and layout problems.
   atox canvas screen preview <name>        Render the screen to a PNG and print its path, so you
                                            can open the image and check your work. Also reports
-                                           content that does not fit the screen.
+                                           build errors, runtime errors and content that does
+                                           not fit the screen.
   atox canvas screen remove <name>         Remove a screen from the canvas (the file stays)
 
 Works only for agents running in Atox chats.`
@@ -139,15 +142,30 @@ async function main(args: string[]): Promise<string> {
   }
 }
 
-const CANVAS_SET_COMMAND = 'atox canvas screen set <name> <file.html> [--device <device>]'
+const CANVAS_SET_COMMAND = 'atox canvas screen set <name> <file.tsx> [--device <device>]'
 
 const CANVAS_SET_USAGE = `Usage: ${CANVAS_SET_COMMAND} [--size WxH]. Quote names with spaces.`
 
-/** Проблемы раскладки отдельными строками: агент правит HTML по ним. */
-function describeLayout(problems: string[]): string[] {
-  return problems.length > 0
-    ? ['Layout problems (fix them in the HTML):', ...problems.map((problem) => `- ${problem}`)]
-    : []
+interface ScreenProblems {
+  buildError: string | null
+  runtimeErrors: string[]
+  layout: string[]
+}
+
+/** Что не так с экраном, словами: агент правит файлы по этим строкам. */
+function describeProblems({ buildError, runtimeErrors, layout }: ScreenProblems): string[] {
+  const section = (title: string, lines: string[]) =>
+    lines.length > 0 ? [title, ...lines.map((line) => `- ${line}`)] : []
+  return [
+    ...(buildError
+      ? [
+          `Build failed: ${buildError}`,
+          'The canvas keeps the last version that built. Fix the file; it rebuilds by itself.'
+        ]
+      : []),
+    ...section('Errors in the running screen (fix them):', runtimeErrors),
+    ...section('Layout problems (fix them in the screen):', layout)
+  ]
 }
 
 /** `atox canvas …`: холст чата и его экраны. */
@@ -160,8 +178,8 @@ async function canvas(args: string[]): Promise<string> {
     }
     const count = shown.screens.length === 1 ? '1 screen' : `${shown.screens.length} screens`
     const lines = shown.screens.map(
-      ({ name, device, width, height, file, missing }) =>
-        `${name}\t${device} ${width}x${height}\t${file}${missing ? '\tfile missing' : ''}`
+      ({ name, device, width, height, file, missing, buildError }) =>
+        `${name}\t${device} ${width}x${height}\t${file}${missing ? '\tfile missing' : ''}${buildError ? `\tbuild failed: ${buildError}` : ''}`
     )
     return [
       `Canvas "${shown.name}", ${count}. Edit a screen's file and the canvas updates by itself.`,
@@ -189,9 +207,9 @@ async function canvas(args: string[]): Promise<string> {
       [
         ...(result.canvasCreated ? [`Created the canvas "${result.canvas}" for this chat.`] : []),
         done,
-        `From now on just edit ${result.file}: the canvas updates by itself. Run this command again only to change the device or size.`
+        `From now on just edit ${result.file} (and the files it imports): the canvas updates by itself. Run this command again only to change the device or size.`
       ].join(' '),
-      ...describeLayout(result.layout)
+      ...describeProblems(result)
     ].join('\n')
   }
   if (group === 'screen' && action === 'preview') {
@@ -199,8 +217,10 @@ async function canvas(args: string[]): Promise<string> {
     if (!name.trim()) {
       throw new UsageError('Usage: atox canvas screen preview <name>')
     }
-    const { screen, path, layout } = await call('canvasScreenPreview', { name })
-    return [`Screenshot of "${screen}": ${path}`, ...describeLayout(layout)].join('\n')
+    const preview = await call('canvasScreenPreview', { name })
+    return [`Screenshot of "${preview.screen}": ${preview.path}`, ...describeProblems(preview)].join(
+      '\n'
+    )
   }
   if (group === 'screen' && action === 'remove') {
     const name = rest.join(' ')

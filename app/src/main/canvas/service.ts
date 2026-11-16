@@ -7,16 +7,19 @@ import {
   SCREEN_HISTORY_LIMIT,
   canvasScreenUrl,
   isScreenDeviceId,
+  screenSourceKind,
   type CanvasState,
   type ScreenDevice,
   type ScreenDeviceId,
   type ScreenVersion
 } from '../../shared/canvas'
+import { CANVAS_KIT_ENTRY } from '../../shared/canvasRuntime'
 import type { ConversationManager } from '../conversations/manager'
 import { JsonFileWriter, readVersionedJson } from '../jsonFile'
 import type { ChatLocation, ProjectStore } from '../store'
-import { captureScreen, measureScreen, type ScreenRender } from './capture'
-import type { ScreenDocumentSource } from './protocol'
+import { ScreenBuildError, buildScreen, type ScreenBuild } from './build'
+import { captureScreen, inspectScreen, type ScreenRender } from './capture'
+import type { ScreenDocument, ScreenDocumentSource } from './protocol'
 import {
   CanvasError,
   SCREEN_FILE_MAX_BYTES,
@@ -33,6 +36,7 @@ import {
   parseScreenSize,
   placeNewScreen
 } from './rules'
+import { renderBuildErrorPage, renderShell } from './shell'
 import { ScreenSnapshots, contentHash } from './snapshots'
 import {
   CANVAS_FILE_VERSION,
@@ -49,13 +53,15 @@ import { ScreenFileWatcher } from './watcher'
 export interface CanvasServices {
   store: ProjectStore
   conversations: ConversationManager
+  /** Папка кита `@atox/ui` и токенов темы: из неё собираются экраны-React. */
+  kitDirectory: string
   onChange(state: CanvasState): void
 }
 
 /** Экран, который агент ставит на холст командой `atox canvas screen set`. */
 export interface AgentScreenRequest {
   name: string
-  /** Абсолютный путь к HTML-файлу. */
+  /** Абсолютный путь к файлу экрана: HTML или React-компонент. */
   file: string
   device?: string
   /** `WxH` — свой размер экрана. */
@@ -75,6 +81,10 @@ export interface AgentScreenResult {
   file: string
   /** Что не так с раскладкой экрана; пусто — всё помещается или измерить не удалось. */
   layout: string[]
+  /** Сборка экрана-React не удалась: «файл:строка: что не так»; `null` — собрался. */
+  buildError: string | null
+  /** Ошибки, которые вывела страница экрана при открытии. */
+  runtimeErrors: string[]
 }
 
 export interface AgentScreenPreview {
@@ -82,6 +92,8 @@ export interface AgentScreenPreview {
   /** Абсолютный путь к PNG экрана. */
   path: string
   layout: string[]
+  buildError: string | null
+  runtimeErrors: string[]
 }
 
 export interface AgentCanvasView {
@@ -93,6 +105,7 @@ export interface AgentCanvasView {
     height: number
     file: string
     missing: boolean
+    buildError: string | null
   }[]
 }
 
@@ -102,10 +115,11 @@ interface ScreenLocation {
 }
 
 /**
- * Холсты чатов: экраны-HTML-файлы из проекта, за которыми приложение следит. Каждое
- * изменение файла становится версией экрана (снимок хранится в данных приложения), и окно
- * перезагружает экран по новой ревизии. Файлы экранов принадлежат проекту: холст их только
- * читает, а пишет лишь при восстановлении версии по просьбе человека.
+ * Холсты чатов: экраны из файлов проекта (React-компонент или HTML), за которыми приложение
+ * следит. У экрана-React следят и за всем, что он импортирует, и пересобирают его.
+ * Каждое изменение файла экрана становится версией (снимок хранится в данных приложения),
+ * и окно перезагружает экран по новой ревизии. Файлы экранов принадлежат проекту: холст их
+ * только читает, а пишет лишь при восстановлении версии по просьбе человека.
  */
 export class CanvasService implements ScreenDocumentSource {
   private readonly watcher = new ScreenFileWatcher((key) => void this.queueCheck(key))
@@ -113,6 +127,10 @@ export class CanvasService implements ScreenDocumentSource {
   private readonly checks = new Map<string, Promise<void>>()
   /** Экраны, в файл которых записана версия из истории: следующая версия — восстановление. */
   private readonly restoring = new Set<string>()
+  /** Последняя удачная сборка каждого экрана-React: её показывает холст, пока новая не готова. */
+  private readonly builds = new Map<string, ScreenBuild>()
+  /** Хеш того, что показывает экран сейчас: у HTML — файл, у React — результат сборки. */
+  private readonly outputs = new Map<string, string>()
 
   private constructor(
     private readonly services: CanvasServices,
@@ -271,7 +289,8 @@ export class CanvasService implements ScreenDocumentSource {
           canvasName: canvas.name,
           text: message,
           file: screen.file,
-          screenshot
+          screenshot,
+          buildError: screen.buildError
         }),
         {},
         options
@@ -325,7 +344,7 @@ export class CanvasService implements ScreenDocumentSource {
     canvasId: string,
     screenId: string,
     versionId?: string
-  ): Promise<string | null> {
+  ): Promise<ScreenDocument | null> {
     const location = this.findScreen(canvasId, screenId)
     if (!location) {
       return null
@@ -334,11 +353,57 @@ export class CanvasService implements ScreenDocumentSource {
     const version = versionId
       ? screen.versions.find(({ id }) => id === versionId)
       : screen.versions.at(-1)
-    if (version) {
-      return this.snapshots.read(canvas.id, screen.id, version.hash).catch(() => null)
+    if (versionId && !version) {
+      return null
     }
-    // Версий ещё нет (первая проверка файла не закончилась) — показывается сам файл.
-    return versionId ? null : readScreenFile(screen.file)
+    const source = version
+      ? await this.snapshots.read(canvas.id, screen.id, version.hash).catch(() => null)
+      : // Версий ещё нет (первая проверка файла не закончилась) — показывается сам файл.
+        await readScreenFile(screen.file)
+    if (source === null) {
+      return null
+    }
+    if (screenSourceKind(screen.file) !== 'react') {
+      return { html: source, modules: false }
+    }
+    return this.reactDocument(canvas, screen, versionId ? source : undefined)
+  }
+
+  /**
+   * Страница экрана-React. Текущий экран — последняя удачная сборка (идущую сборку
+   * дожидаемся); версия из истории собирается из своего снимка с нынешними импортами.
+   */
+  private async reactDocument(
+    canvas: StoredCanvas,
+    screen: StoredScreen,
+    versionSource?: string
+  ): Promise<ScreenDocument> {
+    const key = screenKey(canvas.id, screen.id)
+    try {
+      await this.checks.get(key)
+      const build = versionSource
+        ? await buildScreen(this.buildRequest(canvas, screen, versionSource))
+        : this.builds.get(key)
+      if (!build) {
+        throw new ScreenBuildError(screen.buildError ?? 'The screen has not been built yet.', [])
+      }
+      return { html: await renderShell(build, this.services.kitDirectory), modules: true }
+    } catch (error) {
+      if (!(error instanceof ScreenBuildError)) {
+        console.error('Failed to render a React canvas screen', error)
+      }
+      const message = error instanceof ScreenBuildError ? error.message : 'The screen could not be built.'
+      return { html: renderBuildErrorPage(message), modules: false }
+    }
+  }
+
+  private buildRequest(canvas: StoredCanvas, screen: StoredScreen, source: string) {
+    const { store, kitDirectory } = this.services
+    const roots = [
+      store.findProject(canvas.projectId)?.path,
+      store.findChat(canvas.chatId)?.chat.worktree
+    ].filter((root) => root !== undefined)
+    return { source, file: screen.file, roots, kit: join(kitDirectory, CANVAS_KIT_ENTRY) }
   }
 
   /** Холст чата для `atox canvas`; `null` — холста нет. */
@@ -347,14 +412,17 @@ export class CanvasService implements ScreenDocumentSource {
     return canvas
       ? {
           name: canvas.name,
-          screens: canvas.screens.map(({ name, device, width, height, file, missing }) => ({
-            name,
-            device,
-            width,
-            height,
-            file,
-            missing
-          }))
+          screens: canvas.screens.map(
+            ({ name, device, width, height, file, missing, buildError }) => ({
+              name,
+              device,
+              width,
+              height,
+              file,
+              missing,
+              buildError
+            })
+          )
         }
       : null
   }
@@ -388,6 +456,9 @@ export class CanvasService implements ScreenDocumentSource {
     // Без --device и --size существующий экран остаётся на своём устройстве.
     const look = size ? { device: 'custom' as const, ...size } : device && deviceLook(device)
     if (screen) {
+      if (screen.file !== file) {
+        this.forgetOutput(screenKey(canvas.id, screen.id))
+      }
       Object.assign(screen, look, { file })
     } else {
       const newLook = look ?? deviceLook(DEFAULT_SCREEN_DEVICE)
@@ -407,13 +478,10 @@ export class CanvasService implements ScreenDocumentSource {
     }
     canvas.updatedAt = Date.now()
     this.changed()
-    this.watcher.watch(screenKey(canvas.id, screen.id), file)
-    await this.queueCheck(screenKey(canvas.id, screen.id))
-    const content = await measureScreen(
-      canvasScreenUrl(canvas.id, screen.id, screen.revision),
-      screen.width,
-      screen.height
-    )
+    const key = screenKey(canvas.id, screen.id)
+    this.watcher.watch(key, [file])
+    await this.queueCheck(key)
+    const inspection = await this.inspect(canvas, screen)
     return {
       canvas: canvas.name,
       screen: screen.name,
@@ -423,7 +491,9 @@ export class CanvasService implements ScreenDocumentSource {
       width: screen.width,
       height: screen.height,
       file: screen.file,
-      layout: describeOverflow(screen, content)
+      layout: describeOverflow(screen, inspection?.size ?? null),
+      buildError: screen.buildError,
+      runtimeErrors: inspection?.errors ?? []
     }
   }
 
@@ -441,6 +511,8 @@ export class CanvasService implements ScreenDocumentSource {
       const names = canvas.screens.map((other) => `"${other.name}"`).join(', ') || 'none'
       throw new CanvasError(`There is no screen "${name.trim()}" on the canvas. Screens: ${names}.`)
     }
+    // Сначала дописывается идущая проверка: снимок должен показать то, что агент только что записал.
+    await this.checks.get(screenKey(canvas.id, screen.id))
     const rendered = await this.render(canvas, screen)
     if (!rendered) {
       throw new CanvasError(
@@ -450,7 +522,9 @@ export class CanvasService implements ScreenDocumentSource {
     return {
       screen: screen.name,
       path: rendered.path,
-      layout: describeOverflow(screen, rendered.size)
+      layout: describeOverflow(screen, rendered.size),
+      buildError: screen.buildError,
+      runtimeErrors: rendered.errors
     }
   }
 
@@ -466,6 +540,7 @@ export class CanvasService implements ScreenDocumentSource {
       throw new CanvasError(`There is no screen "${name.trim()}" on the canvas. Screens: ${names}.`)
     }
     this.watcher.unwatch(screenKey(canvas.id, screen.id))
+    this.forgetOutput(screenKey(canvas.id, screen.id))
     canvas.screens = canvas.screens.filter((other) => other !== screen)
     canvas.updatedAt = Date.now()
     this.changed()
@@ -481,6 +556,23 @@ export class CanvasService implements ScreenDocumentSource {
 
   dispose(): void {
     this.watcher.dispose()
+  }
+
+  /** Открывает экран в скрытом окне; экран, который не собрался ни разу, не открывается. */
+  private async inspect(canvas: StoredCanvas, screen: StoredScreen) {
+    const built = screenSourceKind(screen.file) !== 'react' || this.builds.has(screenKey(canvas.id, screen.id))
+    return built
+      ? inspectScreen(
+          canvasScreenUrl(canvas.id, screen.id, screen.revision),
+          screen.width,
+          screen.height
+        )
+      : null
+  }
+
+  private forgetOutput(key: string): void {
+    this.builds.delete(key)
+    this.outputs.delete(key)
   }
 
   private render(canvas: StoredCanvas, screen: StoredScreen): Promise<ScreenRender | null> {
@@ -550,14 +642,16 @@ export class CanvasService implements ScreenDocumentSource {
   private watchCanvas(canvas: StoredCanvas): void {
     for (const screen of canvas.screens) {
       const key = screenKey(canvas.id, screen.id)
-      this.watcher.watch(key, screen.file)
+      this.watcher.watch(key, [screen.file])
       void this.queueCheck(key)
     }
   }
 
   private unwatchCanvas(canvas: StoredCanvas): void {
     for (const screen of canvas.screens) {
-      this.watcher.unwatch(screenKey(canvas.id, screen.id))
+      const key = screenKey(canvas.id, screen.id)
+      this.watcher.unwatch(key)
+      this.forgetOutput(key)
     }
   }
 
@@ -574,7 +668,12 @@ export class CanvasService implements ScreenDocumentSource {
     return next
   }
 
-  /** Сверяет файл экрана с последней версией: новое содержимое — новая версия и ревизия. */
+  /**
+   * Сверяет файл экрана с тем, что показывает холст. У экрана-React сначала собирается
+   * файл вместе с импортами: пока сборка не удалась, холст остаётся на прежней сборке,
+   * а ошибка попадает в `buildError`. Изменился файл экрана — появляется версия; изменился
+   * только импорт — меняется ревизия (экран перезагружается), версия не нужна.
+   */
   private async check(key: string): Promise<void> {
     const location = this.findScreenByKey(key)
     if (!location) {
@@ -594,8 +693,20 @@ export class CanvasService implements ScreenDocumentSource {
       return
     }
     const hash = contentHash(content)
+    const output = await this.compile(key, canvas, screen, content)
+    if (this.findScreenByKey(key)?.screen !== screen) {
+      return
+    }
+    if (output === null) {
+      this.restoring.delete(key)
+      return
+    }
     const latest = screen.versions.at(-1)
-    if (latest?.hash === hash) {
+    const previous = this.outputs.get(key)
+    this.outputs.set(key, output)
+    const fileChanged = latest?.hash !== hash
+    const outputChanged = previous !== undefined && previous !== output
+    if (!fileChanged && !outputChanged) {
       this.restoring.delete(key)
       if (screen.missing) {
         screen.missing = false
@@ -603,45 +714,95 @@ export class CanvasService implements ScreenDocumentSource {
       }
       return
     }
-    await this.snapshots.save(canvas.id, screen.id, hash, content)
-    if (this.findScreenByKey(key)?.screen !== screen) {
-      // Экран удалили, пока писался снимок: его история не должна остаться на диске.
-      await (this.canvases.includes(canvas)
-        ? this.snapshots.removeScreen(canvas.id, screen.id)
-        : this.snapshots.removeCanvas(canvas.id))
-      return
+    // Версия пишется, когда изменился файл экрана или за ним стоит просьба «Fix»: так просьба
+    // остаётся в истории, даже если агент правил только импортированный компонент.
+    const record = fileChanged || screen.pendingFix !== undefined
+    if (record) {
+      await this.snapshots.save(canvas.id, screen.id, hash, content)
+      if (this.findScreenByKey(key)?.screen !== screen) {
+        // Экран удалили, пока писался снимок: его история не должна остаться на диске.
+        await (this.canvases.includes(canvas)
+          ? this.snapshots.removeScreen(canvas.id, screen.id)
+          : this.snapshots.removeCanvas(canvas.id))
+        return
+      }
     }
     const cause = this.restoring.delete(key) ? 'restore' : latest ? 'edit' : 'created'
-    this.addVersion(canvas, screen, hash, cause)
+    this.addVersion(canvas, screen, record ? { hash, cause } : null)
   }
 
+  /**
+   * Собирает экран-React и берёт под слежку всё, что он импортирует. Возвращает хеш того,
+   * что экран показывает; `null` — сборка не удалась (ошибка записана в экран).
+   */
+  private async compile(
+    key: string,
+    canvas: StoredCanvas,
+    screen: StoredScreen,
+    content: string
+  ): Promise<string | null> {
+    if (screenSourceKind(screen.file) !== 'react') {
+      this.setBuildError(screen, null)
+      return contentHash(content)
+    }
+    try {
+      const build = await buildScreen(this.buildRequest(canvas, screen, content))
+      this.builds.set(key, build)
+      this.watcher.watch(key, build.inputs)
+      this.setBuildError(screen, null)
+      return contentHash(`${build.js}\n${build.css}`)
+    } catch (error) {
+      if (error instanceof ScreenBuildError) {
+        this.watcher.watch(key, [screen.file, ...error.inputs])
+      } else {
+        console.error('Failed to build a canvas screen', error)
+      }
+      this.setBuildError(
+        screen,
+        error instanceof ScreenBuildError ? error.message : 'The screen could not be built.'
+      )
+      return null
+    }
+  }
+
+  private setBuildError(screen: StoredScreen, buildError: string | null): void {
+    if (screen.buildError !== buildError) {
+      screen.buildError = buildError
+      this.changed()
+    }
+  }
+
+  /** Новый вид экрана: ревизия растёт, версия — по `version`; `null` — версию не писать. */
   private addVersion(
     canvas: StoredCanvas,
     screen: StoredScreen,
-    hash: string,
-    cause: ScreenVersion['cause']
+    version: { hash: string; cause: ScreenVersion['cause'] } | null
   ): void {
     const now = Date.now()
-    const fix = cause === 'edit' ? screen.pendingFix : undefined
-    if (fix !== undefined) {
-      delete screen.pendingFix
+    let dropped: StoredVersion[] = []
+    if (version) {
+      const fix = version.cause === 'edit' ? screen.pendingFix : undefined
+      if (fix !== undefined) {
+        delete screen.pendingFix
+      }
+      const entry: StoredVersion = {
+        id: randomUUID(),
+        savedAt: now,
+        cause: version.cause,
+        hash: version.hash,
+        ...(fix && { fix })
+      }
+      const appended = appendVersion(screen.versions, entry, SCREEN_HISTORY_LIMIT)
+      screen.versions = appended.versions
+      dropped = appended.dropped
     }
-    const version: StoredVersion = {
-      id: randomUUID(),
-      savedAt: now,
-      cause,
-      hash,
-      ...(fix && { fix })
-    }
-    const { versions, dropped } = appendVersion(screen.versions, version, SCREEN_HISTORY_LIMIT)
-    screen.versions = versions
     screen.missing = false
     screen.revision += 1
     screen.updatedAt = now
     canvas.updatedAt = now
     this.changed()
-    const kept = new Set(versions.map((kept) => kept.hash))
-    const unused = new Set(dropped.map((old) => old.hash).filter((old) => !kept.has(old)))
+    const kept = new Set(screen.versions.map(({ hash }) => hash))
+    const unused = new Set(dropped.map(({ hash }) => hash).filter((hash) => !kept.has(hash)))
     if (unused.size > 0) {
       void this.snapshots
         .remove(canvas.id, screen.id, unused)
@@ -705,31 +866,34 @@ async function readScreenFile(file: string): Promise<string | null> {
   }
 }
 
+/** Что агент слышит, если файл не годится в экран. */
+function notAScreenFile(file: string): CanvasError {
+  return new CanvasError(
+    `${file} is not a screen file. A screen is a .tsx or .jsx file with a default-exported React component, or one self-contained .html file.`
+  )
+}
+
 /**
  * Проверяет файл, который агент ставит на холст, и возвращает его настоящий путь (без
- * символических ссылок). Файл должен быть HTML-файлом разумного размера внутри папки чата:
- * холст не показывает файлы вне проекта.
+ * символических ссылок). Файл должен быть экраном (React или HTML) разумного размера внутри
+ * папки чата: холст не показывает файлы вне проекта.
  */
 async function verifyScreenFile(file: string, folders: readonly string[]): Promise<string> {
   if (!isAbsolute(file) || !isScreenFileName(file)) {
-    throw new CanvasError(
-      `${file} is not an .html file. A screen is one self-contained .html file.`
-    )
+    throw notAScreenFile(file)
   }
   const real = await realpath(file).catch(() => {
     throw new CanvasError(
-      `File not found: ${file}. Write the HTML file first, then run this command.`
+      `File not found: ${file}. Write the screen file first, then run this command.`
     )
   })
   const info = await stat(real)
   if (!info.isFile() || !isScreenFileName(real)) {
-    throw new CanvasError(
-      `${file} is not an .html file. A screen is one self-contained .html file.`
-    )
+    throw notAScreenFile(file)
   }
   if (info.size > SCREEN_FILE_MAX_BYTES) {
     throw new CanvasError(
-      `${file} is larger than ${SCREEN_FILE_MAX_MB} MB. Keep the screen light: inline SVG instead of embedded photos.`
+      `${file} is larger than ${SCREEN_FILE_MAX_MB} MB. Keep the file light: inline SVG instead of embedded photos, split code into imported files.`
     )
   }
   const roots = await Promise.all(folders.map((folder) => realpath(folder).catch(() => null)))
