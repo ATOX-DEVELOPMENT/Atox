@@ -1,5 +1,15 @@
-import { Archive, ArchiveRestore, ArrowUpRight, MessageCircle, Pencil, Trash2 } from 'lucide-react'
-import type { Canvas } from '../../../shared/canvas'
+import {
+  Archive,
+  ArchiveRestore,
+  ArrowUpRight,
+  FileImage,
+  FileText,
+  MessageCircle,
+  Pencil,
+  Presentation,
+  Trash2
+} from 'lucide-react'
+import type { Canvas, CanvasExportFormat } from '../../../shared/canvas'
 import type { CanvasNavigation } from '../hooks/CanvasesContext'
 import { showMenu, type MenuAnchor, type MenuItem } from './menu'
 
@@ -15,6 +25,16 @@ interface CanvasMenuOptions {
   navigation: CanvasNavigation
   /** Включает переименование там, где открыто меню. */
   onRename(): void
+}
+
+/** Меню выгрузки: во что превратить экраны холста. `null` — меню закрыли ничего не выбрав. */
+export async function showExportMenu(anchor: MenuAnchor): Promise<CanvasExportFormat | null> {
+  const items: MenuItem<CanvasExportFormat>[] = [
+    { action: 'pdf', label: 'PDF document', icon: <FileText /> },
+    { action: 'pptx', label: 'PowerPoint presentation', icon: <Presentation /> },
+    { action: 'png', label: 'PNG images', icon: <FileImage /> }
+  ]
+  return showMenu(items, anchor)
 }
 
 /** Меню холста — одно и то же в сайдбаре, на его странице и в списке холстов. */

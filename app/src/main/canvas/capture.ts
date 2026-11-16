@@ -213,21 +213,23 @@ export function renderScreenPdf(url: string, width: number, height: number): Pro
   )
 }
 
-/** Экран как PNG для выгрузки: двойной плотности, если он не очень широкий. */
+/**
+ * Экран как PNG для выгрузки. Плотность задана явно (не зависит от монитора): вдвое чётче для
+ * узких экранов, обычная для широких.
+ */
 export function renderScreenImage(url: string, width: number, height: number): Promise<Buffer | null> {
   return inScreenWindow(url, width, height, async (window) => {
     const devtools = window.webContents.debugger
     devtools.attach('1.3')
     try {
+      await devtools.sendCommand('Emulation.setDeviceMetricsOverride', {
+        width,
+        height,
+        deviceScaleFactor: width < EXPORT_SHARP_BELOW_WIDTH ? 2 : 1,
+        mobile: false
+      })
       const { data } = (await devtools.sendCommand('Page.captureScreenshot', {
-        format: 'png',
-        clip: {
-          x: 0,
-          y: 0,
-          width,
-          height,
-          scale: width < EXPORT_SHARP_BELOW_WIDTH ? 2 : 1
-        }
+        format: 'png'
       })) as { data: string }
       return Buffer.from(data, 'base64')
     } finally {

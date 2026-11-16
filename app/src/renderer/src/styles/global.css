@@ -5626,6 +5626,10 @@ ul {
   margin-left: auto;
 }
 
+.canvas-header__export-spinner {
+  animation: spin var(--canvas-spin-duration) linear infinite;
+}
+
 .canvas-header__zoom {
   min-width: calc(var(--toolbar-button-size) * 1.5);
   height: var(--toolbar-button-size);
