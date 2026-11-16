@@ -142,7 +142,10 @@ function normalizeScreen(raw: unknown, now: number): StoredScreen | null {
     file,
     x: finite(value['x']),
     y: finite(value['y']),
-    revision: typeof revision === 'number' && Number.isSafeInteger(revision) && revision > 0 ? revision : 0,
+    revision:
+      typeof revision === 'number' && Number.isSafeInteger(revision) && revision > 0
+        ? revision
+        : 0,
     missing: value['missing'] === true,
     updatedAt: timestamp(value['updatedAt'], now),
     versions,

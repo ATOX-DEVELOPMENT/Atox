@@ -27,6 +27,7 @@ import {
   type BoardState,
   type TaskStart
 } from '../shared/board'
+import type { CanvasState } from '../shared/canvas'
 import type { GitHubCounts, GitHubKind, ListState } from '../shared/repository'
 import type { Settings } from '../shared/settings'
 import type { UpdateState } from '../shared/update'
@@ -46,6 +47,7 @@ import { readImage, saveImageAs } from './images'
 import { savePastedImage } from './pastedImages'
 import { pickFiles } from './pickedFiles'
 import type { BoardService } from './board/service'
+import type { CanvasService } from './canvas/service'
 import type { GitHubAccounts } from './githubAccounts'
 import type { RepositoryReader } from './repository'
 import { getUserProfile } from './system'
@@ -68,6 +70,7 @@ interface AppServices {
   tokenSpend: TokenSpendLedger
   githubAccounts: GitHubAccounts
   board: BoardService
+  canvas: CanvasService
 }
 
 export function registerIpcHandlers({
@@ -84,7 +87,8 @@ export function registerIpcHandlers({
   planLimits,
   tokenSpend,
   githubAccounts,
-  board
+  board,
+  canvas
 }: AppServices): void {
   const trackProjectBranches = () => void branches.track(store.list().map(({ path }) => path))
   trackProjectBranches()
@@ -124,6 +128,7 @@ export function registerIpcHandlers({
     if (confirmed) {
       store.removeProject(projectId)
       terminals.kill(projectId)
+      await canvas.removeProject(projectId)
       // История чатов из архива удаляется вместе с проектом.
       const chats = [...project.chats, ...archivedChats(project)]
       await Promise.all(chats.map((chat) => conversations.remove(chat.id)))
@@ -544,10 +549,65 @@ export function registerIpcHandlers({
     }
   )
 
+  ipcMain.handle(IpcChannel.CanvasGet, () => canvas.state())
+  ipcMain.handle(IpcChannel.CanvasCreate, (_event, chatId: unknown) =>
+    canvas.create(requireId(chatId))
+  )
+  ipcMain.handle(IpcChannel.CanvasRename, (_event, canvasId: unknown, name: unknown) =>
+    canvas.rename(requireId(canvasId), name)
+  )
+  ipcMain.handle(
+    IpcChannel.CanvasRenameScreen,
+    (_event, canvasId: unknown, screenId: unknown, name: unknown) =>
+      canvas.renameScreen(requireId(canvasId), requireId(screenId), name)
+  )
+  ipcMain.handle(
+    IpcChannel.CanvasMoveScreen,
+    (_event, canvasId: unknown, screenId: unknown, x: unknown, y: unknown) =>
+      canvas.moveScreen(requireId(canvasId), requireId(screenId), x, y)
+  )
+  ipcMain.handle(IpcChannel.CanvasSetView, (_event, canvasId: unknown, view: unknown) =>
+    canvas.setView(requireId(canvasId), view)
+  )
+  ipcMain.handle(IpcChannel.CanvasArchive, (_event, canvasId: unknown, archived: unknown) => {
+    if (typeof archived !== 'boolean') {
+      throw new Error('Invalid archive flag')
+    }
+    canvas.archive(requireId(canvasId), archived)
+  })
+  ipcMain.handle(IpcChannel.CanvasRemove, (_event, canvasId: unknown) =>
+    canvas.remove(requireId(canvasId))
+  )
+  ipcMain.handle(
+    IpcChannel.CanvasRequest,
+    (_event, canvasId: unknown, text: unknown, screenId: unknown) =>
+      canvas.request(
+        requireId(canvasId),
+        text,
+        screenId === undefined || screenId === null ? undefined : requireId(screenId)
+      )
+  )
+  ipcMain.handle(IpcChannel.CanvasHistory, (_event, canvasId: unknown, screenId: unknown) =>
+    canvas.history(requireId(canvasId), requireId(screenId))
+  )
+  ipcMain.handle(
+    IpcChannel.CanvasRestore,
+    (_event, canvasId: unknown, screenId: unknown, versionId: unknown) =>
+      canvas.restore(requireId(canvasId), requireId(screenId), requireId(versionId))
+  )
+
   ipcMain.on(IpcChannel.ShortcutsRecording, (_event, recording: boolean) =>
     menu.setRecordingShortcut(recording === true)
   )
 
+}
+
+/** Id чата, холста, экрана или версии из окна: непустая строка. */
+function requireId(value: unknown): string {
+  if (typeof value !== 'string' || !value) {
+    throw new Error('Invalid id')
+  }
+  return value
 }
 
 /** Запуск задачи из окна: агент обязателен, сообщение — только непустой текст. */
@@ -601,6 +661,10 @@ export function broadcastProjectsChanged(projects: Project[]): void {
 
 export function broadcastBoard(state: BoardState): void {
   broadcast(IpcChannel.BoardChanged, state)
+}
+
+export function broadcastCanvas(state: CanvasState): void {
+  broadcast(IpcChannel.CanvasChanged, state)
 }
 
 export function broadcastGitBranches(branches: GitBranches): void {

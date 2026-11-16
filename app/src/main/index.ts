@@ -1,6 +1,6 @@
 import { tmpdir } from 'node:os'
 import { basename, delimiter, join } from 'node:path'
-import { app, BrowserWindow, nativeTheme, shell as electronShell } from 'electron'
+import { app, BrowserWindow, nativeTheme, protocol, shell as electronShell } from 'electron'
 import { AgentDetector } from './agents'
 import { WorkingTreeReader } from './changes'
 import { claudeDriver } from './conversations/claude'
@@ -9,9 +9,12 @@ import { ConversationManager } from './conversations/manager'
 import { TranscriptStore } from './conversations/transcripts'
 import { installDesktopEntry } from './desktopEntry'
 import { GitBranchTracker } from './gitBranches'
-import { handleImageProtocol, registerImageScheme } from './imageProtocol'
+import { handleImageProtocol, IMAGE_SCHEME } from './imageProtocol'
+import { CANVAS_SCHEME, handleCanvasProtocol } from './canvas/protocol'
+import { CanvasService } from './canvas/service'
 import {
   broadcastBoard,
+  broadcastCanvas,
   broadcastGitBranches,
   broadcastConversationEvent,
   broadcastAgentListsStale,
@@ -43,11 +46,14 @@ import { checkForUpdatesFromMenu } from './updateCheck'
 import { createUpdateInstaller } from './updateInstallers'
 import { AppUpdater } from './updater'
 import { UsageStats } from './usageStats'
-import { createMainWindow } from './window'
+import { APP_FRAME_SOURCE, createMainWindow } from './window'
 
 const STORE_FILE_NAME = 'projects.json'
 const SETTINGS_FILE_NAME = 'settings.json'
 const BOARD_FILE_NAME = 'board.json'
+const CANVAS_FILE_NAME = 'canvases.json'
+/** Каталог снимков версий экранов холстов. */
+const CANVAS_HISTORY_DIRECTORY_NAME = 'canvas-history'
 const USAGE_STATS_FILE_NAME = 'usage-stats.json'
 const TOKEN_SPEND_FILE_NAME = 'token-spend.json'
 const PLAN_LIMITS_FILE_NAME = 'plan-limits.json'
@@ -74,7 +80,8 @@ if (!app.isPackaged) {
  */
 const isPrimaryInstance = app.requestSingleInstanceLock()
 
-registerImageScheme()
+// Схемы объявляются до готовности приложения и одним вызовом: следующий вызов отменил бы прежний.
+protocol.registerSchemesAsPrivileged([IMAGE_SCHEME, CANVAS_SCHEME])
 
 async function bootstrap(): Promise<void> {
   await app.whenReady()
@@ -144,6 +151,13 @@ async function bootstrap(): Promise<void> {
     onAgentListsStale: broadcastAgentListsStale,
     onAccountChanged: () => void planLimits.refreshAll()
   })
+  const canvas = await CanvasService.load(
+    { store, conversations, onChange: broadcastCanvas },
+    join(userData, CANVAS_FILE_NAME),
+    join(userData, CANVAS_HISTORY_DIRECTORY_NAME)
+  )
+  handleCanvasProtocol(canvas, APP_FRAME_SOURCE)
+  app.on('will-quit', () => canvas.dispose())
   const planLimits = await PlanLimitsMonitor.load(
     {
       installed: () => agents.list(),
@@ -171,6 +185,7 @@ async function bootstrap(): Promise<void> {
     store,
     conversations,
     agents,
+    canvas,
     // Путь к сокету ограничен ~100 символами, поэтому он во временном каталоге пользователя,
     // а не в длинном пути данных приложения. Имя различает сборку для разработки.
     socketPath: join(tmpdir(), `${basename(userData)}.sock`),
@@ -223,7 +238,8 @@ async function bootstrap(): Promise<void> {
     agents,
     menu,
     planLimits,
-    tokenSpend
+    tokenSpend,
+    canvas
   })
   // Ветку могли сменить или создать репозиторий в другом приложении, пока окно было не в фокусе.
   app.on('browser-window-focus', () => void branches.refreshOnFocus())
@@ -258,8 +274,8 @@ async function bootstrap(): Promise<void> {
     conversations,
     terminals,
     stores: usageStats
-      ? [store, settings, conversations, board, tokenSpend, planLimits, usageStats]
-      : [store, settings, conversations, board, tokenSpend, planLimits]
+      ? [store, settings, conversations, board, canvas, tokenSpend, planLimits, usageStats]
+      : [store, settings, conversations, board, canvas, tokenSpend, planLimits]
   })
   if (updater) {
     quitHandling.onQuitCancelled(() => updater.cancelRelaunch())
