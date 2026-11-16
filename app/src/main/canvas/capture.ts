@@ -202,7 +202,11 @@ const EXPORT_SHARP_BELOW_WIDTH = 1600
  * Экран как PDF-страница ровно его размера, с настоящим текстом и векторной графикой. То, что
  * не поместилось по высоте, обрезается: лишних страниц у экрана не бывает.
  */
-export function renderScreenPdf(url: string, width: number, height: number): Promise<Buffer | null> {
+export function renderScreenPdf(
+  url: string,
+  width: number,
+  height: number
+): Promise<Buffer | null> {
   return inScreenWindow(url, width, height, (window) =>
     window.webContents.printToPDF({
       pageSize: { width: width / CSS_PIXELS_PER_INCH, height: height / CSS_PIXELS_PER_INCH },
@@ -217,7 +221,11 @@ export function renderScreenPdf(url: string, width: number, height: number): Pro
  * Экран как PNG для выгрузки. Плотность задана явно (не зависит от монитора): вдвое чётче для
  * узких экранов, обычная для широких.
  */
-export function renderScreenImage(url: string, width: number, height: number): Promise<Buffer | null> {
+export function renderScreenImage(
+  url: string,
+  width: number,
+  height: number
+): Promise<Buffer | null> {
   return inScreenWindow(url, width, height, async (window) => {
     const devtools = window.webContents.debugger
     devtools.attach('1.3')
@@ -235,6 +243,85 @@ export function renderScreenImage(url: string, width: number, height: number): P
     } finally {
       devtools.detach()
     }
+  })
+}
+
+/** Снимок экрана для ссылки «Share»: статичная страница и её стили отдельно, плюс маленькая картинка. */
+export interface SharedScreenRender {
+  /** Страница без скриптов и стилей: стили подключает служба по хешу, они общие у экранов. */
+  html: string
+  css: string
+  /** JPEG для общего вида холста; `null` — снять не удалось. */
+  thumbnail: Buffer | null
+}
+
+/** Ширина картинки экрана для общего вида: на телефоне и в обзоре холста экран мельче. */
+const SHARE_THUMBNAIL_WIDTH = 640
+const SHARE_THUMBNAIL_QUALITY = 82
+
+/**
+ * Снимок отрисованной страницы: все её стили (из CSSOM — и те, что собрал Tailwind), разметка
+ * без скриптов, значения полей и прокрутка, которых нет в HTML. Холсты становятся картинками.
+ */
+const SHARE_SNAPSHOT_SCRIPT = `(() => {
+  const css = [...document.styleSheets].map((sheet) => {
+    try { return [...sheet.cssRules].map((rule) => rule.cssText).join('\\n') } catch { return '' }
+  }).join('\\n')
+  for (const element of document.querySelectorAll('*')) {
+    if (element.scrollTop || element.scrollLeft) {
+      element.setAttribute('data-share-scroll', element.scrollTop + ',' + element.scrollLeft)
+    }
+  }
+  for (const input of document.querySelectorAll('input')) {
+    if (input.type === 'checkbox' || input.type === 'radio') {
+      input.checked ? input.setAttribute('checked', '') : input.removeAttribute('checked')
+    } else if (input.type !== 'password' && input.type !== 'file') {
+      input.setAttribute('value', input.value)
+    }
+  }
+  for (const area of document.querySelectorAll('textarea')) area.textContent = area.value
+  for (const select of document.querySelectorAll('select')) {
+    for (const option of select.options) option.selected ? option.setAttribute('selected', '') : option.removeAttribute('selected')
+  }
+  const pictures = [...document.querySelectorAll('canvas')].map((canvas) => {
+    try { return { url: canvas.toDataURL(), width: canvas.clientWidth, height: canvas.clientHeight } } catch { return null }
+  })
+  const root = document.documentElement.cloneNode(true)
+  root.querySelectorAll('canvas').forEach((canvas, index) => {
+    const picture = pictures[index]
+    if (!picture) return canvas.remove()
+    const image = document.createElement('img')
+    image.className = canvas.className
+    image.style.cssText = canvas.style.cssText
+    image.style.width = picture.width + 'px'
+    image.style.height = picture.height + 'px'
+    image.src = picture.url
+    canvas.replaceWith(image)
+  })
+  root.querySelectorAll('script, style, link, noscript, iframe, object, embed').forEach((node) => node.remove())
+  return { css, html: '<!doctype html>' + root.outerHTML }
+})()`
+
+export function renderScreenForSharing(
+  url: string,
+  width: number,
+  height: number
+): Promise<SharedScreenRender | null> {
+  return inScreenWindow(url, width, height, async (window) => {
+    const snapshot: unknown = await window.webContents
+      .executeJavaScript(SHARE_SNAPSHOT_SCRIPT)
+      .catch(() => null)
+    const { html, css } = (snapshot ?? {}) as Record<string, unknown>
+    if (typeof html !== 'string' || typeof css !== 'string') {
+      return null
+    }
+    const image = await window.webContents.capturePage(undefined, { stayHidden: true })
+    const thumbnail = image.isEmpty()
+      ? null
+      : image
+          .resize({ width: Math.min(width, SHARE_THUMBNAIL_WIDTH), quality: 'good' })
+          .toJPEG(SHARE_THUMBNAIL_QUALITY)
+    return { html, css, thumbnail }
   })
 }
 
