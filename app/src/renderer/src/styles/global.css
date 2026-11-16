@@ -5724,10 +5724,12 @@ ul {
   align-items: center;
   gap: var(--status-gap);
   height: calc(var(--canvas-label-height) + var(--canvas-label-gap));
-  max-width: calc(var(--frame-width) * var(--z) * 1px);
+  width: calc(var(--frame-width) * var(--z) * 1px);
+  container-type: inline-size;
   padding-bottom: var(--canvas-label-gap);
   font-size: var(--canvas-label-font-size);
-  line-height: 1;
+  /* Выше строки не меньше: у имени и устройства overflow hidden, и он срезал бы хвосты букв. */
+  line-height: 1.4;
   color: var(--color-text-muted);
   white-space: nowrap;
   transform: scale(calc(1 / var(--z)));
@@ -5744,10 +5746,18 @@ ul {
   color: var(--color-text);
 }
 
+/* Устройство видно, только когда подпись над экраном достаточно широка для него целиком. */
 .canvas-screen__device {
+  display: none;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+@container (min-width: 240px) {
+  .canvas-screen__device {
+    display: block;
+  }
 }
 
 .canvas-screen__label .row__input {
