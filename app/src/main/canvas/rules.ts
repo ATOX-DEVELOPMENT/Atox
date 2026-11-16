@@ -1,4 +1,4 @@
-import { extname, isAbsolute, relative } from 'node:path'
+import { extname, isAbsolute, relative, sep } from 'node:path'
 import {
   CANVAS_NAME_MAX_LENGTH,
   SCREEN_DEVICES,
@@ -20,7 +20,8 @@ export class CanvasError extends Error {}
 export const CANVAS_ROW_WIDTH = 3600
 
 /** Экран — один лёгкий HTML-файл; больший файл не читается и не сохраняется в историю. */
-export const SCREEN_FILE_MAX_BYTES = 2 * 1024 * 1024
+export const SCREEN_FILE_MAX_MB = 2
+export const SCREEN_FILE_MAX_BYTES = SCREEN_FILE_MAX_MB * 1024 * 1024
 
 const SCREEN_FILE_EXTENSIONS = new Set(['.html', '.htm'])
 
@@ -121,7 +122,8 @@ export function isScreenFileName(path: string): boolean {
 /** Путь лежит в папке или совпадает с ней; оба пути — абсолютные и без символических ссылок. */
 export function isInsideFolder(path: string, folder: string): boolean {
   const relation = relative(folder, path)
-  return relation === '' || (!relation.startsWith('..') && !isAbsolute(relation))
+  const outside = relation === '..' || relation.startsWith(`..${sep}`) || isAbsolute(relation)
+  return !outside
 }
 
 /**

@@ -2,6 +2,8 @@ import { existsSync } from 'node:fs'
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
+import { DEFAULT_SCREEN_DEVICE, SCREEN_DEVICES, SCREEN_SIZE } from '../../shared/canvas'
+import { CANVAS_MESSAGE_PREFIX, SCREEN_FILE_MAX_MB } from '../canvas/rules'
 import { quoteShell } from '../shellQuote'
 
 /** Права исполняемого файла команды. */
@@ -75,6 +77,79 @@ If your first message says you are a worker, do the task, then run \`atox report
 - Blocked by a sandbox or permissions: run it again with elevated permissions; it only talks to the local Atox app.
 `
 
+/** Устройства холста с размерами — из того же списка, что проверяет команда. */
+const CANVAS_DEVICES = Object.entries(SCREEN_DEVICES)
+  .map(([id, { name, width, height }]) => `- \`${id}\`: ${name}, ${width}x${height}`)
+  .join('\n')
+
+const CANVAS_SKILL = `---
+name: atox-canvas
+description: Show UI designs to the user on the Atox canvas. Use inside Atox (the ATOX_CHAT_ID environment variable is set) when the user asks to design, draw, show, mock up, prototype or preview screens, a UI, a page, a website or an app screen, and whenever a message starts with "${CANVAS_MESSAGE_PREFIX}".
+---
+
+# Atox canvas
+
+The canvas is a page in Atox where the user sees the screens of this chat side by side: phone app screens, website pages, desktop app windows. Each screen is one HTML file in the project. Atox watches the file, so the canvas updates by itself every time you edit it. The user moves, renames and zooms screens; you only write the HTML.
+
+## Commands
+
+\`\`\`sh
+atox canvas                                                    # this chat's canvas: screens with device, size and file
+atox canvas screen set Login .atox/canvas/login.html --device iphone
+atox canvas screen set "Admin dashboard" .atox/canvas/admin.html --device web
+atox canvas screen set Widget .atox/canvas/widget.html --size 360x640
+atox canvas screen remove Login                                # removes the screen; the file stays
+\`\`\`
+
+## Workflow
+
+1. Write the screen as an HTML file inside the project, for example \`.atox/canvas/login.html\`.
+2. Put it on the canvas once: \`atox canvas screen set Login .atox/canvas/login.html --device iphone\`. The canvas is created for this chat if it has none.
+3. From then on just edit the file. Do not run \`set\` again unless the device or size changes; \`set\` with the name of an existing screen updates it and keeps its name and place.
+4. One file per screen. Add several screens for a flow (Login, Home, Settings).
+
+The user, not you, names and arranges screens. If they renamed a screen, use the new name from \`atox canvas\`.
+
+## Devices
+
+\`--device\` (default \`${DEFAULT_SCREEN_DEVICE}\`), sizes in CSS pixels:
+${CANVAS_DEVICES}
+
+\`--size WxH\` sets a custom size without a device frame (each side ${SCREEN_SIZE.min} to ${SCREEN_SIZE.max}).
+
+## HTML rules
+
+- One self-contained file: inline \`<style>\` and \`<script>\`, no other files.
+- No external requests: CDNs, web fonts, remote images, fetch and forms are blocked. Images only as inline SVG or \`data:\` URIs.
+- Design for the exact device size: the page is shown at that width and height. Fill it, with no outer scrollbars (\`html, body { margin: 0; height: 100%; overflow: hidden }\`); scroll inside the layout if the content is long.
+- System font stack: \`font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif\`.
+- Realistic content: real labels, names, numbers and states, not lorem ipsum.
+- Light inline JS for tabs, toggles or hover states is fine; the page runs sandboxed, without network or storage.
+
+## "${CANVAS_MESSAGE_PREFIX} Fix the screen ..." messages
+
+The user clicked a screen and asked for a change. The message has the request, \`File:\` with the screen's HTML file and usually \`Screenshot:\` with a PNG of how it looks now.
+
+- Open the File, look at the Screenshot, make the change in the file. The canvas updates by itself.
+- Do not run \`atox canvas screen set\` again unless the device or size must change.
+- Do not ask the user for screenshots or which file: both are in the message.
+- Answer in one or two lines with what you changed.
+
+Other "${CANVAS_MESSAGE_PREFIX} ..." messages are requests about the canvas as a whole, for example a new screen.
+
+## Troubleshooting
+
+- \`atox\` not found: run "$ATOX_CLI" with the same arguments.
+- Blocked by a sandbox or permissions: run it again with elevated permissions; it only talks to the local Atox app.
+- The file must be inside the project folder, an .html file, at most ${SCREEN_FILE_MAX_MB} MB.
+`
+
+/** Навыки Atox для агентов: имя папки навыка и текст. */
+const SKILLS = [
+  { name: 'atox', content: SKILL },
+  { name: 'atox-canvas', content: CANVAS_SKILL }
+]
+
 /** Каталоги навыков агентов: Claude Code читает свой, Codex — общий для агентов ~/.agents. */
 const SKILL_TARGETS = [
   { agentHome: '.claude', skillsDirectory: ['.claude', 'skills'] },
@@ -82,22 +157,24 @@ const SKILL_TARGETS = [
 ]
 
 /**
- * Устанавливает навык `atox` тем агентам, что есть у пользователя, — так агент знает, что
- * может запускать помощников. Файл перезаписывается, только если его текст изменился.
+ * Устанавливает навыки Atox тем агентам, что есть у пользователя, — так агент знает, что
+ * может запускать помощников и показывать экраны на холсте. Файл перезаписывается, только
+ * если его текст изменился.
  */
 export async function installSkills(): Promise<void> {
   const home = homedir()
+  const targets = SKILL_TARGETS.filter(({ agentHome }) => existsSync(join(home, agentHome)))
   await Promise.all(
-    SKILL_TARGETS.filter(({ agentHome }) => existsSync(join(home, agentHome))).map(
-      async ({ skillsDirectory }) => {
-        const directory = join(home, ...skillsDirectory, 'atox')
+    targets.flatMap(({ skillsDirectory }) =>
+      SKILLS.map(async ({ name, content }) => {
+        const directory = join(home, ...skillsDirectory, name)
         const file = join(directory, 'SKILL.md')
         const current = await readFile(file, 'utf8').catch(() => null)
-        if (current !== SKILL) {
+        if (current !== content) {
           await mkdir(directory, { recursive: true })
-          await writeFile(file, SKILL)
+          await writeFile(file, content)
         }
-      }
+      })
     )
   )
 }
