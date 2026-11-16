@@ -51,6 +51,24 @@ export const SCREEN_HISTORY_LIMIT = 30
 /** Длиннее имя холста или экрана не помещается в подпись. */
 export const CANVAS_NAME_MAX_LENGTH = 60
 
+/** Файл экрана: HTML показывается как есть, React-компонент (`export default`) собирается приложением. */
+export const HTML_SCREEN_EXTENSIONS = ['.html', '.htm'] as const
+export const REACT_SCREEN_EXTENSIONS = ['.tsx', '.jsx'] as const
+
+export type ScreenSourceKind = 'html' | 'react'
+
+/** Вид файла экрана по его имени; `null` — такой файл экраном быть не может. */
+export function screenSourceKind(file: string): ScreenSourceKind | null {
+  const name = file.toLowerCase()
+  if (HTML_SCREEN_EXTENSIONS.some((extension) => name.endsWith(extension))) {
+    return 'html'
+  }
+  if (REACT_SCREEN_EXTENSIONS.some((extension) => name.endsWith(extension))) {
+    return 'react'
+  }
+  return null
+}
+
 export interface CanvasScreen {
   id: string
   /** Имя: агент даёт при создании, человек может изменить. По имени агент находит экран. */
@@ -58,7 +76,10 @@ export interface CanvasScreen {
   device: ScreenDevice
   width: number
   height: number
-  /** Абсолютный путь к HTML-файлу экрана в проекте. Приложение следит за ним и обновляет экран. */
+  /**
+   * Абсолютный путь к файлу экрана в проекте: HTML или React-компонент. Приложение следит за
+   * файлом и всем, что он импортирует, и обновляет экран.
+   */
   file: string
   /** Левый верхний угол экрана на холсте, в координатах холста. */
   x: number
@@ -67,6 +88,11 @@ export interface CanvasScreen {
   revision: number
   /** Файл пропал или не читается: экран показывает последнюю сохранённую версию. */
   missing: boolean
+  /**
+   * Сборка React-экрана не удалась: здесь текст ошибки, а экран показывает последнюю удачную
+   * сборку. `null` — ошибок нет (и у HTML-экрана тоже).
+   */
+  buildError: string | null
   updatedAt: number
 }
 
