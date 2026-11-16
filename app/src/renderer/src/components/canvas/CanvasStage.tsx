@@ -43,7 +43,7 @@ const WHEEL_LINE_HEIGHT = 16
 const VIEW_SAVE_DELAY = 600
 /** Сколько длится перелёт к экрану после клика, мс. */
 const FOCUS_DURATION = 380
-/** Пауза после жеста, после которой холст перерисовывается в чётком масштабе, мс. */
+/** Пауза после смены масштаба, после которой холст перерисовывается в новом масштабе, мс. */
 const VIEW_SETTLE_DELAY = 200
 
 export interface CanvasStageHandle {
@@ -102,6 +102,8 @@ export function CanvasStage({
   const saveTimerRef = useRef<number | undefined>(undefined)
   const flightRef = useRef<number | null>(null)
   const settleTimerRef = useRef<number | undefined>(undefined)
+  // Масштаб, в котором слой холста нарисован сейчас.
+  const rasterZoomRef = useRef<number | null>(null)
   const { id: canvasId, screens, groups } = canvas
 
   const positionOf = useCallback(
@@ -285,10 +287,11 @@ export function CanvasStage({
 
   // Вид — в transform и фон сетки. Экраны за краем окна не прячутся: скрытый iframe теряет
   // картинку, и при возвращении в кадр на миг пустеет; невидимое браузер и так не рисует.
-  // will-change держится только во время жеста: с ним Chromium не перерисовывает слой при
-  // смене масштаба, и после приближения весь холст при отдалении остаётся в крупном масштабе.
-  // Такому слою не хватает памяти видеокарты: часть плиток не рисуется, и кадр застывает с
-  // серыми дырами. После жеста слой перерисовывается в масштабе, при котором его видно.
+  // Слой холста всегда с will-change: transform, чтобы прокрутка только двигала готовую картинку.
+  // Но с ним Chromium не перерисовывает слой при смене масштаба: после приближения холст на 10%
+  // остаётся нарисованным крупно, не помещается в память видеокарты, и при прокрутке новые куски
+  // не дорисовываются — серые дыры. Поэтому после смены масштаба, когда жест затих, will-change
+  // снимается на пару кадров, и слой перерисовывается в масштабе, в котором его видно.
   const applyView = useCallback(() => {
     const stage = stageRef.current
     const world = worldRef.current
@@ -298,11 +301,21 @@ export function CanvasStage({
     }
     world.style.transform = `translate(${view.x}px, ${view.y}px) scale(${view.zoom})`
     world.style.setProperty('--z', String(view.zoom))
-    world.style.willChange = 'transform'
     stage.style.backgroundPosition = `${view.x}px ${view.y}px`
+    rasterZoomRef.current ??= view.zoom
+    if (settleTimerRef.current === undefined && view.zoom === rasterZoomRef.current) {
+      return
+    }
     window.clearTimeout(settleTimerRef.current)
     settleTimerRef.current = window.setTimeout(() => {
-      world.style.willChange = ''
+      settleTimerRef.current = undefined
+      rasterZoomRef.current = viewState.view()?.zoom ?? null
+      world.style.willChange = 'auto'
+      requestAnimationFrame(() =>
+        requestAnimationFrame(() => {
+          world.style.willChange = ''
+        })
+      )
     }, VIEW_SETTLE_DELAY)
   }, [viewState])
   useEffect(() => viewState.subscribe(applyView), [viewState, applyView])
