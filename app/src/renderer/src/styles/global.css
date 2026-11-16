@@ -5571,53 +5571,6 @@ ul {
   white-space: nowrap;
 }
 
-.canvas-header__chat {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  min-width: 0;
-  height: var(--canvas-chip-height);
-  padding: 0 10px 0 8px;
-  border-radius: 999px;
-  font-size: var(--font-size-small);
-  background: var(--color-hover);
-  box-shadow: 0 0 0 1px var(--color-border);
-}
-
-.canvas-header__chat:hover:not(:disabled) {
-  background: var(--color-active);
-}
-
-.canvas-header__chat:disabled {
-  color: var(--color-text-muted);
-}
-
-.canvas-header__chat-dot {
-  width: calc(var(--status-dot-size) - 1px);
-  height: calc(var(--status-dot-size) - 1px);
-  flex-shrink: 0;
-  border-radius: 50%;
-  background: var(--color-accent);
-}
-
-.canvas-header__chat:disabled .canvas-header__chat-dot {
-  background: var(--color-status-idle);
-}
-
-.canvas-header__chat-title {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.canvas-header__chat-arrow {
-  width: 12px;
-  height: 12px;
-  flex-shrink: 0;
-  color: var(--color-text-muted);
-}
-
 .canvas-header__badge {
   flex-shrink: 0;
   padding: 1px 8px;
@@ -6041,43 +5994,7 @@ ul {
   pointer-events: none;
 }
 
-/* Плашки поверх холста: подсказка, мини-карта, работа агента. */
-.canvas-hint {
-  position: absolute;
-  left: var(--canvas-overlay-inset);
-  bottom: var(--canvas-overlay-inset);
-  display: flex;
-  align-items: center;
-  gap: var(--status-gap);
-  max-width: calc(100% - var(--canvas-minimap-width) - var(--canvas-overlay-inset) * 3);
-  height: var(--canvas-pill-height);
-  margin: 0;
-  padding: 0 12px;
-  border-radius: 999px;
-  font-size: var(--font-size-small);
-  color: var(--color-text-muted);
-  background: var(--color-menu);
-  box-shadow: var(--shadow-menu);
-  pointer-events: none;
-}
-
-.canvas-hint .icon {
-  width: 14px;
-  height: 14px;
-}
-
-.canvas-hint__text {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-/* Пока агент работает, внизу его плашка — подсказка уступает ей место. */
-.canvas-stage:has(.agent-bar) .canvas-hint {
-  display: none;
-}
-
+/* Плашки поверх холста: мини-карта, работа агента. */
 .canvas-minimap {
   position: absolute;
   right: var(--canvas-overlay-inset);
