@@ -1,16 +1,8 @@
 import { createHash, randomBytes } from 'node:crypto'
-import { readFile, readdir } from 'node:fs/promises'
-import { join } from 'node:path'
 import { promisify } from 'node:util'
 import { gzip } from 'node:zlib'
-import {
-  CANVAS_PROTOCOL,
-  type CanvasGroup,
-  type CanvasLink,
-  type ScreenFrame
-} from '../../shared/canvas'
+import type { CanvasGroup, CanvasLink, ScreenFrame } from '../../shared/canvas'
 import { CanvasError } from './rules'
-import { VENDOR_HOST } from './shell'
 
 const gzipAsync = promisify(gzip)
 
@@ -50,12 +42,6 @@ export interface SharedCanvas {
   links: Pick<CanvasLink, 'id' | 'from' | 'to' | 'anchor'>[]
 }
 
-export interface VendorBundle {
-  /** Хеш всех общих файлов: по нему служба понимает, что они у неё уже есть. */
-  hash: string
-  files: ReadonlyMap<string, Buffer>
-}
-
 export function shareUrl(id: string): string {
   return `${SHARE_ORIGIN}/${id}`
 }
@@ -65,33 +51,46 @@ export function newShareCredentials(): ShareCredentials {
   return { id: randomBytes(18).toString('base64url'), token: randomBytes(32).toString('base64url') }
 }
 
-/** Общие файлы экранов (react, Tailwind): страницы на сайте берут их по хешу, а не из приложения. */
-export async function readVendorBundle(directory: string): Promise<VendorBundle> {
-  const names = (await readdir(directory)).filter((name) => name.endsWith('.js')).toSorted()
-  const files = new Map<string, Buffer>()
-  const hash = createHash('sha256')
-  for (const name of names) {
-    const content = await readFile(join(directory, name))
-    files.set(name, content)
-    hash.update(`${name}\0${content.length}\0`).update(content)
-  }
-  if (files.size === 0) {
-    throw new CanvasError('The canvas files for sharing are missing from this build of Atox.')
-  }
-  return { hash: hash.digest('hex'), files }
+/** Экран на сайте: статичная страница (без скриптов экрана), её стили и картинка для обзора. */
+export interface SharedScreenPage {
+  html: string
+  css: string
+  thumbnail: Buffer | null
 }
 
-const VENDOR_URL_PREFIX = `${CANVAS_PROTOCOL}://${VENDOR_HOST}/`
+/**
+ * Восстанавливает прокрутку, которой нет в разметке: снимок помечает прокрученные блоки.
+ * Других скриптов в странице экрана на сайте нет.
+ */
+const RESTORE_SCROLL_SCRIPT = `<script>addEventListener('load',()=>{for(const e of document.querySelectorAll('[data-share-scroll]')){const[t,l]=e.dataset.shareScroll.split(',');e.scrollTop=+t;e.scrollLeft=+l}})</script>`
 
-/** Страница экрана для сайта: общие файлы лежат по адресу службы, а не в приложении. */
-export function pageForSharing(html: string, vendorHash: string): string {
-  return html.replaceAll(VENDOR_URL_PREFIX, `/v/${vendorHash}/`)
+/**
+ * Страницы экранов для службы. Одинаковые стили (у экранов одного проекта они обычно общие)
+ * уходят один раз: страница подключает их по хешу, и браузер берёт их из кэша.
+ */
+export function sharedPages(screens: ReadonlyMap<string, SharedScreenPage>): {
+  docs: Record<string, string>
+  thumbs: Record<string, string>
+  styles: Record<string, string>
+} {
+  const docs: Record<string, string> = {}
+  const thumbs: Record<string, string> = {}
+  const styles: Record<string, string> = {}
+  for (const [id, { html, css, thumbnail }] of screens) {
+    const hash = createHash('sha256').update(css).digest('hex')
+    styles[hash] = css
+    const head = `<link rel="stylesheet" href="/c/${hash}.css">${RESTORE_SCROLL_SCRIPT}`
+    docs[id] = html.includes('</head>') ? html.replace('</head>', `${head}</head>`) : head + html
+    if (thumbnail) {
+      thumbs[id] = thumbnail.toString('base64')
+    }
+  }
+  return { docs, thumbs, styles }
 }
 
 interface PublishRequest {
   canvas: SharedCanvas
-  docs: Record<string, string>
-  vendor: VendorBundle
+  screens: ReadonlyMap<string, SharedScreenPage>
 }
 
 async function call(
@@ -130,35 +129,13 @@ async function failure(response: Response): Promise<CanvasError> {
   )
 }
 
-/**
- * Публикует холст по ссылке. Общие файлы идут, только если службе их не хватает: она
- * отвечает «vendor-missing» — тогда запрос повторяется вместе с ними.
- */
+/** Публикует холст по ссылке: снимки экранов, их места, группы и линии. */
 export async function publishShare(
   credentials: ShareCredentials,
-  { canvas, docs, vendor }: PublishRequest
+  { canvas, screens }: PublishRequest
 ): Promise<void> {
-  const send = async (withVendor: boolean): Promise<Response> => {
-    const payload = {
-      canvas,
-      docs,
-      ...(withVendor
-        ? {
-            vendor: {
-              hash: vendor.hash,
-              files: Object.fromEntries(
-                [...vendor.files].map(([name, content]) => [name, content.toString('base64')])
-              )
-            }
-          }
-        : { vendorHash: vendor.hash })
-    }
-    return call('PUT', credentials, await gzipAsync(Buffer.from(JSON.stringify(payload))))
-  }
-  let response = await send(false)
-  if (response.status === 409) {
-    response = await send(true)
-  }
+  const payload = JSON.stringify({ canvas, ...sharedPages(screens) })
+  const response = await call('PUT', credentials, await gzipAsync(Buffer.from(payload)))
   if (!response.ok) {
     throw await failure(response)
   }

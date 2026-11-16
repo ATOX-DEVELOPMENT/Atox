@@ -28,7 +28,13 @@ import type { ConversationManager } from '../conversations/manager'
 import { JsonFileWriter, readVersionedJson } from '../jsonFile'
 import type { ChatLocation, ProjectStore } from '../store'
 import { ScreenBuildError, buildScreen, type ScreenBuild } from './build'
-import { captureScreen, findScreenElements, inspectScreen, type ScreenRender } from './capture'
+import {
+  captureScreen,
+  findScreenElements,
+  inspectScreen,
+  renderScreenForSharing,
+  type ScreenRender
+} from './capture'
 import { checkExportTarget, exportScreens, freeExportPath } from './export'
 import type { ScreenDocument, ScreenDocumentSource } from './protocol'
 import {
@@ -64,12 +70,11 @@ import {
 } from './store'
 import {
   newShareCredentials,
-  pageForSharing,
   publishShare,
-  readVendorBundle,
   shareUrl,
   unpublishShare,
-  type SharedCanvas
+  type SharedCanvas,
+  type SharedScreenPage
 } from './share'
 import { ScreenFileWatcher } from './watcher'
 
@@ -78,8 +83,6 @@ export interface CanvasServices {
   conversations: ConversationManager
   /** Папка кита `@atox/ui` и токенов темы: из неё собираются экраны-React. */
   kitDirectory: string
-  /** Папка общих файлов экранов (react, Tailwind): их получает и сайт, где открывается ссылка. */
-  vendorDirectory: string
   onChange(state: CanvasState): void
 }
 
@@ -179,6 +182,9 @@ export interface AgentCanvasView {
     buildError: string | null
   }[]
 }
+
+/** Сколько экранов снимается для ссылки одновременно: каждый — скрытое окно. */
+const SHARE_RENDER_CONCURRENCY = 3
 
 interface ScreenLocation {
   canvas: StoredCanvas
@@ -1050,23 +1056,43 @@ export class CanvasService implements ScreenDocumentSource {
     }
     this.sharing.add(canvas.id)
     try {
-      const vendor = await readVendorBundle(this.services.vendorDirectory)
-      const docs: Record<string, string> = {}
-      for (const screen of canvas.screens) {
-        const document = await this.screenDocument(canvas.id, screen.id)
-        if (!document) {
-          throw new CanvasError(`Could not read the screen "${screen.name}".`)
-        }
-        docs[screen.id] = pageForSharing(document.html, vendor.hash)
-      }
+      const screens = await this.renderForSharing(canvas)
       const credentials = canvas.share ?? newShareCredentials()
-      await publishShare(credentials, { canvas: sharedCanvas(canvas), docs, vendor })
+      await publishShare(credentials, { canvas: sharedCanvas(canvas), screens })
       canvas.share = { ...credentials, publishedAt: Date.now() }
       this.changed()
       return { url: shareUrl(canvas.share.id), publishedAt: canvas.share.publishedAt }
     } finally {
       this.sharing.delete(canvas.id)
     }
+  }
+
+  /**
+   * Снимает каждый экран для сайта: статичную страницу без скриптов и картинку для обзора. Так
+   * страница по ссылке лёгкая и на телефоне. Снимков идёт несколько сразу, но не все: каждый —
+   * скрытое окно с экраном.
+   */
+  private async renderForSharing(canvas: StoredCanvas): Promise<Map<string, SharedScreenPage>> {
+    const pages = new Map<string, SharedScreenPage>()
+    const queue = [...canvas.screens]
+    const worker = async () => {
+      for (let screen = queue.shift(); screen; screen = queue.shift()) {
+        await this.queueCheck(screenKey(canvas.id, screen.id))
+        const page = await renderScreenForSharing(
+          canvasScreenUrl(canvas.id, screen.id, screen.revision),
+          screen.width,
+          screen.height
+        )
+        if (!page) {
+          throw new CanvasError(
+            `Could not render the screen "${screen.name}" for sharing. Check that it opens without errors and try again.`
+          )
+        }
+        pages.set(screen.id, page)
+      }
+    }
+    await Promise.all(Array.from({ length: SHARE_RENDER_CONCURRENCY }, worker))
+    return pages
   }
 
   /** Закрывает ссылку: страница по ней перестаёт открываться. Не вышло закрыть — ссылка остаётся. */
