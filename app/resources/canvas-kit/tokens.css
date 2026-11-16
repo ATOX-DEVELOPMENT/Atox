@@ -1,0 +1,323 @@
+/*
+ * Atox canvas kit: дизайн-токены для Tailwind CSS v4.
+ *
+ * Как подключать (shell экрана):
+ *   1. Загрузить runtime-сборку Tailwind v4 (@tailwindcss/browser) локальным <script>.
+ *   2. Вставить этот файл целиком внутрь <style type="text/tailwindcss"> ... </style>,
+ *      сразу после строки `@import "tailwindcss";` или без неё: browser-сборка сама
+ *      подключает базовые слои. Внешних @import здесь нет и быть не должно.
+ *   3. Корневые элементы html, body и контейнер приложения должны иметь height: 100%,
+ *      тогда <Screen> заполняет кадр устройства без 100vh.
+ *
+ * Устройство: семантические цвета живут в CSS-переменных --atox-*, а @theme inline
+ * превращает их в утилиты (bg-surface, text-fg-muted, border-border, bg-accent ...).
+ * Тёмная тема включается классом `dark` на любом предке, акцент атрибутом
+ * data-accent="indigo|blue|emerald|rose|amber|violet" (их ставит компонент <Theme>).
+ */
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* Нейтральная шкала, радиусы, тени, шрифты и шкала текста. */
+@theme {
+  --color-gray-0: #ffffff;
+  --color-gray-50: #fafafa;
+  --color-gray-100: #f4f4f5;
+  --color-gray-150: #ececee;
+  --color-gray-200: #e4e4e7;
+  --color-gray-300: #d4d4d8;
+  --color-gray-400: #a1a1aa;
+  --color-gray-500: #71717a;
+  --color-gray-600: #52525b;
+  --color-gray-700: #3f3f46;
+  --color-gray-800: #27272a;
+  --color-gray-850: #1f1f23;
+  --color-gray-900: #18181b;
+  --color-gray-950: #0e0e10;
+
+  --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Inter",
+    "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-display: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Inter", "Segoe UI",
+    Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, "Liberation Mono",
+    monospace;
+
+  /* Шкала текста: размер / межстрочный / трекинг. Крупные кегли слегка поджаты. */
+  --text-2xs: 0.6875rem;
+  --text-2xs--line-height: 1rem;
+  --text-xs: 0.75rem;
+  --text-xs--line-height: 1rem;
+  --text-sm: 0.8125rem;
+  --text-sm--line-height: 1.25rem;
+  --text-base: 0.9375rem;
+  --text-base--line-height: 1.5rem;
+  --text-lg: 1.0625rem;
+  --text-lg--line-height: 1.5rem;
+  --text-xl: 1.25rem;
+  --text-xl--line-height: 1.75rem;
+  --text-xl--letter-spacing: -0.01em;
+  --text-2xl: 1.5rem;
+  --text-2xl--line-height: 2rem;
+  --text-2xl--letter-spacing: -0.015em;
+  --text-3xl: 1.875rem;
+  --text-3xl--line-height: 2.25rem;
+  --text-3xl--letter-spacing: -0.02em;
+  --text-4xl: 2.25rem;
+  --text-4xl--line-height: 2.625rem;
+  --text-4xl--letter-spacing: -0.025em;
+  --text-5xl: 3rem;
+  --text-5xl--line-height: 3.25rem;
+  --text-5xl--letter-spacing: -0.03em;
+  --text-6xl: 3.75rem;
+  --text-6xl--line-height: 4rem;
+  --text-6xl--letter-spacing: -0.035em;
+  --text-7xl: 4.5rem;
+  --text-7xl--line-height: 4.625rem;
+  --text-7xl--letter-spacing: -0.04em;
+
+  /* Радиусы: контролы md, карточки xl, листы и модалки 2xl. */
+  --radius-xs: 0.25rem;
+  --radius-sm: 0.375rem;
+  --radius-md: 0.5rem;
+  --radius-lg: 0.625rem;
+  --radius-xl: 0.875rem;
+  --radius-2xl: 1.125rem;
+  --radius-3xl: 1.5rem;
+}
+
+/* Семантические утилиты ссылаются на переменные, поэтому меняются вместе с темой. */
+@theme inline {
+  --color-canvas: var(--atox-canvas);
+  --color-canvas-subtle: var(--atox-canvas-subtle);
+  --color-surface: var(--atox-surface);
+  --color-surface-raised: var(--atox-surface-raised);
+  --color-muted: var(--atox-muted);
+  --color-muted-strong: var(--atox-muted-strong);
+  --color-border: var(--atox-border);
+  --color-border-strong: var(--atox-border-strong);
+  --color-fg: var(--atox-fg);
+  --color-fg-muted: var(--atox-fg-muted);
+  --color-fg-subtle: var(--atox-fg-subtle);
+  --color-inverse: var(--atox-inverse);
+  --color-inverse-fg: var(--atox-inverse-fg);
+
+  --color-accent: var(--atox-accent);
+  --color-accent-hover: var(--atox-accent-hover);
+  --color-accent-fg: var(--atox-accent-fg);
+  --color-accent-text: var(--atox-accent-text);
+  --color-accent-soft: var(--atox-accent-soft);
+  --color-ring: var(--atox-ring);
+
+  --color-success: var(--atox-success);
+  --color-success-text: var(--atox-success-text);
+  --color-success-soft: var(--atox-success-soft);
+  --color-warning: var(--atox-warning);
+  --color-warning-text: var(--atox-warning-text);
+  --color-warning-soft: var(--atox-warning-soft);
+  --color-danger: var(--atox-danger);
+  --color-danger-text: var(--atox-danger-text);
+  --color-danger-soft: var(--atox-danger-soft);
+  --color-info: var(--atox-info);
+  --color-info-text: var(--atox-info-text);
+  --color-info-soft: var(--atox-info-soft);
+
+  --color-chart-1: var(--atox-accent);
+  --color-chart-2: var(--atox-chart-2);
+  --color-chart-3: var(--atox-chart-3);
+  --color-chart-4: var(--atox-chart-4);
+  --color-chart-5: var(--atox-chart-5);
+
+  --shadow-xs: var(--atox-shadow-xs);
+  --shadow-sm: var(--atox-shadow-sm);
+  --shadow-md: var(--atox-shadow-md);
+  --shadow-lg: var(--atox-shadow-lg);
+  --shadow-xl: var(--atox-shadow-xl);
+}
+
+@layer base {
+  :root,
+  .light {
+    color-scheme: light;
+    --atox-canvas: #ffffff;
+    --atox-canvas-subtle: #f7f7f8;
+    --atox-surface: #ffffff;
+    --atox-surface-raised: #ffffff;
+    --atox-muted: #f4f4f5;
+    --atox-muted-strong: #e9e9ec;
+    --atox-border: #e6e6e9;
+    --atox-border-strong: #d4d4d8;
+    --atox-fg: #111113;
+    --atox-fg-muted: #5f5f69;
+    --atox-fg-subtle: #6f6f79;
+    --atox-inverse: #18181b;
+    --atox-inverse-fg: #fafafa;
+
+    --atox-success: #16a34a;
+    --atox-success-text: #15803d;
+    --atox-warning: #f59e0b;
+    --atox-warning-text: #b45309;
+    --atox-danger: #dc2626;
+    --atox-danger-text: #b91c1c;
+    --atox-info: #2563eb;
+    --atox-info-text: #1d4ed8;
+
+    --atox-chart-2: #eb6834;
+    --atox-chart-3: #1baf7a;
+    --atox-chart-4: #eda100;
+    --atox-chart-5: #e87ba4;
+
+    --atox-shadow-xs: 0 1px 2px rgb(16 16 20 / 0.05);
+    --atox-shadow-sm: 0 1px 2px rgb(16 16 20 / 0.04), 0 1px 3px rgb(16 16 20 / 0.06);
+    --atox-shadow-md: 0 1px 2px rgb(16 16 20 / 0.04), 0 4px 12px -2px rgb(16 16 20 / 0.08);
+    --atox-shadow-lg: 0 2px 4px rgb(16 16 20 / 0.04), 0 12px 32px -6px rgb(16 16 20 / 0.14);
+    --atox-shadow-xl: 0 4px 8px rgb(16 16 20 / 0.05), 0 24px 64px -12px rgb(16 16 20 / 0.22);
+  }
+
+  .dark {
+    color-scheme: dark;
+    --atox-canvas: #0e0e10;
+    --atox-canvas-subtle: #09090b;
+    --atox-surface: #141416;
+    --atox-surface-raised: #1b1b1e;
+    --atox-muted: #1c1c1f;
+    --atox-muted-strong: #27272b;
+    --atox-border: #252529;
+    --atox-border-strong: #34343a;
+    --atox-fg: #ededef;
+    --atox-fg-muted: #a1a1aa;
+    --atox-fg-subtle: #85858f;
+    --atox-inverse: #f4f4f5;
+    --atox-inverse-fg: #18181b;
+
+    --atox-success: #22a354;
+    --atox-success-text: #4ade80;
+    --atox-warning: #f59e0b;
+    --atox-warning-text: #fbbf24;
+    --atox-danger: #e5484d;
+    --atox-danger-text: #ff8a8a;
+    --atox-info: #3b82f6;
+    --atox-info-text: #7cb4ff;
+
+    --atox-chart-2: #d95926;
+    --atox-chart-3: #199e70;
+    --atox-chart-4: #c98500;
+    --atox-chart-5: #d55181;
+
+    --atox-shadow-xs: 0 1px 2px rgb(0 0 0 / 0.4);
+    --atox-shadow-sm: 0 1px 2px rgb(0 0 0 / 0.4), 0 1px 3px rgb(0 0 0 / 0.3);
+    --atox-shadow-md: 0 1px 2px rgb(0 0 0 / 0.4), 0 4px 12px -2px rgb(0 0 0 / 0.5);
+    --atox-shadow-lg: 0 2px 4px rgb(0 0 0 / 0.4), 0 12px 32px -6px rgb(0 0 0 / 0.6);
+    --atox-shadow-xl: 0 4px 8px rgb(0 0 0 / 0.4), 0 24px 64px -12px rgb(0 0 0 / 0.7);
+  }
+
+  /* Акценты: фон кнопки, наведение, текст на акценте и акцентный текст на фоне. */
+  :root,
+  [data-accent="indigo"] {
+    --atox-accent: #5b5bd6;
+    --atox-accent-hover: #4c4cc6;
+    --atox-accent-fg: #ffffff;
+    --atox-accent-text: #4646c0;
+  }
+  [data-accent="blue"] {
+    --atox-accent: #0b6bdc;
+    --atox-accent-hover: #095cc0;
+    --atox-accent-fg: #ffffff;
+    --atox-accent-text: #0a5fc7;
+  }
+  [data-accent="emerald"] {
+    --atox-accent: #047857;
+    --atox-accent-hover: #065f46;
+    --atox-accent-fg: #ffffff;
+    --atox-accent-text: #047857;
+  }
+  [data-accent="rose"] {
+    --atox-accent: #e11d48;
+    --atox-accent-hover: #c8143d;
+    --atox-accent-fg: #ffffff;
+    --atox-accent-text: #be123c;
+  }
+  [data-accent="amber"] {
+    --atox-accent: #f5a524;
+    --atox-accent-hover: #e8961a;
+    --atox-accent-fg: #1f1300;
+    --atox-accent-text: #a35a00;
+  }
+  [data-accent="violet"] {
+    --atox-accent: #7c3aed;
+    --atox-accent-hover: #6d28d9;
+    --atox-accent-fg: #ffffff;
+    --atox-accent-text: #6d28d9;
+  }
+
+  .dark,
+  .dark [data-accent="indigo"],
+  .dark[data-accent="indigo"] {
+    --atox-accent: #6262dc;
+    --atox-accent-hover: #7272e6;
+    --atox-accent-fg: #ffffff;
+    --atox-accent-text: #a5a8ff;
+  }
+  .dark [data-accent="blue"],
+  .dark[data-accent="blue"] {
+    --atox-accent: #1f74e0;
+    --atox-accent-hover: #3584ea;
+    --atox-accent-fg: #ffffff;
+    --atox-accent-text: #7cb6ff;
+  }
+  .dark [data-accent="emerald"],
+  .dark[data-accent="emerald"] {
+    --atox-accent: #10b981;
+    --atox-accent-hover: #2cc994;
+    --atox-accent-fg: #04140d;
+    --atox-accent-text: #4ade9a;
+  }
+  .dark [data-accent="rose"],
+  .dark[data-accent="rose"] {
+    --atox-accent: #e11d48;
+    --atox-accent-hover: #ee2f59;
+    --atox-accent-fg: #ffffff;
+    --atox-accent-text: #fb7185;
+  }
+  .dark [data-accent="amber"],
+  .dark[data-accent="amber"] {
+    --atox-accent: #f5b13d;
+    --atox-accent-hover: #f8bf5a;
+    --atox-accent-fg: #1f1300;
+    --atox-accent-text: #fbbf4b;
+  }
+  .dark [data-accent="violet"],
+  .dark[data-accent="violet"] {
+    --atox-accent: #7c4df0;
+    --atox-accent-hover: #8b62f5;
+    --atox-accent-fg: #ffffff;
+    --atox-accent-text: #b49cff;
+  }
+
+  /* Мягкие подложки считаются от основного цвета, поэтому работают в обеих темах. */
+  :root,
+  .light,
+  .dark,
+  [data-accent] {
+    --atox-accent-soft: color-mix(in oklab, var(--atox-accent) 12%, transparent);
+    --atox-ring: color-mix(in oklab, var(--atox-accent) 45%, transparent);
+    --atox-success-soft: color-mix(in oklab, var(--atox-success) 13%, transparent);
+    --atox-warning-soft: color-mix(in oklab, var(--atox-warning) 15%, transparent);
+    --atox-danger-soft: color-mix(in oklab, var(--atox-danger) 12%, transparent);
+    --atox-info-soft: color-mix(in oklab, var(--atox-info) 12%, transparent);
+  }
+
+  html,
+  body {
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+    font-feature-settings: "cv11", "ss01";
+  }
+
+  /* Цифры в таблицах, метриках и графиках выравниваются по ширине. */
+  .tabular,
+  table,
+  [data-numeric] {
+    font-variant-numeric: tabular-nums;
+  }
+}
