@@ -85,14 +85,14 @@ const CANVAS_DEVICES = Object.entries(SCREEN_DEVICES)
 
 const CANVAS_SKILL = `---
 name: atox-canvas
-description: Show UI designs to the user on the Atox canvas as live React screens. Use inside Atox (the ATOX_CHAT_ID environment variable is set) when the user asks to design, draw, show, mock up, prototype or preview screens, a UI, a page, a website, a dashboard, a landing page or an app screen, and whenever a message starts with "${CANVAS_MESSAGE_PREFIX}".
+description: Show UI designs, presentations and documents to the user on the Atox canvas as live React screens, and export them to PDF, PowerPoint or images. Use inside Atox (the ATOX_CHAT_ID environment variable is set) when the user asks to design, draw, show, mock up, prototype or preview screens, a UI, a page, a website, a dashboard, a landing page or an app screen, to make a presentation, slides, a commercial proposal, a report or a PDF, and whenever a message starts with "${CANVAS_MESSAGE_PREFIX}".
 ---
 
 # Atox canvas
 
-The canvas is a page in Atox where the user sees the screens of this chat side by side: phone app screens, website pages, desktop app windows. Each screen is a React component in a file of the project. Atox builds it, shows it in a device frame and watches the files: every time you edit the screen or a file it imports, the canvas rebuilds by itself. The user moves, renames and zooms screens; you only write the code.
+The canvas is a page in Atox where the user sees the screens of this chat side by side: phone app screens, website pages, desktop app windows, and also presentation slides and document pages. Each screen is a React component in a file of the project. Atox builds it, shows it in a device frame and watches the files: every time you edit the screen or a file it imports, the canvas rebuilds by itself. The user moves, renames and zooms screens; you only write the code.
 
-Before you design, read \`kit.md\` in this skill's folder once (about 230 lines): the component kit (\`@atox/ui\`) reference and the design rules. Use the kit instead of building buttons, inputs and layouts from scratch. \`examples.md\` next to it has three full screens; open it only when you want a complete example. For a small change to a screen you already built you do not need to read them again.
+Before you design, read \`kit.md\` in this skill's folder once (about 230 lines): the component kit (\`@atox/ui\`) reference and the design rules. Use the kit instead of building buttons, inputs and layouts from scratch. \`examples.md\` next to it has three full screens; open it only when you want a complete example. For a small change to a screen you already built you do not need to read them again. For a presentation, a commercial proposal or any document, also read section 8 of \`kit.md\` (slide and A4 sizes, type scale, page structure) and use the \`slide\` or \`a4\` device.
 
 Quick reference (details and props are in \`kit.md\`):
 
@@ -109,6 +109,10 @@ atox canvas screen set "Admin dashboard" .atox/canvas/admin.tsx --device web
 atox canvas screen set Widget .atox/canvas/widget.tsx --size 360x640
 atox canvas screen preview Login                               # PNG of the screen as the user sees it, plus problems
 atox canvas screen remove Login                                # removes the screen; the files stay
+atox canvas export pdf                                         # all screens to a PDF (selectable text) in the Downloads folder
+atox canvas export pdf --screens "Cover,Price" --out /abs/path/offer.pdf
+atox canvas export pptx                                        # PowerPoint, one image slide per screen
+atox canvas export png                                         # a folder of PNG images
 \`\`\`
 
 ## Workflow
@@ -120,6 +124,10 @@ atox canvas screen remove Login                                # removes the scr
 5. \`set\` and \`preview\` also report problems in plain text: "Build failed" (file:line and the error), "Errors in the running screen" (exceptions and console errors), and "Layout problems" such as "Content is 1240 px tall but the screen is 844 px: it is cut off." Fix them in the code. When the build fails, the canvas keeps the last version that built; \`atox canvas\` shows the build error of each screen.
 
 Edit files with your editor tool, not with \`sed -i\` (on macOS it differs from GNU sed and fails). A command that printed an error changed nothing: do not assume the canvas shows the new version.
+
+## Presentations and documents
+
+When the user asks for a presentation, slides, a commercial proposal, a report or "a PDF", make it on the canvas: one screen per slide or page, \`--device slide\` (1920x1080) or \`--device a4\` (794x1123), added in reading order (the export goes left to right, rows top to bottom). Follow section 8 of \`kit.md\`. Preview every page. When the user wants the file, run \`atox canvas export pdf\` and tell them the path it prints. The user can also export from the Export button on the canvas, and can ask for changes by clicking a page.
 
 The user, not you, names and arranges screens. If they renamed a screen, use the new name from \`atox canvas\`.
 
