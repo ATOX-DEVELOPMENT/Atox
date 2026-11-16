@@ -42,6 +42,8 @@ export const CANVAS_KIT_DIRECTORY = 'canvas-kit'
 /** Файл кита, с которого он собирается, и его описание для агентов. */
 export const CANVAS_KIT_ENTRY = 'index.ts'
 export const CANVAS_KIT_GUIDE = 'GUIDE.md'
+/** Готовые экраны на ките: агент открывает их, только когда нужен пример целиком. */
+export const CANVAS_KIT_EXAMPLES = 'EXAMPLES.md'
 
 /** Файл токенов кита (тема Tailwind): подставляется в страницу каждого экрана-React. */
 export const CANVAS_KIT_TOKENS = 'tokens.css'
