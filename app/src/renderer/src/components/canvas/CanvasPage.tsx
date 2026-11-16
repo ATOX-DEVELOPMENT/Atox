@@ -3,7 +3,7 @@ import { MousePointerClick } from 'lucide-react'
 import { useCanvas, useCanvasNavigation } from '../../hooks/CanvasesContext'
 import { useProjectsContext } from '../../hooks/ProjectsContext'
 import { canvasOwner, chatLabel } from '../../lib/canvasOwner'
-import { showCanvasMenu } from '../../lib/canvasMenu'
+import { showCanvasMenu, showExportMenu } from '../../lib/canvasMenu'
 import { AgentBar } from './AgentBar'
 import { CanvasEmpty } from './CanvasEmpty'
 import { CanvasHeader } from './CanvasHeader'
@@ -28,6 +28,7 @@ export function CanvasPage({ canvasId, onClose }: CanvasPageProps) {
   const [historyOpen, setHistoryOpen] = useState(false)
   const [historyScreenId, setHistoryScreenId] = useState<string | null>(null)
   const [preview, setPreview] = useState<{ screenId: string; versionId: string } | null>(null)
+  const [exporting, setExporting] = useState(false)
 
   useEffect(() => () => viewState.cancel(), [viewState])
 
@@ -92,6 +93,22 @@ export function CanvasPage({ canvasId, onClose }: CanvasPageProps) {
         onFit={() => stageRef.current?.fit()}
         onResetZoom={() => stageRef.current?.resetZoom()}
         onOpenChat={openChat}
+        exporting={exporting}
+        onExport={(event) => {
+          const anchor = event.currentTarget
+          void (async () => {
+            const format = await showExportMenu(anchor)
+            if (!format) {
+              return
+            }
+            setExporting(true)
+            try {
+              await window.atox.canvas.export(canvas.id, format)
+            } finally {
+              setExporting(false)
+            }
+          })()
+        }}
         onOpenMenu={(event) =>
           void showCanvasMenu(canvas, event.currentTarget, {
             withOpen: false,

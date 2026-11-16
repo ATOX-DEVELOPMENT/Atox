@@ -1,5 +1,13 @@
 import { useSyncExternalStore, type MouseEvent } from 'react'
-import { ArrowUpRight, Ellipsis, History, LayoutDashboard, Scan } from 'lucide-react'
+import {
+  ArrowUpRight,
+  Download,
+  Ellipsis,
+  History,
+  LayoutDashboard,
+  LoaderCircle,
+  Scan
+} from 'lucide-react'
 import { CANVAS_NAME_MAX_LENGTH, type Canvas } from '../../../../shared/canvas'
 import { chatLabel, type CanvasOwner } from '../../lib/canvasOwner'
 import { InlineRename } from '../InlineRename'
@@ -16,6 +24,9 @@ interface CanvasHeaderProps {
   onFit(): void
   onResetZoom(): void
   onOpenChat(): void
+  /** Выгрузка экранов идёт: кнопка занята. */
+  exporting: boolean
+  onExport(event: MouseEvent<HTMLButtonElement>): void
   onOpenMenu(event: MouseEvent<HTMLButtonElement>): void
 }
 
@@ -31,6 +42,8 @@ export function CanvasHeader({
   onFit,
   onResetZoom,
   onOpenChat,
+  exporting,
+  onExport,
   onOpenMenu
 }: CanvasHeaderProps) {
   const hasScreens = canvas.screens.length > 0
@@ -89,6 +102,20 @@ export function CanvasHeader({
               onClick={onFit}
             >
               <Scan className="icon" />
+            </button>
+            <button
+              type="button"
+              className="workspace-toolbar__button"
+              disabled={exporting}
+              aria-label="Export"
+              title={exporting ? 'Exporting…' : 'Export as PDF, PowerPoint or images'}
+              onClick={onExport}
+            >
+              {exporting ? (
+                <LoaderCircle className="icon canvas-header__export-spinner" />
+              ) : (
+                <Download className="icon" />
+              )}
             </button>
             <button
               type="button"
