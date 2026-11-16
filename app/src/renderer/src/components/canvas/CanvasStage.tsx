@@ -14,11 +14,8 @@ import type { Canvas, CanvasScreen, CanvasView } from '../../../../shared/canvas
 import {
   fitView,
   groupBounds,
-  inflate,
-  intersects,
   screenBounds,
   unionRect,
-  visibleArea,
   withLabel,
   wheelZoomFactor,
   zoomAround,
@@ -46,8 +43,6 @@ const WHEEL_LINE_HEIGHT = 16
 const VIEW_SAVE_DELAY = 600
 /** Сколько длится перелёт к экрану после клика, мс. */
 const FOCUS_DURATION = 380
-/** Экраны дальше этого расстояния от окна (в его размерах) не рисуются. */
-const OFFSCREEN_MARGIN = 0.5
 
 export interface CanvasStageHandle {
   /** Вписывает все экраны в окно. */
@@ -285,7 +280,8 @@ export function CanvasStage({
     return () => observer.disconnect()
   }, [viewState, fittedView])
 
-  // Вид — в transform и фон сетки; экраны далеко за краем окна не рисуются.
+  // Вид — в transform и фон сетки. Экраны за краем окна не прячутся: скрытый iframe теряет
+  // картинку, и при возвращении в кадр на миг пустеет; невидимое браузер и так не рисует.
   const applyView = useCallback(() => {
     const stage = stageRef.current
     const world = worldRef.current
@@ -296,18 +292,9 @@ export function CanvasStage({
     world.style.transform = `translate(${view.x}px, ${view.y}px) scale(${view.zoom})`
     world.style.setProperty('--z', String(view.zoom))
     stage.style.backgroundPosition = `${view.x}px ${view.y}px`
-    const viewport = viewState.viewport()
-    const area = inflate(
-      visibleArea(view, viewport),
-      (Math.max(viewport.width, viewport.height) * OFFSCREEN_MARGIN) / view.zoom
-    )
-    for (const element of world.querySelectorAll<HTMLElement>('[data-screen-id]')) {
-      const rect = boundsRef.current.get(element.dataset.screenId ?? '')
-      element.dataset.offscreen = String(!rect || !intersects(rect, area))
-    }
   }, [viewState])
   useEffect(() => viewState.subscribe(applyView), [viewState, applyView])
-  // Экраны могли сдвинуться или добавиться: их видимость пересчитывается после отрисовки.
+  // Вид нужно применить и после отрисовки: холст мог только что появиться.
   useLayoutEffect(applyView)
 
   // Колесо слушается напрямую: React вешает его пассивным, и холст не смог бы отменить прокрутку.
