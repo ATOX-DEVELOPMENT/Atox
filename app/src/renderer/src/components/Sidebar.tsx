@@ -1,5 +1,13 @@
 import { useState } from 'react'
-import { Bot, FolderPlus, GitPullRequest, SquareKanban, SquarePen } from 'lucide-react'
+import {
+  Bot,
+  FolderPlus,
+  GitPullRequest,
+  LayoutDashboard,
+  SquareKanban,
+  SquarePen
+} from 'lucide-react'
+import { useCanvases } from '../hooks/CanvasesContext'
 import { useProjectsContext } from '../hooks/ProjectsContext'
 import { useGitBranches } from '../hooks/useGitBranches'
 import { useSettings } from '../hooks/SettingsContext'
@@ -28,10 +36,13 @@ interface SidebarProps {
   agentsOpen: boolean
   /** Открыта доска задач. */
   boardOpen: boolean
+  /** Открыт список холстов. */
+  canvasListOpen: boolean
   onOpenSettings(): void
   onToggleRepository(): void
   onToggleAgents(): void
   onToggleBoard(): void
+  onToggleCanvasList(): void
   onOpenRepository(projectId: string): void
 }
 
@@ -39,10 +50,12 @@ export function Sidebar({
   repositoryOpen,
   agentsOpen,
   boardOpen,
+  canvasListOpen,
   onOpenSettings,
   onToggleRepository,
   onToggleAgents,
   onToggleBoard,
+  onToggleCanvasList,
   onOpenRepository
 }: SidebarProps) {
   const {
@@ -58,6 +71,9 @@ export function Sidebar({
   } = useProjectsContext()
   const { sidebarWidth, sidebarButtons } = useSettings()
   const branches = useGitBranches()
+  const canvases = useCanvases()
+  // Холсты в архиве не считаются: их нет и в списке чатов.
+  const canvasCount = canvases?.filter(({ archived }) => !archived).length
   // Пока тянут край, ширина живёт здесь; в настройки попадает только итоговая.
   const [draftWidth, setDraftWidth] = useState<number | null>(null)
   const [limitsShown, setLimitsShown] = useState(() => localStorage.getItem(LIMITS_SHOWN_KEY) === '1')
@@ -89,6 +105,13 @@ export function Sidebar({
         />
         <SidebarButton icon={Bot} label="Agents" active={agentsOpen} onClick={onToggleAgents} />
         <SidebarButton icon={SquareKanban} label="Board" active={boardOpen} onClick={onToggleBoard} />
+        <SidebarButton
+          icon={LayoutDashboard}
+          label="Canvases"
+          count={canvasCount}
+          active={canvasListOpen}
+          onClick={onToggleCanvasList}
+        />
       </nav>
 
       <div className="sidebar__spaces">
