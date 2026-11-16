@@ -139,7 +139,9 @@ export function HistoryDrawer({
           <ol className="history-drawer__list">
             {versions.versions.map((version, index) => {
               const current = index === 0
-              const previewed = current ? previewVersionId === null : previewVersionId === version.id
+              const previewed = current
+                ? previewVersionId === null
+                : previewVersionId === version.id
               return (
                 <li key={version.id} className="version" data-current={current}>
                   <button
@@ -150,9 +152,14 @@ export function HistoryDrawer({
                     onClick={() => onPreview(current ? null : version.id)}
                   >
                     <span className="version__meta">
-                      {current && <span className="version__badge version__badge--current">Current</span>}
+                      {current && (
+                        <span className="version__badge version__badge--current">Current</span>
+                      )}
                       <span className="version__badge">{CAUSE_LABELS[version.cause]}</span>
-                      <time dateTime={new Date(version.savedAt).toISOString()} title={formatFullDate(version.savedAt)}>
+                      <time
+                        dateTime={new Date(version.savedAt).toISOString()}
+                        title={formatFullDate(version.savedAt)}
+                      >
                         {formatSavedAt(version.savedAt)}
                       </time>
                     </span>
@@ -162,7 +169,11 @@ export function HistoryDrawer({
                   </button>
                   {!current &&
                     (confirmingId === version.id ? (
-                      <div className="version__actions" role="group" aria-label="Restore this version">
+                      <div
+                        className="version__actions"
+                        role="group"
+                        aria-label="Restore this version"
+                      >
                         <span className="version__question">Replace the current file?</span>
                         <button
                           type="button"

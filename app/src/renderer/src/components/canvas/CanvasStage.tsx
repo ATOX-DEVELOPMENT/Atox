@@ -354,7 +354,9 @@ export function CanvasStage({
             next.delete(screenId)
             return next
           })
-        void window.atox.canvas.moveScreen(canvasId, screenId, position.x, position.y).then(settle, settle)
+        void window.atox.canvas
+          .moveScreen(canvasId, screenId, position.x, position.y)
+          .then(settle, settle)
       }
       target.addEventListener('pointermove', onMove)
       target.addEventListener('pointerup', onEnd)
@@ -387,12 +389,7 @@ export function CanvasStage({
   const allBounds = useMemo((): Rect[] => [...bounds.values()], [bounds])
 
   return (
-    <div
-      ref={stageRef}
-      className="canvas-stage"
-      data-panning={panning}
-      onPointerDown={startPan}
-    >
+    <div ref={stageRef} className="canvas-stage" data-panning={panning} onPointerDown={startPan}>
       <div ref={worldRef} className="canvas-stage__world">
         {screens.map((screen) => (
           <ScreenFrame

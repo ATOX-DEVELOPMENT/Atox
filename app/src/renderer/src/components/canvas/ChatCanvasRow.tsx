@@ -1,11 +1,7 @@
 import { memo, useState, type MouseEvent } from 'react'
 import { LayoutDashboard } from 'lucide-react'
 import { CANVAS_NAME_MAX_LENGTH } from '../../../../shared/canvas'
-import {
-  useCanvasNavigation,
-  useCanvasOpened,
-  useChatCanvas
-} from '../../hooks/CanvasesContext'
+import { useCanvasNavigation, useCanvasOpened, useChatCanvas } from '../../hooks/CanvasesContext'
 import { showCanvasMenu } from '../../lib/canvasMenu'
 import { InlineRename } from '../InlineRename'
 

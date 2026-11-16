@@ -164,10 +164,8 @@ export function placeBeside(
   gap: number,
   margin: number
 ): Point {
-  const clampX = (x: number) =>
-    Math.max(margin, Math.min(x, viewport.width - margin - box.width))
-  const clampY = (y: number) =>
-    Math.max(margin, Math.min(y, viewport.height - margin - box.height))
+  const clampX = (x: number) => Math.max(margin, Math.min(x, viewport.width - margin - box.width))
+  const clampY = (y: number) => Math.max(margin, Math.min(y, viewport.height - margin - box.height))
   const startX = clampX(target.x)
   const endX = clampX(target.x + target.width - box.width)
   const below = target.y + target.height + gap

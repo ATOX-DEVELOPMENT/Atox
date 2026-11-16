@@ -36,7 +36,11 @@ export function CanvasEmpty({ canvasId, chatTitle, onOpenChat }: CanvasEmptyProp
           />
         ) : (
           <div className="canvas-empty__actions">
-            <button type="button" className="canvas-button canvas-button--primary" onClick={onOpenChat}>
+            <button
+              type="button"
+              className="canvas-button canvas-button--primary"
+              onClick={onOpenChat}
+            >
               Open chat
             </button>
             <button type="button" className="canvas-button" onClick={() => setAsking(true)}>
