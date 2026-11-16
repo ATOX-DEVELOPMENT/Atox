@@ -5734,8 +5734,10 @@ ul {
   transform-origin: 0 100%;
 }
 
+/* Имя экрана сжимается последним: сначала уступает подпись устройства. */
 .canvas-screen__name {
-  min-width: 0;
+  flex-shrink: 0;
+  max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
   font-weight: 500;
@@ -5743,7 +5745,6 @@ ul {
 }
 
 .canvas-screen__device {
-  flex-shrink: 2;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
