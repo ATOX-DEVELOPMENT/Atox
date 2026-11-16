@@ -8,7 +8,7 @@ export interface PaginationProps {
   page?: number
   defaultPage?: number
   onChange?: (page: number) => void
-  /** Текст слева: "Showing 21–40 of 312". */
+  /** Текст слева: "Showing 21 to 40 of 312". */
   summary?: string
   className?: string
 }

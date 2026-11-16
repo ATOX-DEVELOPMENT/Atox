@@ -21,7 +21,7 @@ export interface TabBarProps {
   className?: string
 }
 
-/** Нижняя панель вкладок телефона: 3–5 пунктов, активный в цвете акцента. */
+/** Нижняя панель вкладок телефона: от 3 до 5 пунктов, активный в цвете акцента. */
 export function TabBar({ items, value, defaultValue, onChange, homeIndicator = true, className }: TabBarProps) {
   const [current, setCurrent] = useControllable(value, defaultValue ?? items[0]?.value ?? '', onChange)
   return (
