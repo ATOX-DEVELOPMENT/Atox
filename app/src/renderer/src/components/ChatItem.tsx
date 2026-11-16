@@ -4,16 +4,19 @@ import {
   ChevronDown,
   Columns2,
   GitFork,
+  LayoutDashboard,
   Pencil,
   Trash2
 } from 'lucide-react'
 import { findAgent } from '../../../shared/agents'
 import type { Chat } from '../../../shared/models'
 import { isCommandClick } from '../../../shared/shortcuts'
+import { useCanvasNavigation, useChatCanvas } from '../hooks/CanvasesContext'
 import { useChatActivity } from '../hooks/ChatActivityContext'
 import { useProjectActions } from '../hooks/ProjectsContext'
 import { showMenu } from '../lib/menu'
 import { AgentIcon } from './AgentIcon'
+import { ChatCanvasRow } from './canvas/ChatCanvasRow'
 import { ChatStatus } from './ChatStatus'
 import { InlineRename } from './InlineRename'
 import { useSortableItem } from './SortableList'
@@ -67,6 +70,7 @@ export const ChatItem = memo(function ChatItem({
         onRenamingChange={setRenaming}
         dragHandleProps={handleProps}
       />
+      <ChatCanvasRow chatId={chat.id} />
       {hasWorkers && (
         <>
           <button
@@ -119,6 +123,7 @@ function WorkerItem({ chat, ...selection }: { chat: Chat } & RowSelection) {
         renaming={renaming}
         onRenamingChange={setRenaming}
       />
+      <ChatCanvasRow chatId={chat.id} compact />
     </li>
   )
 }
@@ -149,6 +154,9 @@ function ChatRow({
   // Только действия: строка перерисовывается, лишь когда меняются её собственные данные.
   const { selectChat, openChatBeside, renameChat, forkChat, archiveChat, removeChat } =
     useProjectActions()
+  // У чата не больше одного холста вне архива: пункт меню открывает его или создаёт новый.
+  const canvas = useChatCanvas(chat.id)
+  const { openCanvas } = useCanvasNavigation()
 
   const openContextMenu = async (event: MouseEvent) => {
     event.preventDefault()
@@ -161,9 +169,14 @@ function ChatRow({
                 label: 'Open to the Side',
                 icon: <Columns2 />
               },
-              { type: 'separator' as const }
             ]
           : []),
+        {
+          action: 'canvas',
+          label: canvas ? 'Open canvas' : 'Create canvas',
+          icon: <LayoutDashboard />
+        },
+        { type: 'separator' },
         { action: 'rename', label: 'Rename', icon: <Pencil /> },
         { action: 'fork', label: 'Fork chat', icon: <GitFork /> },
         { type: 'separator' },
@@ -174,6 +187,8 @@ function ChatRow({
     )
     if (action === 'open-beside') {
       openChatBeside(chat.id)
+    } else if (action === 'canvas') {
+      openCanvas(canvas?.id ?? (await window.atox.canvas.create(chat.id)))
     } else if (action === 'rename') {
       onRenamingChange(true)
     } else if (action === 'fork') {
