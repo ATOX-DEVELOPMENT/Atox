@@ -126,13 +126,17 @@ if (placeOnCanvas && done.length > 0) {
   // Ряды по смыслу — из layout.mjs; состояния, которых там нет, уходят в последний ряд.
   const { rows: layout } = await import('./layout.mjs')
   const titles = new Map(done.map((state) => [state.id, state.title]))
-  const rows = layout
-    .map((ids) => ids.flatMap((id) => titles.get(id) ?? []))
-    .filter((row) => row.length > 0)
+  const groups = layout
+    .map(({ name, ids }) => ({ name, titles: ids.flatMap((id) => titles.get(id) ?? []) }))
+    .filter(({ titles: row }) => row.length > 0)
   try {
-    atox('canvas', 'arrange', ...rows.map((row) => row.join(',')))
+    atox('canvas', 'arrange', ...groups.map(({ titles: row }) => row.join(',')))
+    // Каждый ряд — в рамке с названием, чтобы нужный экран находился сразу.
+    for (const { name, titles: row } of groups) {
+      atox('canvas', 'group', name, ...row)
+    }
   } catch {
-    console.log('This Atox has no `canvas arrange` yet: screens stay in one row until it is updated.')
+    console.log('This Atox has no `canvas arrange` or `canvas group` yet: screens stay in one row until it is updated.')
   }
 console.log(`Placed ${done.length} screens on the canvas.`)
 }
