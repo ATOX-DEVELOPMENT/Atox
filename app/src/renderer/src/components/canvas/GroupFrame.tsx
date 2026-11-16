@@ -1,5 +1,5 @@
 import { memo, useState, type CSSProperties, type MouseEvent, type PointerEvent } from 'react'
-import { EllipsisVertical, Layers, Pencil, Ungroup } from 'lucide-react'
+import { EllipsisVertical, Pencil, Ungroup } from 'lucide-react'
 import { CANVAS_NAME_MAX_LENGTH, type CanvasGroup } from '../../../../shared/canvas'
 import type { Rect } from '../../lib/canvasView'
 import { showMenu } from '../../lib/menu'
@@ -37,8 +37,7 @@ export const GroupFrame = memo(function GroupFrame({
   const style = {
     transform: `translate(${rect.x}px, ${rect.y}px)`,
     width: rect.width,
-    '--group-width': rect.width,
-    '--group-height': rect.height
+    height: rect.height
   } as CSSProperties
 
   const rename = (name: string) => {
@@ -84,7 +83,6 @@ export const GroupFrame = memo(function GroupFrame({
             // Клик мышью уже обработан протяжкой; здесь — Enter и пробел (у них `detail` равен 0).
             onClick={(event) => event.detail === 0 && onFocus(group.id)}
           >
-            <Layers className="icon" aria-hidden />
             <span className="canvas-group__name">{group.name}</span>
           </button>
         )}

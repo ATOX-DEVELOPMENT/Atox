@@ -53,13 +53,19 @@ export function screenFrame(screen: Pick<CanvasScreen, 'device'>): ScreenFrame {
 }
 
 /**
- * Место над экраном под его подпись, в пикселях окна: подпись не масштабируется вместе с холстом.
- * Чуть больше высоты подписи (`--canvas-label-height` и `--canvas-label-gap` в global.css).
+ * Высота подписи над экраном, в пикселях холста: подпись стоит на месте и масштабируется вместе
+ * с холстом. Равна `--canvas-label-height` и `--canvas-label-gap` в global.css.
  */
-export const SCREEN_LABEL_SPACE = 32
+export const SCREEN_LABEL_HEIGHT = 64
 
-/** Место над рамкой группы под её заголовок, в пикселях окна (`--canvas-group-lift` в global.css). */
-export const GROUP_HEADER_SPACE = 56
+/** Прямоугольник вместе с подписью над ним. */
+export function withLabel(rect: Rect): Rect {
+  return {
+    ...rect,
+    y: rect.y - SCREEN_LABEL_HEIGHT,
+    height: rect.height + SCREEN_LABEL_HEIGHT
+  }
+}
 
 /** Экран вместе с рамкой устройства: (x, y) экрана — угол самой рамки. */
 export function screenBounds(screen: CanvasScreen, position: Point = screen): Rect {
