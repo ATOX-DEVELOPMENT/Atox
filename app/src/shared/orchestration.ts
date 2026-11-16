@@ -49,6 +49,19 @@ export interface WorkerInfo {
   startedAt: number
 }
 
+/** Экран на холсте чата, как его видит агент. */
+export interface CanvasScreenInfo {
+  name: string
+  /** Устройство из списка холста или `custom` — свой размер. */
+  device: string
+  width: number
+  height: number
+  /** Абсолютный путь к HTML-файлу экрана. */
+  file: string
+  /** Файла нет или он не читается: холст показывает последнюю сохранённую версию. */
+  missing: boolean
+}
+
 /** Команды и их параметры/результаты. */
 export interface OrchestrationMethods {
   agents: { params: Record<string, never>; result: AgentInfo[] }
@@ -67,6 +80,30 @@ export interface OrchestrationMethods {
   workers: { params: Record<string, never>; result: WorkerInfo[] }
   /** Останавливает помощников и убирает их чаты из списка. */
   remove: { params: { chatIds: string[] }; result: { removed: string[] } }
+  /** Холст чата и его экраны; `null` — холста у чата нет. */
+  canvas: {
+    params: Record<string, never>
+    result: { name: string; screens: CanvasScreenInfo[] } | null
+  }
+  /**
+   * Ставит на холст чата экран из HTML-файла или обновляет экран с тем же именем (без учёта
+   * регистра). Холста нет — он создаётся. `file` — абсолютный путь, `size` — `WxH`.
+   */
+  canvasScreenSet: {
+    params: { name: string; file: string; device?: string; size?: string }
+    result: {
+      canvas: string
+      screen: string
+      canvasCreated: boolean
+      created: boolean
+      device: string
+      width: number
+      height: number
+      file: string
+    }
+  }
+  /** Убирает экран с холста; HTML-файл остаётся. */
+  canvasScreenRemove: { params: { name: string }; result: { screen: string } }
 }
 
 export type OrchestrationMethod = keyof OrchestrationMethods
