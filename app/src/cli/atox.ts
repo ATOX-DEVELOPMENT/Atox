@@ -48,14 +48,14 @@ Show screens (app, website, desktop UI) to the user on this chat's canvas.
                                            build errors, runtime errors and content that does
                                            not fit the screen.
   atox canvas screen remove <name>         Remove a screen from the canvas (the file stays)
-  atox canvas link <from> <to> [--label "Tap Sign in"] [--on "Sign in"]
-                                           Draw an arrow from one screen to another so the user
-                                           sees what follows what. --on starts the arrow at a
-                                           button of the "from" screen (its text or a CSS
-                                           selector); without it the arrow starts at the screen.
-                                           Run it again for the same pair to change the label.
+  atox canvas link <from> <to> [--on "Sign in"]
+                                           Draw a line from one screen to another so the user
+                                           sees what follows what: it starts with a dot on the
+                                           "from" screen and ends at the "to" screen. --on starts
+                                           it at a button of the "from" screen (its text or a CSS
+                                           selector); without it the line starts at the screen.
   atox canvas link remove <from> <to> [--on "Sign in"]
-                                           Remove the arrows between two screens (or only the one
+                                           Remove the lines between two screens (or only the one
                                            that starts at that button)
   atox canvas export <pdf|png|pptx> [--screens "Name,Name"] [--out <path>]
                                            Export the screens to a file for the user to send or
@@ -197,13 +197,12 @@ async function canvas(args: string[]): Promise<string> {
         `${name}\t${device} ${width}x${height}\t${file}${missing ? '\tfile missing' : ''}${buildError ? `\tbuild failed: ${buildError}` : ''}`
     )
     const arrows = shown.links.map(
-      ({ from, to, label, on }) =>
-        `${from} -> ${to}${on ? `\tfrom "${on}"` : ''}${label ? `\t${label}` : ''}`
+      ({ from, to, on }) => `${from} -> ${to}${on ? `\tfrom "${on}"` : ''}`
     )
     return [
       `Canvas "${shown.name}", ${count}. Edit a screen's file and the canvas updates by itself.`,
       ...lines,
-      ...(arrows.length > 0 ? ['Arrows:', ...arrows] : [])
+      ...(arrows.length > 0 ? ['Lines:', ...arrows] : [])
     ].join('\n')
   }
   if (group === 'screen' && action === 'set') {
@@ -252,16 +251,16 @@ async function canvas(args: string[]): Promise<string> {
   }
   if (group === 'link') {
     const removing = action === 'remove'
-    const { values, positional } = parseFlags(removing ? rest : [action, ...rest].filter((part) => part !== undefined), [
-      'label',
-      'on'
-    ])
+    const { values, positional } = parseFlags(
+      removing ? rest : [action, ...rest].filter((part) => part !== undefined),
+      ['on']
+    )
     const [from, to] = positional
     if (!from || !to || positional.length > 2) {
       throw new UsageError(
         removing
           ? 'Usage: atox canvas link remove <from> <to> [--on "Sign in"]'
-          : 'Usage: atox canvas link <from> <to> [--label "Tap Sign in"] [--on "Sign in"]'
+          : 'Usage: atox canvas link <from> <to> [--on "Sign in"]'
       )
     }
     if (removing) {
@@ -271,21 +270,20 @@ async function canvas(args: string[]): Promise<string> {
         ...(values['on'] !== undefined && { on: values['on'] })
       })
       return removed === 0
-        ? `There was no arrow from "${from}" to "${to}".`
-        : `Removed ${removed === 1 ? '1 arrow' : `${removed} arrows`} from "${from}" to "${to}".`
+        ? `There was no line from "${from}" to "${to}".`
+        : `Removed ${removed === 1 ? '1 line' : `${removed} lines`} from "${from}" to "${to}".`
     }
     const result = await call('canvasLinkSet', {
       from,
       to,
-      ...(values['label'] !== undefined && { label: values['label'] }),
       ...(values['on'] !== undefined && { on: values['on'] })
     })
     const route = `"${result.from}" -> "${result.to}"`
     return [
-      `${result.created ? 'Added' : 'Updated'} the arrow ${route}${result.on ? ` from "${result.on}"` : ''}${result.label ? `, labelled "${result.label}"` : ''}.`,
+      `${result.created ? 'Added' : 'There already was'} the line ${route}${result.on ? ` from "${result.on}"` : ''}.`,
       ...(result.elementMissing
         ? [
-            `Warning: no visible element "${result.on}" on "${result.from}", so the arrow starts at the screen. Use the exact text of the button or a CSS selector, and run the command again.`
+            `Warning: no visible element "${result.on}" on "${result.from}", so the line starts at the screen. Use the exact text of the button or a CSS selector, and run the command again.`
           ]
         : [])
     ].join('\n')

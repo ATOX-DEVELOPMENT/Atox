@@ -590,6 +590,25 @@ export function registerIpcHandlers({
       await canvas.remove(id)
     }
   })
+  ipcMain.handle(IpcChannel.CanvasRemoveScreen, async (event, canvasId: unknown, screenId: unknown) => {
+    const id = requireId(canvasId)
+    const screen = requireId(screenId)
+    const target = canvas
+      .state()
+      .canvases.find((other) => other.id === id)
+      ?.screens.find((other) => other.id === screen)
+    if (!target) {
+      throw new Error('The screen was not found.')
+    }
+    const confirmed = await confirm(BrowserWindow.fromWebContents(event.sender), {
+      message: `Remove “${target.name}” from the canvas?`,
+      detail: 'The screen file stays in the project.',
+      confirmLabel: 'Remove'
+    })
+    if (confirmed) {
+      await canvas.removeScreenById(id, screen)
+    }
+  })
   ipcMain.handle(IpcChannel.CanvasExport, async (event, canvasId: unknown, format: unknown) => {
     const id = requireId(canvasId)
     if (!isCanvasExportFormat(format)) {

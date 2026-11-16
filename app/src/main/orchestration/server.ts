@@ -315,14 +315,13 @@ export class OrchestrationServer {
       return this.services.canvas.previewScreen(caller.chat.id, name)
     },
 
-    canvasLinkSet: (caller, { from, to, label, on }) => {
+    canvasLinkSet: (caller, { from, to, on }) => {
       if (typeof from !== 'string' || typeof to !== 'string' || !from.trim() || !to.trim()) {
         throw new CommandError('Specify the names of the two screens.')
       }
       return this.services.canvas.setLink(caller.chat.id, {
         from,
         to,
-        ...(typeof label === 'string' && { label }),
         ...(typeof on === 'string' && { on })
       })
     },

@@ -321,6 +321,11 @@ export interface AtoxApi {
      * бросает ошибку.
      */
     request(canvasId: string, text: string, screenId?: string): Promise<void>
+    /**
+     * Убирает экран с холста после подтверждения в системном диалоге. Файл экрана остаётся
+     * в проекте: он принадлежит проекту.
+     */
+    removeScreen(canvasId: string, screenId: string): Promise<void>
     history(canvasId: string, screenId: string): Promise<ScreenVersion[]>
     /** Записывает снимок версии в файл экрана; агент и холст видят его как обычную правку. */
     restore(canvasId: string, screenId: string, versionId: string): Promise<void>
@@ -427,6 +432,7 @@ export const IpcChannel = {
   CanvasSetView: 'canvas:set-view',
   CanvasArchive: 'canvas:archive',
   CanvasRemove: 'canvas:remove',
+  CanvasRemoveScreen: 'canvas:remove-screen',
   CanvasRequest: 'canvas:request',
   CanvasHistory: 'canvas:history',
   CanvasRestore: 'canvas:restore',

@@ -98,6 +98,9 @@
   --canvas-label-height: 22px;
   --canvas-label-gap: 8px;
   --canvas-label-font-size: 13px;
+  --canvas-link-width: 2px;
+  --canvas-link-dot: 5px;
+  --canvas-link-dot-ring: var(--color-menu);
   --canvas-ring-gap: 8px;
   --canvas-ring-width: 2px;
   --canvas-hover-ring-width: 1.5px;
@@ -5686,6 +5689,30 @@ ul {
   top: 0;
   transform-origin: 0 0;
   will-change: transform;
+}
+
+.canvas-links {
+  position: absolute;
+  left: 0;
+  top: 0;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.canvas-link__line {
+  fill: none;
+  stroke: var(--color-accent);
+  stroke-width: var(--canvas-link-width);
+  stroke-linecap: round;
+  vector-effect: non-scaling-stroke;
+}
+
+.canvas-link__dot {
+  r: calc(var(--canvas-link-dot) / var(--z));
+  fill: var(--color-accent);
+  stroke: var(--canvas-link-dot-ring);
+  stroke-width: 2px;
+  vector-effect: non-scaling-stroke;
 }
 
 .canvas-screen {

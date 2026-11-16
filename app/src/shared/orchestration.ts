@@ -82,13 +82,13 @@ export interface OrchestrationMethods {
   workers: { params: Record<string, never>; result: WorkerInfo[] }
   /** Останавливает помощников и убирает их чаты из списка. */
   remove: { params: { chatIds: string[] }; result: { removed: string[] } }
-  /** Холст чата, его экраны и стрелки между ними; `null` — холста у чата нет. */
+  /** Холст чата, его экраны и линии между ними; `null` — холста у чата нет. */
   canvas: {
     params: Record<string, never>
     result: {
       name: string
       screens: CanvasScreenInfo[]
-      links: { from: string; to: string; label: string | null; on: string | null }[]
+      links: { from: string; to: string; on: string | null }[]
     } | null
   }
   /**
@@ -126,21 +126,20 @@ export interface OrchestrationMethods {
     }
   }
   /**
-   * Ставит стрелку между двумя экранами (по именам): что за чем идёт. С `on` стрелка начинается
-   * у кнопки экрана `from` (её текст или CSS-селектор). Та же пара и кнопка обновляют подпись.
+   * Ставит линию между двумя экранами (по именам): что за чем идёт. С `on` линия начинается
+   * у кнопки экрана `from` (её текст или CSS-селектор).
    */
   canvasLinkSet: {
-    params: { from: string; to: string; label?: string; on?: string }
+    params: { from: string; to: string; on?: string }
     result: {
       from: string
       to: string
-      label: string | null
       on: string | null
       created: boolean
       elementMissing: boolean
     }
   }
-  /** Убирает стрелки между экранами; с `on` — только от этой кнопки. */
+  /** Убирает линии между экранами; с `on` — только от этой кнопки. */
   canvasLinkRemove: {
     params: { from: string; to: string; on?: string }
     result: { removed: number }
