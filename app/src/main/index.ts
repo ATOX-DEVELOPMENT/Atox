@@ -9,7 +9,11 @@ import { ConversationManager } from './conversations/manager'
 import { TranscriptStore } from './conversations/transcripts'
 import { installDesktopEntry } from './desktopEntry'
 import { GitBranchTracker } from './gitBranches'
-import { CANVAS_KIT_DIRECTORY, CANVAS_VENDOR_DIRECTORY } from '../shared/canvasRuntime'
+import {
+  CANVAS_KIT_DIRECTORY,
+  CANVAS_KIT_GUIDE,
+  CANVAS_VENDOR_DIRECTORY
+} from '../shared/canvasRuntime'
 import { handleImageProtocol, IMAGE_SCHEME } from './imageProtocol'
 import { CANVAS_SCHEME, handleCanvasProtocol } from './canvas/protocol'
 import { canvasResourcePath } from './canvas/resources'
@@ -205,7 +209,9 @@ async function bootstrap(): Promise<void> {
     .start()
     .catch((error) => console.error('Failed to start orchestration', error))
   app.on('will-quit', () => orchestration.stop())
-  void installSkills().catch((error) => console.error('Failed to install agent skills', error))
+  void installSkills(join(canvasResourcePath(CANVAS_KIT_DIRECTORY), CANVAS_KIT_GUIDE)).catch(
+    (error) => console.error('Failed to install agent skills', error)
+  )
   void installCodexRules().catch((error) => console.error('Failed to install Codex rules', error))
   if (app.isPackaged && appImage) {
     void installDesktopEntry(appImage).catch((error) =>
