@@ -5763,14 +5763,18 @@ ul {
   align-items: center;
   gap: 4px;
   min-width: 0;
+}
+
+.canvas-screen__note-text {
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
-  color: var(--color-attention);
 }
 
 .canvas-screen__note .icon {
   width: 12px;
   height: 12px;
+  color: var(--color-attention);
 }
 
 .canvas-screen__tag {

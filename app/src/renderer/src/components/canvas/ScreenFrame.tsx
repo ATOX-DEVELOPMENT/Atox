@@ -90,11 +90,15 @@ export const ScreenFrame = memo(function ScreenFrame({
           </span>
         )}
         <span className="canvas-screen__device">{describeDevice(screen)}</span>
-        {screen.missing && (
-          <span className="canvas-screen__note">
-            <TriangleAlert className="icon" aria-hidden />
-            File not found, showing the last saved version
-          </span>
+        {screen.missing ? (
+          <ScreenNote text="File not found, showing the last saved version" />
+        ) : (
+          screen.buildError && (
+            <ScreenNote
+              text="Build failed, showing the last working version"
+              detail={screen.buildError}
+            />
+          )
         )}
         {previewVersionId && <span className="canvas-screen__tag">Older version</span>}
       </div>
@@ -123,6 +127,16 @@ export const ScreenFrame = memo(function ScreenFrame({
     </div>
   )
 })
+
+/** Тихое предупреждение в подписи экрана; полный текст — в подсказке. */
+function ScreenNote({ text, detail }: { text: string; detail?: string }) {
+  return (
+    <span className="canvas-screen__note" title={detail ?? text}>
+      <TriangleAlert className="icon" aria-hidden />
+      <span className="canvas-screen__note-text">{text}</span>
+    </span>
+  )
+}
 
 /** Полоса окна или браузера над экраном: кнопки светофора и адрес. */
 function DeviceChrome({ frame, file }: { frame: FrameKind; file: string }) {
