@@ -1,4 +1,3 @@
-import { cn } from '../../lib/cn'
 import { ChartFrame } from './Frame'
 import { toneColor, type ChartTone } from './geometry'
 
@@ -42,10 +41,10 @@ export function BarChart({
         {(top) => (
           <div className="absolute inset-0 flex items-end">
             {items.map((item, index) => (
-              <div key={`${item.label}-${index}`} className="flex h-full flex-1 items-end justify-center px-[18%]">
+              <div key={`${item.label}-${index}`} className="flex h-full flex-1 items-end justify-center">
                 <div
                   title={`${item.label}: ${item.value}`}
-                  className={cn('w-full max-w-10 rounded-t-[4px] transition-opacity')}
+                  className="w-[60%] max-w-10 rounded-t-[4px] transition-opacity"
                   style={{
                     height: `${(item.value / top) * 100}%`,
                     background: color,

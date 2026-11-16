@@ -17,10 +17,10 @@ export const statusIcon: Record<StatusTone, LucideIcon> = {
 
 const surfaceTone: Record<StatusTone, string> = {
   neutral: 'bg-muted border-border',
-  info: 'bg-info-soft border-info/25',
-  success: 'bg-success-soft border-success/25',
-  warning: 'bg-warning-soft border-warning/30',
-  danger: 'bg-danger-soft border-danger/25'
+  info: 'bg-info/6 border-info/20',
+  success: 'bg-success/6 border-success/20',
+  warning: 'bg-warning/8 border-warning/25',
+  danger: 'bg-danger/6 border-danger/20'
 }
 
 export interface AlertProps {

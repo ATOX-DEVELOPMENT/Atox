@@ -5,7 +5,7 @@ export interface CtaBandProps {
   title: ReactNode
   description?: ReactNode
   actions: ReactNode
-  /** accent: заливка акцентом; muted: спокойная плашка; inverse: тёмная плашка в светлой теме. */
+  /** accent: заливка акцентом; muted: спокойная плашка; inverse: тёмная плашка (в тёмной теме приподнятая поверхность). */
   tone?: 'accent' | 'muted' | 'inverse'
   className?: string
 }
@@ -13,7 +13,7 @@ export interface CtaBandProps {
 const ctaTone = {
   accent: 'bg-accent text-accent-fg',
   muted: 'bg-muted text-fg border border-border',
-  inverse: 'bg-inverse text-inverse-fg'
+  inverse: 'bg-gray-950 text-white dark:border dark:border-border dark:bg-surface-raised'
 } as const
 
 /** Плашка призыва к действию перед подвалом. */

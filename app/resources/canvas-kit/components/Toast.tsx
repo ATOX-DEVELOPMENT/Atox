@@ -13,7 +13,7 @@ export interface ToastProps {
   /** Короткое действие: «Undo», «View». */
   action?: ReactNode
   onDismiss?: () => void
-  /** Прижать к углу экрана; родитель должен быть relative (Screen уже такой). */
+  /** Прижать к краю экрана; bottom стоит над TabBar. Родитель relative (Screen уже такой). */
   placement?: 'inline' | 'bottom-right' | 'bottom' | 'top'
   className?: string
 }
@@ -21,8 +21,8 @@ export interface ToastProps {
 const placementClass = {
   inline: '',
   'bottom-right': 'absolute right-6 bottom-6 z-30',
-  bottom: 'absolute inset-x-4 bottom-6 z-30 mx-auto',
-  top: 'absolute inset-x-4 top-14 z-30 mx-auto'
+  bottom: 'absolute inset-x-4 bottom-[100px] z-30 mx-auto w-auto',
+  top: 'absolute inset-x-4 top-[58px] z-30 mx-auto w-auto'
 } as const
 
 /** Всплывающее уведомление, показанное в момент появления. */

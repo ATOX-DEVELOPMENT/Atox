@@ -52,7 +52,7 @@ export function Table<Row>({
         <thead>
           <tr className="border-b border-border">
             {selectable && (
-              <th className="w-10 pl-4">
+              <th className="w-10 pl-5">
                 <Checkbox
                   aria-label="Select all"
                   checked={allSelected}
@@ -65,7 +65,7 @@ export function Table<Row>({
                 key={column.key}
                 scope="col"
                 className={cn(
-                  'h-10 px-4 text-xs font-semibold whitespace-nowrap text-fg-muted',
+                  'h-10 px-4 text-xs first:pl-5 last:pr-5 font-semibold whitespace-nowrap text-fg-muted',
                   alignClass[column.align ?? 'left'],
                   column.width
                 )}
@@ -97,14 +97,14 @@ export function Table<Row>({
                   )}
                 >
                   {selectable && (
-                    <td className="w-10 pl-4">
+                    <td className="w-10 pl-5">
                       <Checkbox aria-label="Select row" checked={isSelected} />
                     </td>
                   )}
                   {columns.map((column) => (
                     <td
                       key={column.key}
-                      className={cn('px-4 whitespace-nowrap text-fg', alignClass[column.align ?? 'left'], column.width)}
+                      className={cn('px-4 whitespace-nowrap text-fg first:pl-5 last:pr-5', alignClass[column.align ?? 'left'], column.width)}
                     >
                       {column.render
                         ? column.render(row)
