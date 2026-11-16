@@ -32,6 +32,19 @@ export function isThemeMode(value: unknown): value is ThemeMode {
   return THEME_MODES.some((mode) => mode === value)
 }
 
+/**
+ * Вид кнопок над списком проектов: `list` — строки с иконкой и подписью, `icons` — только
+ * иконки в один ряд.
+ */
+export const SIDEBAR_BUTTON_STYLES = ['list', 'icons'] as const
+export type SidebarButtonStyle = (typeof SIDEBAR_BUTTON_STYLES)[number]
+
+export const DEFAULT_SIDEBAR_BUTTON_STYLE: SidebarButtonStyle = 'list'
+
+export function isSidebarButtonStyle(value: unknown): value is SidebarButtonStyle {
+  return SIDEBAR_BUTTON_STYLES.some((style) => style === value)
+}
+
 export interface Settings {
   /** Агент нового чата по ⌘N; меняется на последний выбранный. */
   defaultAgent: AgentId
@@ -56,6 +69,8 @@ export interface Settings {
   theme: ThemeMode
   /** Акцентный цвет: выделения, переключатели, кнопки. */
   accent: AccentId
+  /** Вид кнопок над списком проектов: строки с подписями или ряд иконок. */
+  sidebarButtons: SidebarButtonStyle
   /** Сколько агентов доски работают одновременно; остальные задачи ждут в очереди. */
   boardMaxAgents: number
   /** Агент, модель и эффорт, которые предлагаются задаче с доски по умолчанию. */
@@ -97,6 +112,7 @@ export const DEFAULT_SETTINGS: Settings = {
   profileName: '',
   theme: 'system',
   accent: DEFAULT_ACCENT,
+  sidebarButtons: DEFAULT_SIDEBAR_BUTTON_STYLE,
   boardMaxAgents: BOARD_AGENTS.default,
   boardAgent: { agent: DEFAULT_AGENT_ID }
 }

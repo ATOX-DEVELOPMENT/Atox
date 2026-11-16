@@ -1,4 +1,5 @@
 import type { LucideIcon } from 'lucide-react'
+import { useSettings } from '../hooks/SettingsContext'
 
 interface SidebarButtonProps {
   icon: LucideIcon
@@ -16,18 +17,23 @@ export function SidebarButton({
   disabled,
   onClick
 }: SidebarButtonProps) {
+  const { sidebarButtons } = useSettings()
+  const withLabel = sidebarButtons === 'list'
+
   return (
     <button
       type="button"
       className="sidebar-button"
       data-active={active}
       aria-pressed={active}
-      aria-label={label}
-      title={label}
+      // Без подписи имя кнопки — в подсказке; рядом с подписью подсказка только повторяла бы её.
+      aria-label={withLabel ? undefined : label}
+      title={withLabel ? undefined : label}
       disabled={disabled}
       onClick={onClick}
     >
       <Icon className="icon" />
+      {withLabel && <span className="sidebar-button__label">{label}</span>}
     </button>
   )
 }

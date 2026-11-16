@@ -4,7 +4,9 @@ import {
   clampWidth,
   DEFAULT_ACCENT,
   DEFAULT_SETTINGS,
+  DEFAULT_SIDEBAR_BUTTON_STYLE,
   isAccentId,
+  isSidebarButtonStyle,
   isThemeMode,
   SIDEBAR_WIDTH,
   TERMINAL_WIDTH,
@@ -83,6 +85,9 @@ function normalize(settings: Settings): Settings {
         : '',
     theme: isThemeMode(settings.theme) ? settings.theme : 'system',
     accent: isAccentId(settings.accent) ? settings.accent : DEFAULT_ACCENT,
+    sidebarButtons: isSidebarButtonStyle(settings.sidebarButtons)
+      ? settings.sidebarButtons
+      : DEFAULT_SIDEBAR_BUTTON_STYLE,
     boardMaxAgents: Number.isInteger(settings.boardMaxAgents)
       ? Math.min(BOARD_AGENTS.max, Math.max(BOARD_AGENTS.min, settings.boardMaxAgents))
       : BOARD_AGENTS.default,

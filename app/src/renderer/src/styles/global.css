@@ -411,6 +411,26 @@ ul {
   border-radius: var(--radius);
 }
 
+/* Список: строки на всю ширину с иконкой и подписью. */
+.sidebar__nav[data-style='list'] {
+  flex-direction: column;
+  padding-bottom: 16px;
+}
+
+.sidebar__nav[data-style='list'] .sidebar-button {
+  flex: none;
+  justify-content: flex-start;
+  gap: var(--row-gap);
+  padding: 0 var(--row-padding);
+}
+
+.sidebar-button__label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .sidebar-button:hover:not(:disabled) {
   background: var(--color-hover);
 }

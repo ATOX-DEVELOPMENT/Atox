@@ -56,7 +56,7 @@ export function Sidebar({
     moveProject,
     createChat
   } = useProjectsContext()
-  const { sidebarWidth } = useSettings()
+  const { sidebarWidth, sidebarButtons } = useSettings()
   const branches = useGitBranches()
   // Пока тянут край, ширина живёт здесь; в настройки попадает только итоговая.
   const [draftWidth, setDraftWidth] = useState<number | null>(null)
@@ -72,7 +72,7 @@ export function Sidebar({
     <aside className="sidebar" style={{ width }}>
       <div className="sidebar__titlebar" />
 
-      <nav className="sidebar__nav">
+      <nav className="sidebar__nav" data-style={sidebarButtons}>
         <SidebarButton
           icon={SquarePen}
           label="New chat"
