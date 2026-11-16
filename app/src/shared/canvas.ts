@@ -127,6 +127,27 @@ export interface CanvasLink {
 export const LINK_ON_MAX_LENGTH = 120
 export const CANVAS_LINKS_MAX = 200
 
+/**
+ * Группа: именованная рамка вокруг нескольких экранов, чтобы нужное находилось сразу. Рамку
+ * ставит и убирает агент; человек переименовывает её, тянет вместе с экранами или распускает.
+ * Экран входит не больше чем в одну группу. Рамка строится по самим экранам, места она не хранит.
+ */
+export interface CanvasGroup {
+  id: string
+  name: string
+  /** Экраны группы (id). */
+  screens: string[]
+}
+
+/** Число групп на холсте ограничено ради порядка. */
+export const CANVAS_GROUPS_MAX = 60
+
+/**
+ * Поля рамки группы вокруг её экранов, в пикселях холста. Место под заголовок группы и подписи
+ * экранов рамка добирает сверху сама, в пикселях окна (они не масштабируются вместе с холстом).
+ */
+export const GROUP_PADDING = { top: 56, side: 64, bottom: 64 } as const
+
 /** Сдвиг и масштаб холста: окно возвращает человека туда, где он остановился. */
 export interface CanvasView {
   x: number
@@ -144,6 +165,8 @@ export interface Canvas {
   archived: boolean
   /** Линии между экранами. */
   links: CanvasLink[]
+  /** Именованные рамки вокруг экранов. */
+  groups: CanvasGroup[]
   /** Сохранённый вид; нет — окно вписывает все экраны само. */
   view: CanvasView | null
   createdAt: number

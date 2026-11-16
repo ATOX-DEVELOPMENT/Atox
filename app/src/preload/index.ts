@@ -288,6 +288,11 @@ const api: AtoxApi = {
       ipcRenderer.invoke(IpcChannel.CanvasRenameScreen, canvasId, screenId, name),
     moveScreen: (canvasId, screenId, x, y) =>
       ipcRenderer.invoke(IpcChannel.CanvasMoveScreen, canvasId, screenId, x, y),
+    renameGroup: (canvasId, groupId, name) =>
+      ipcRenderer.invoke(IpcChannel.CanvasRenameGroup, canvasId, groupId, name),
+    moveGroup: (canvasId, groupId, dx, dy) =>
+      ipcRenderer.invoke(IpcChannel.CanvasMoveGroup, canvasId, groupId, dx, dy),
+    ungroup: (canvasId, groupId) => ipcRenderer.invoke(IpcChannel.CanvasUngroup, canvasId, groupId),
     setView: (canvasId, view) => ipcRenderer.invoke(IpcChannel.CanvasSetView, canvasId, view),
     archive: (canvasId, archived) => ipcRenderer.invoke(IpcChannel.CanvasArchive, canvasId, archived),
     remove: (canvasId) => ipcRenderer.invoke(IpcChannel.CanvasRemove, canvasId),

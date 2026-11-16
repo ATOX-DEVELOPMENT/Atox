@@ -89,6 +89,7 @@ export interface OrchestrationMethods {
       name: string
       screens: CanvasScreenInfo[]
       links: { from: string; to: string; on: string | null }[]
+      groups: { name: string; screens: string[] }[]
     } | null
   }
   /**
@@ -152,6 +153,16 @@ export interface OrchestrationMethods {
     params: { from: string; to: string; on?: string }
     result: { removed: number }
   }
+  /**
+   * Собирает экраны (по именам) в именованную группу — рамку вокруг них. Группа с таким именем
+   * уже есть — получает ровно эти экраны.
+   */
+  canvasGroupSet: {
+    params: { name: string; screens: string[] }
+    result: { name: string; screens: string[]; created: boolean }
+  }
+  /** Распускает группу по имени; экраны остаются на холсте. */
+  canvasGroupRemove: { params: { name: string }; result: { name: string } }
   /** Убирает экран с холста; HTML-файл остаётся. */
   canvasScreenRemove: { params: { name: string }; result: { screen: string } }
   /**

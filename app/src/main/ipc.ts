@@ -566,6 +566,19 @@ export function registerIpcHandlers({
     (_event, canvasId: unknown, screenId: unknown, x: unknown, y: unknown) =>
       canvas.moveScreen(requireId(canvasId), requireId(screenId), x, y)
   )
+  ipcMain.handle(
+    IpcChannel.CanvasRenameGroup,
+    (_event, canvasId: unknown, groupId: unknown, name: unknown) =>
+      canvas.renameGroup(requireId(canvasId), requireId(groupId), name)
+  )
+  ipcMain.handle(
+    IpcChannel.CanvasMoveGroup,
+    (_event, canvasId: unknown, groupId: unknown, dx: unknown, dy: unknown) =>
+      canvas.moveGroup(requireId(canvasId), requireId(groupId), dx, dy)
+  )
+  ipcMain.handle(IpcChannel.CanvasUngroup, (_event, canvasId: unknown, groupId: unknown) =>
+    canvas.ungroup(requireId(canvasId), requireId(groupId))
+  )
   ipcMain.handle(IpcChannel.CanvasSetView, (_event, canvasId: unknown, view: unknown) =>
     canvas.setView(requireId(canvasId), view)
   )

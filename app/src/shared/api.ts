@@ -307,6 +307,11 @@ export interface AtoxApi {
     renameScreen(canvasId: string, screenId: string, name: string): Promise<void>
     /** Вызывается, когда человек отпустил экран; позицию в процессе перетаскивания держит окно. */
     moveScreen(canvasId: string, screenId: string, x: number, y: number): Promise<void>
+    renameGroup(canvasId: string, groupId: string, name: string): Promise<void>
+    /** Человек отпустил заголовок группы: все её экраны сдвигаются на это расстояние. */
+    moveGroup(canvasId: string, groupId: string, dx: number, dy: number): Promise<void>
+    /** Распускает группу: рамка исчезает, экраны остаются. */
+    ungroup(canvasId: string, groupId: string): Promise<void>
     /** Запоминает сдвиг и масштаб холста; окно зовёт редко (после паузы), не на каждый кадр. */
     setView(canvasId: string, view: CanvasView): Promise<void>
     archive(canvasId: string, archived: boolean): Promise<void>
@@ -429,6 +434,9 @@ export const IpcChannel = {
   CanvasRename: 'canvas:rename',
   CanvasRenameScreen: 'canvas:rename-screen',
   CanvasMoveScreen: 'canvas:move-screen',
+  CanvasRenameGroup: 'canvas:rename-group',
+  CanvasMoveGroup: 'canvas:move-group',
+  CanvasUngroup: 'canvas:ungroup',
   CanvasSetView: 'canvas:set-view',
   CanvasArchive: 'canvas:archive',
   CanvasRemove: 'canvas:remove',

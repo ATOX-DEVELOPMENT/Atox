@@ -3,6 +3,7 @@ import { mkdir, open, readFile, realpath, rename, stat } from 'node:fs/promises'
 import { basename, dirname, isAbsolute, join } from 'node:path'
 import { app } from 'electron'
 import {
+  CANVAS_GROUPS_MAX,
   CANVAS_LINKS_MAX,
   DEFAULT_SCREEN_DEVICE,
   LINK_ON_MAX_LENGTH,
@@ -14,6 +15,7 @@ import {
   screenSourceKind,
   type CanvasExportFormat,
   type CanvasExportResult,
+  type CanvasGroup,
   type CanvasState,
   type ScreenDevice,
   type ScreenDeviceId,
@@ -35,6 +37,7 @@ import {
   arrangeRows,
   canvasNameFromTitle,
   describeOverflow,
+  findGroupByName,
   findScreenByName,
   formatCanvasMessage,
   formatFixMessage,
@@ -139,8 +142,17 @@ export interface AgentLinkResult {
   elementMissing: boolean
 }
 
+/** Группа, которую ставит агент: имя и экраны по именам. */
+export interface AgentGroupResult {
+  name: string
+  screens: string[]
+  /** Группа новая, а не обновлённая. */
+  created: boolean
+}
+
 export interface AgentCanvasView {
   name: string
+  groups: { name: string; screens: string[] }[]
   links: { from: string; to: string; on: string | null }[]
   screens: {
     name: string
@@ -274,9 +286,7 @@ export class CanvasService implements ScreenDocumentSource {
     if (!archived) {
       const active = this.activeCanvasOf(canvas.chatId)
       if (active) {
-        throw new CanvasError(
-          `The chat already has the canvas “${active.name}”. Archive it first.`
-        )
+        throw new CanvasError(`The chat already has the canvas “${active.name}”. Archive it first.`)
       }
     }
     canvas.archived = archived
@@ -434,7 +444,10 @@ export class CanvasService implements ScreenDocumentSource {
       if (!build) {
         throw new ScreenBuildError(screen.buildError ?? 'The screen has not been built yet.', [])
       }
-      return { html: await renderShell(build, this.services.kitDirectory), modules: true }
+      return {
+        html: await renderShell(build, this.services.kitDirectory),
+        modules: true
+      }
     } catch (error) {
       if (!(error instanceof ScreenBuildError)) {
         console.error('Failed to render a React canvas screen', error)
@@ -451,7 +464,12 @@ export class CanvasService implements ScreenDocumentSource {
       store.findProject(canvas.projectId)?.path,
       store.findChat(canvas.chatId)?.chat.worktree
     ].filter((root) => root !== undefined)
-    return { source, file: screen.file, roots, kit: join(kitDirectory, CANVAS_KIT_ENTRY) }
+    return {
+      source,
+      file: screen.file,
+      roots,
+      kit: join(kitDirectory, CANVAS_KIT_ENTRY)
+    }
   }
 
   /** Холст чата для `atox canvas`; `null` — холста нет. */
@@ -460,6 +478,12 @@ export class CanvasService implements ScreenDocumentSource {
     return canvas
       ? {
           name: canvas.name,
+          groups: canvas.groups.map(({ name, screens }) => ({
+            name,
+            screens: screens.flatMap(
+              (id) => canvas.screens.find((screen) => screen.id === id)?.name ?? []
+            )
+          })),
           links: canvas.links.flatMap(({ from, to, on }) => {
             const source = canvas.screens.find(({ id }) => id === from)
             const target = canvas.screens.find(({ id }) => id === to)
@@ -618,7 +642,9 @@ export class CanvasService implements ScreenDocumentSource {
           const screen = findScreenByName(canvas.screens, name)
           if (!screen) {
             const known = canvas.screens.map((other) => `"${other.name}"`).join(', ') || 'none'
-            throw new CanvasError(`There is no screen "${name.trim()}" on the canvas. Screens: ${known}.`)
+            throw new CanvasError(
+              `There is no screen "${name.trim()}" on the canvas. Screens: ${known}.`
+            )
           }
           return screen
         })
@@ -739,6 +765,115 @@ export class CanvasService implements ScreenDocumentSource {
     return removed
   }
 
+  /**
+   * Собирает экраны в группу с этим именем: нет такой — создаётся, есть — получает ровно эти
+   * экраны. Экран входит в одну группу, поэтому из прежней группы он уходит; опустевшая
+   * группа исчезает.
+   */
+  setGroup(chatId: string, nameInput: string, screenNames: readonly string[]): AgentGroupResult {
+    const canvas = this.activeCanvasOf(chatId)
+    if (!canvas) {
+      throw new CanvasError('This chat has no canvas. Put the screens on it first.')
+    }
+    const name = parseName(nameInput, 'group')
+    const members = [
+      ...new Set(screenNames.map((screenName) => this.screenNamed(canvas, screenName)))
+    ]
+    if (members.length === 0) {
+      throw new CanvasError('Name at least one screen for the group.')
+    }
+    const ids = new Set(members.map(({ id }) => id))
+    let group = findGroupByName(canvas.groups, name)
+    const created = group === undefined
+    if (!group) {
+      if (canvas.groups.length >= CANVAS_GROUPS_MAX) {
+        throw new CanvasError(`A canvas has at most ${CANVAS_GROUPS_MAX} groups.`)
+      }
+      group = { id: randomUUID(), name, screens: [] }
+      canvas.groups.push(group)
+    }
+    group.screens = members.map(({ id }) => id)
+    for (const other of canvas.groups) {
+      if (other !== group) {
+        other.screens = other.screens.filter((id) => !ids.has(id))
+      }
+    }
+    canvas.groups = canvas.groups.filter(({ screens }) => screens.length > 0)
+    canvas.updatedAt = Date.now()
+    this.changed()
+    return {
+      name: group.name,
+      screens: members.map((screen) => screen.name),
+      created
+    }
+  }
+
+  /** Распускает группу по имени: экраны остаются на холсте. */
+  removeGroup(chatId: string, name: string): string {
+    const canvas = this.activeCanvasOf(chatId)
+    if (!canvas) {
+      throw new CanvasError('This chat has no canvas.')
+    }
+    const group = findGroupByName(canvas.groups, name)
+    if (!group) {
+      const names = canvas.groups.map((other) => `"${other.name}"`).join(', ') || 'none'
+      throw new CanvasError(`There is no group "${name.trim()}" on the canvas. Groups: ${names}.`)
+    }
+    this.dropGroup(canvas, group)
+    return group.name
+  }
+
+  /** Человек распускает группу из меню её заголовка. */
+  ungroup(canvasId: string, groupId: string): void {
+    const { canvas, group } = this.getGroup(canvasId, groupId)
+    this.dropGroup(canvas, group)
+  }
+
+  renameGroup(canvasId: string, groupId: string, name: unknown): void {
+    const { canvas, group } = this.getGroup(canvasId, groupId)
+    const groupName = parseName(name, 'group')
+    const namesake = findGroupByName(canvas.groups, groupName)
+    if (namesake && namesake !== group) {
+      throw new CanvasError(`Another group on this canvas is already called “${namesake.name}”.`)
+    }
+    group.name = groupName
+    canvas.updatedAt = Date.now()
+    this.changed()
+  }
+
+  /** Сдвигает группу вместе со всеми её экранами на одно расстояние. */
+  moveGroup(canvasId: string, groupId: string, dx: unknown, dy: unknown): void {
+    if (!isFiniteNumber(dx) || !isFiniteNumber(dy)) {
+      throw new CanvasError('Invalid group offset.')
+    }
+    const { canvas, group } = this.getGroup(canvasId, groupId)
+    for (const screen of canvas.screens) {
+      if (group.screens.includes(screen.id)) {
+        screen.x += dx
+        screen.y += dy
+      }
+    }
+    this.changed()
+  }
+
+  private dropGroup(canvas: StoredCanvas, group: CanvasGroup): void {
+    canvas.groups = canvas.groups.filter((other) => other !== group)
+    canvas.updatedAt = Date.now()
+    this.changed()
+  }
+
+  private getGroup(
+    canvasId: string,
+    groupId: string
+  ): { canvas: StoredCanvas; group: CanvasGroup } {
+    const canvas = this.getCanvas(canvasId)
+    const group = canvas.groups.find(({ id }) => id === groupId)
+    if (!group) {
+      throw new CanvasError('The group was not found.')
+    }
+    return { canvas, group }
+  }
+
   private screenNamed(canvas: StoredCanvas, name: string): StoredScreen {
     const screen = findScreenByName(canvas.screens, name)
     if (!screen) {
@@ -756,9 +891,11 @@ export class CanvasService implements ScreenDocumentSource {
   private async refreshAnchors(canvas: StoredCanvas, screen: StoredScreen): Promise<void> {
     const key = screenKey(canvas.id, screen.id)
     const previous = this.anchorJobs.get(key) ?? Promise.resolve()
-    const job = previous.then(() => this.measureAnchors(canvas, screen)).catch((error) => {
-      console.error('Failed to place the lines of a screen', error)
-    })
+    const job = previous
+      .then(() => this.measureAnchors(canvas, screen))
+      .catch((error) => {
+        console.error('Failed to place the lines of a screen', error)
+      })
     this.anchorJobs.set(key, job)
     try {
       await job
@@ -790,7 +927,12 @@ export class CanvasService implements ScreenDocumentSource {
     let changed = false
     links.forEach((link, index) => {
       const rect = found[index] ?? null
-      const next = rect && { x: rect.x, y: rect.y, width: rect.width, height: rect.height }
+      const next = rect && {
+        x: rect.x,
+        y: rect.y,
+        width: rect.width,
+        height: rect.height
+      }
       if (JSON.stringify(next) !== JSON.stringify(link.anchor)) {
         link.anchor = next
         changed = true
@@ -870,6 +1012,12 @@ export class CanvasService implements ScreenDocumentSource {
     this.forgetOutput(screenKey(canvas.id, screen.id))
     canvas.screens = canvas.screens.filter((other) => other !== screen)
     canvas.links = canvas.links.filter(({ from, to }) => from !== screen.id && to !== screen.id)
+    canvas.groups = canvas.groups
+      .map((group) => ({
+        ...group,
+        screens: group.screens.filter((id) => id !== screen.id)
+      }))
+      .filter(({ screens }) => screens.length > 0)
     canvas.updatedAt = Date.now()
     this.changed()
     await this.snapshots
@@ -920,6 +1068,7 @@ export class CanvasService implements ScreenDocumentSource {
       projectId: project.id,
       screens: [],
       links: [],
+      groups: [],
       archived: false,
       view: null,
       createdAt: now,
@@ -1147,7 +1296,10 @@ export class CanvasService implements ScreenDocumentSource {
   }
 
   private persist(): void {
-    const data: CanvasFile = { version: CANVAS_FILE_VERSION, canvases: this.canvases }
+    const data: CanvasFile = {
+      version: CANVAS_FILE_VERSION,
+      canvases: this.canvases
+    }
     this.file.write(data)
   }
 

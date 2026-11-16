@@ -6,6 +6,7 @@ import {
   SCREEN_GAP,
   SCREEN_SIZE,
   screenSourceKind,
+  type CanvasGroup,
   type CanvasScreen,
   type ScreenDevice
 } from '../../shared/canvas'
@@ -60,8 +61,11 @@ export function placeNewScreen(
   }
 }
 
-/** Расстояние между рядами при раскладке по просьбе агента: ряд читается как отдельный поток. */
-export const ARRANGE_ROW_GAP = 240
+/**
+ * Расстояние между рядами при раскладке по просьбе агента: ряд читается как отдельный поток.
+ * Больше рамки группы вместе с её заголовком, чтобы рамки соседних рядов не липли друг к другу.
+ */
+export const ARRANGE_ROW_GAP = 520
 
 /**
  * Раскладка рядами: экраны ряда идут слева направо с обычным зазором, по верхнему краю; ряды —
@@ -125,6 +129,15 @@ export function findScreenByName<Screen extends Pick<CanvasScreen, 'name'>>(
   return screens.find((screen) => screen.name.toLowerCase() === wanted)
 }
 
+/** Группа по имени: как и у экрана, без учёта регистра и пробелов по краям. */
+export function findGroupByName<Group extends Pick<CanvasGroup, 'name'>>(
+  groups: readonly Group[],
+  name: string
+): Group | undefined {
+  const wanted = name.trim().toLowerCase()
+  return groups.find((group) => group.name.toLowerCase() === wanted)
+}
+
 /** Имя холста или экрана без пробелов по краям; пустое или слишком длинное — ошибка. */
 export function parseName(value: unknown, subject: string): string {
   const name = typeof value === 'string' ? value.trim() : ''
@@ -145,7 +158,10 @@ export function canvasNameFromTitle(title: string): string {
 }
 
 /** Размер `WxH` из команды агента. */
-export function parseScreenSize(value: string): { width: number; height: number } {
+export function parseScreenSize(value: string): {
+  width: number
+  height: number
+} {
   const match = /^\s*(\d+)\s*[xX×]\s*(\d+)\s*$/.exec(value)
   const width = Number(match?.[1])
   const height = Number(match?.[2])
@@ -227,9 +243,7 @@ export function describeOverflow(
     )
   }
   if (size.contentWidth > screen.width + OVERFLOW_TOLERANCE_PX) {
-    problems.push(
-      `Content is wider than the screen (${size.contentWidth} > ${screen.width} px).`
-    )
+    problems.push(`Content is wider than the screen (${size.contentWidth} > ${screen.width} px).`)
   }
   return problems
 }
