@@ -84,7 +84,11 @@ export function CanvasPage({ canvasId, onClose }: CanvasPageProps) {
         renaming={renaming}
         onRenamingChange={setRenaming}
         historyOpen={historyOpen && hasScreens}
-        onToggleHistory={() => setHistoryOpen((open) => !open)}
+        onToggleHistory={() => {
+          // Закрытая история возвращает экранам текущие версии.
+          setHistoryOpen((open) => !open)
+          setPreview(null)
+        }}
         onFit={() => stageRef.current?.fit()}
         onResetZoom={() => stageRef.current?.resetZoom()}
         onOpenChat={openChat}
