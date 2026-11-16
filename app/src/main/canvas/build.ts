@@ -1,7 +1,11 @@
 import { realpath } from 'node:fs/promises'
 import { dirname, isAbsolute, relative, resolve } from 'node:path'
 import type { BuildFailure, Message, Plugin } from 'esbuild'
-import { CANVAS_IMPORTABLE_PACKAGES, CANVAS_KIT_PACKAGE } from '../../shared/canvasRuntime'
+import {
+  CANVAS_ERROR_TOP_INSET,
+  CANVAS_IMPORTABLE_PACKAGES,
+  CANVAS_KIT_PACKAGE
+} from '../../shared/canvasRuntime'
 import { isInsideFolder } from './rules'
 
 /**
@@ -59,7 +63,7 @@ function ErrorCard({ error }) {
   const text = error instanceof Error ? error.message : String(error)
   return h('div', {
     style: {
-      boxSizing: 'border-box', height: '100%', padding: '24px', overflow: 'auto',
+      boxSizing: 'border-box', height: '100%', padding: '${CANVAS_ERROR_TOP_INSET}px 24px 24px', overflow: 'auto',
       background: '#fef2f2', color: '#7f1d1d', font: '14px/1.5 ui-monospace, Menlo, monospace'
     }
   },

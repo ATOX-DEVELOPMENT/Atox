@@ -23,6 +23,12 @@ export const CANVAS_IMPORTABLE_PACKAGES: ReadonlySet<string> = new Set([
   'lucide-react'
 ])
 
+/**
+ * Отступ карточки ошибки сверху, в пикселях: в рамке телефона верх экрана закрывают «чёлка» и
+ * статус-бар, и первая строка ошибки пряталась бы за ними.
+ */
+export const CANVAS_ERROR_TOP_INSET = 56
+
 /** Набор компонентов Atox: собирается вместе с экраном, а не лежит среди vendor-файлов. */
 export const CANVAS_KIT_PACKAGE = '@atox/ui'
 

@@ -2,6 +2,7 @@ import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { CANVAS_PROTOCOL } from '../../shared/canvas'
 import {
+  CANVAS_ERROR_TOP_INSET,
   CANVAS_KIT_TOKENS,
   CANVAS_TAILWIND_FILE,
   CANVAS_VENDOR_MODULES
@@ -80,7 +81,7 @@ export function renderBuildErrorPage(message: string): string {
 <head>
 <meta charset="utf-8">
 <style>${BASE_STYLE}
-.error { box-sizing: border-box; height: 100%; padding: 24px; overflow: auto; background: #fef2f2; color: #7f1d1d; font: 14px/1.5 ui-monospace, Menlo, monospace; }
+.error { box-sizing: border-box; height: 100%; padding: ${CANVAS_ERROR_TOP_INSET}px 24px 24px; overflow: auto; background: #fef2f2; color: #7f1d1d; font: 14px/1.5 ui-monospace, Menlo, monospace; }
 .error strong { display: block; margin-bottom: 8px; font-size: 16px; }
 .error div { white-space: pre-wrap; }
 </style>
