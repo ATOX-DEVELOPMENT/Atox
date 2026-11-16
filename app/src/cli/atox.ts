@@ -48,6 +48,12 @@ Show screens (app, website, desktop UI) to the user on this chat's canvas.
                                            build errors, runtime errors and content that does
                                            not fit the screen.
   atox canvas screen remove <name>         Remove a screen from the canvas (the file stays)
+  atox canvas arrange "<A>,<B>,<C>" "<D>,<E>" ...
+                                           Lay the screens out in rows: each argument is one row
+                                           (screen names, left to right), rows go top to bottom.
+                                           Screens you do not name go in a last row. Use it to
+                                           group flows: one flow per row, so the canvas reads at
+                                           a glance. The user can still drag screens afterwards.
   atox canvas link <from> <to> [--on "Sign in"]
                                            Draw a line from one screen to another so the user
                                            sees what follows what: it starts with a dot on the
@@ -248,6 +254,27 @@ async function canvas(args: string[]): Promise<string> {
     }
     const { screen } = await call('canvasScreenRemove', { name })
     return `Removed the screen "${screen}" from the canvas. Its file stays in the project.`
+  }
+  if (group === 'arrange') {
+    const rows = [action, ...rest]
+      .filter((part) => part !== undefined)
+      .map((row) =>
+        row
+          .split(',')
+          .map((name) => name.trim())
+          .filter(Boolean)
+      )
+      .filter((row) => row.length > 0)
+    if (rows.length === 0) {
+      throw new UsageError('Usage: atox canvas arrange "<A>,<B>,<C>" "<D>,<E>" ...')
+    }
+    const result = await call('canvasArrange', { rows })
+    return [
+      `Arranged ${result.screens === 1 ? '1 screen' : `${result.screens} screens`} in ${result.rows === 1 ? '1 row' : `${result.rows} rows`}.`,
+      ...(result.rest.length > 0
+        ? [`Not named, put in the last row: ${result.rest.map((name) => `"${name}"`).join(', ')}.`]
+        : [])
+    ].join('\n')
   }
   if (group === 'link') {
     const removing = action === 'remove'

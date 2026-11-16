@@ -60,6 +60,29 @@ export function placeNewScreen(
   }
 }
 
+/** Расстояние между рядами при раскладке по просьбе агента: ряд читается как отдельный поток. */
+export const ARRANGE_ROW_GAP = 240
+
+/**
+ * Раскладка рядами: экраны ряда идут слева направо с обычным зазором, по верхнему краю; ряды —
+ * сверху вниз. Возвращает левый верхний угол каждого экрана.
+ */
+export function arrangeRows<Screen extends Pick<CanvasScreen, 'width' | 'height'>>(
+  rows: readonly (readonly Screen[])[]
+): Map<Screen, ScreenPlacement> {
+  const places = new Map<Screen, ScreenPlacement>()
+  let y = 0
+  for (const row of rows) {
+    let x = 0
+    for (const screen of row) {
+      places.set(screen, { x, y })
+      x += screen.width + SCREEN_GAP
+    }
+    y += Math.max(0, ...row.map(({ height }) => height)) + ARRANGE_ROW_GAP
+  }
+  return places
+}
+
 /**
  * Порядок страниц выгрузки: ряды холста сверху вниз, в ряду слева направо. Экраны одного ряда
  * стоят на одной высоте (с запасом, если человек сдвинул экран чуть выше или ниже).
