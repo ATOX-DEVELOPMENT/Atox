@@ -90,15 +90,11 @@ export const ScreenFrame = memo(function ScreenFrame({
           </span>
         )}
         <span className="canvas-screen__device">{describeDevice(screen)}</span>
-        {screen.missing ? (
-          <ScreenNote text="File not found, showing the last saved version" />
-        ) : (
-          screen.buildError && (
-            <ScreenNote
-              text="Build failed, showing the last working version"
-              detail={screen.buildError}
-            />
-          )
+        {screen.missing && <ScreenNote text="File not found, showing the last saved version" />}
+        {screen.buildError && (
+          <span className="canvas-screen__badge" title={screen.buildError}>
+            Build error
+          </span>
         )}
         {previewVersionId && <span className="canvas-screen__tag">Older version</span>}
       </div>
@@ -128,10 +124,10 @@ export const ScreenFrame = memo(function ScreenFrame({
   )
 })
 
-/** Тихое предупреждение в подписи экрана; полный текст — в подсказке. */
-function ScreenNote({ text, detail }: { text: string; detail?: string }) {
+/** Тихое предупреждение в подписи экрана. */
+function ScreenNote({ text }: { text: string }) {
   return (
-    <span className="canvas-screen__note" title={detail ?? text}>
+    <span className="canvas-screen__note" title={text}>
       <TriangleAlert className="icon" aria-hidden />
       <span className="canvas-screen__note-text">{text}</span>
     </span>

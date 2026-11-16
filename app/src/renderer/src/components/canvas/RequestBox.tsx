@@ -9,6 +9,8 @@ interface RequestBoxProps {
   /** Что ещё уйдёт агенту вместе с текстом: «screen: Login», «screenshot». */
   context?: readonly string[]
   placeholder: string
+  /** Что человеку стоит знать до отправки, например ошибка сборки экрана; показывается красным. */
+  notice?: string | null
   /** Чат холста: в него уйдёт просьба. */
   chatTitle: string
   onSend(text: string): Promise<void>
@@ -26,6 +28,7 @@ export function RequestBox({
   subtitle,
   context = [],
   placeholder,
+  notice,
   chatTitle,
   onSend,
   onClose,
@@ -107,6 +110,11 @@ export function RequestBox({
         rows={3}
         onChange={(event) => setText(event.target.value)}
       />
+      {notice && (
+        <p className="request-box__notice" title={notice}>
+          {notice}
+        </p>
+      )}
       {error && (
         <p id={errorId} className="request-box__error" role="alert">
           {error}

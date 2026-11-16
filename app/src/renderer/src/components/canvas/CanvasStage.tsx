@@ -414,6 +414,7 @@ export function CanvasStage({
           viewState={viewState}
           screenId={selected.id}
           screenName={selected.name}
+          buildError={selected.buildError}
           target={selectedBounds}
           obstacles={otherBounds}
           chatTitle={chatTitle}
