@@ -104,11 +104,6 @@ export function zoomAround(view: CanvasView, anchor: Point, zoom: number): Canva
   }
 }
 
-/** Точка окна в координатах холста. */
-export function toCanvas(view: CanvasView, point: Point): Point {
-  return { x: (point.x - view.x) / view.zoom, y: (point.y - view.y) / view.zoom }
-}
-
 /** Прямоугольник холста в пикселях окна. */
 export function toViewport(view: CanvasView, rect: Rect): Rect {
   return {
@@ -197,9 +192,4 @@ export function placeBeside(
     return inside.reduce((best, point) => (covered(point) < covered(best) ? point : best))
   }
   return { x: startX, y: clampY(below) }
-}
-
-/** Масштаб для подписи: «60%». */
-export function formatZoom(zoom: number): string {
-  return `${Math.round(zoom * 100)}%`
 }

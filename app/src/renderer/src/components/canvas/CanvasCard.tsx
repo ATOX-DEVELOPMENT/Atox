@@ -62,8 +62,8 @@ export const CanvasCard = memo(function CanvasCard({
           </h2>
         )}
         <p className="canvas-card__details" title={details}>
-          {details}
-          {' · '}
+          <span className="canvas-card__place">{details}</span>
+          <span aria-hidden> · </span>
           <time
             dateTime={new Date(canvas.updatedAt).toISOString()}
             title={formatFullDate(canvas.updatedAt)}

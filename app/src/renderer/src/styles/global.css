@@ -6567,13 +6567,19 @@ ul {
   width: 100%;
 }
 
+/* Время правки видно всегда: сжимаются проект и чат. */
 .canvas-card__details {
+  display: flex;
   margin: 3px 0 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  white-space: pre;
   font-size: var(--font-size-small);
   color: var(--color-text-muted);
+}
+
+.canvas-card__place {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .canvas-card__menu {
