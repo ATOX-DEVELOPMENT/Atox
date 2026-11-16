@@ -6,6 +6,8 @@ import { useGitBranches } from '../hooks/useGitBranches'
 import type { TerminalPanelState } from '../hooks/useTerminalPanel'
 import { AgentsView } from './AgentsView'
 import { BoardView } from './BoardView'
+import { CanvasList } from './canvas/CanvasList'
+import { CanvasPage } from './canvas/CanvasPage'
 import { ChangesPanel } from './ChangesPanel'
 import { ChatView } from './ChatView'
 import { RepositoryView, type RepositorySection } from './RepositoryView'
@@ -22,6 +24,8 @@ export type WorkspacePage =
   | { kind: 'agents' }
   | { kind: 'board' }
   | { kind: 'repository'; projectId: string }
+  | { kind: 'canvasList' }
+  | { kind: 'canvas'; canvasId: string }
 
 interface WorkspaceProps {
   page: WorkspacePage | null
@@ -74,6 +78,8 @@ export function Workspace({
     page?.kind === 'settings' ||
     page?.kind === 'agents' ||
     page?.kind === 'board' ||
+    page?.kind === 'canvasList' ||
+    page?.kind === 'canvas' ||
     Boolean(repositoryProject)
   const isSplit = !pageOpen && visibleChatIds.length > 1
   // Терминалы убранных проектов main-процесс уже остановил.
@@ -193,6 +199,15 @@ export function Workspace({
       {page?.kind === 'settings' && <SettingsView onClose={onClosePage} />}
       {page?.kind === 'agents' && <AgentsView onOpenChat={onOpenChat} onClose={onClosePage} />}
       {page?.kind === 'board' && <BoardView onOpenChat={onOpenChat} onClose={onClosePage} />}
+      {page?.kind === 'canvasList' && <CanvasList onClose={onClosePage} />}
+      {page?.kind === 'canvas' && (
+        <CanvasPage
+          // Вид, выбор и окно «Fix» у каждого холста свои: другой холст начинается заново.
+          key={page.canvasId}
+          canvasId={page.canvasId}
+          onClose={onClosePage}
+        />
+      )}
       {repositoryProject && (
         <RepositoryView
           // У каждого проекта свои фильтры и данные: при смене проекта страница начинается заново.

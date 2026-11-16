@@ -1,8 +1,14 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { RepositorySection } from './components/RepositoryView'
 import { MenuLayer } from './components/MenuLayer'
 import { Sidebar } from './components/Sidebar'
 import { Workspace, type WorkspacePage } from './components/Workspace'
+import {
+  CanvasesProvider,
+  CanvasNavigationProvider,
+  useCanvasStore,
+  type CanvasNavigation
+} from './hooks/CanvasesContext'
 import { ChatActivityProvider, useChatsCovered } from './hooks/ChatActivityContext'
 import { ProjectsProvider, useProjectsContext } from './hooks/ProjectsContext'
 import { SettingsProvider } from './hooks/SettingsContext'
@@ -14,8 +20,10 @@ export function App() {
     <SettingsProvider>
       <ProjectsProvider>
         <ChatActivityProvider>
-          <Layout />
-          <MenuLayer />
+          <CanvasesProvider>
+            <Layout />
+            <MenuLayer />
+          </CanvasesProvider>
         </ChatActivityProvider>
       </ProjectsProvider>
     </SettingsProvider>
@@ -52,6 +60,22 @@ function Layout() {
     [projects.selectChat]
   )
   const closePage = useCallback(() => setPage(null), [])
+  const toggleCanvasList = useCallback(
+    () => setPage((current) => (current?.kind === 'canvasList' ? null : { kind: 'canvasList' })),
+    []
+  )
+  const canvasNavigation = useMemo<CanvasNavigation>(
+    () => ({
+      openCanvas: (canvasId) => setPage({ kind: 'canvas', canvasId }),
+      openCanvasList: () => setPage({ kind: 'canvasList' }),
+      openChat
+    }),
+    [openChat]
+  )
+  // Строка открытого холста в сайдбаре подсвечена; узнаёт она об этом из хранилища холстов.
+  const canvasStore = useCanvasStore()
+  const openedCanvasId = page?.kind === 'canvas' ? page.canvasId : null
+  useEffect(() => canvasStore.setOpened(openedCanvasId), [canvasStore, openedCanvasId])
   const openRepository = useCallback(
     (projectId: string) => setPage({ kind: 'repository', projectId }),
     []
@@ -123,32 +147,36 @@ function Layout() {
   useChatsCovered(page !== null)
 
   return (
-    <div className="app" data-sidebar={sidebarVisible ? 'visible' : 'hidden'}>
-      {sidebarVisible && (
-        <Sidebar
-          repositoryOpen={page?.kind === 'repository'}
-          agentsOpen={page?.kind === 'agents'}
-          boardOpen={page?.kind === 'board'}
-          onOpenSettings={openSettings}
-          onToggleRepository={toggleRepository}
-          onToggleAgents={toggleAgents}
-          onToggleBoard={toggleBoard}
-          onOpenRepository={openRepository}
+    <CanvasNavigationProvider navigation={canvasNavigation}>
+      <div className="app" data-sidebar={sidebarVisible ? 'visible' : 'hidden'}>
+        {sidebarVisible && (
+          <Sidebar
+            repositoryOpen={page?.kind === 'repository'}
+            agentsOpen={page?.kind === 'agents'}
+            boardOpen={page?.kind === 'board'}
+            canvasListOpen={page?.kind === 'canvasList'}
+            onOpenSettings={openSettings}
+            onToggleRepository={toggleRepository}
+            onToggleAgents={toggleAgents}
+            onToggleBoard={toggleBoard}
+            onToggleCanvasList={toggleCanvasList}
+            onOpenRepository={openRepository}
+          />
+        )}
+        <Workspace
+          page={page}
+          repositorySection={repositorySection}
+          onRepositorySectionChange={setRepositorySection}
+          onClosePage={closePage}
+          onOpenChat={openChat}
+          terminals={terminals}
+          changesOpen={changesOpen}
+          sidebarVisible={sidebarVisible}
+          onToggleSidebar={toggleSidebar}
+          onToggleTerminal={toggleTerminal}
+          onToggleChanges={toggleChanges}
         />
-      )}
-      <Workspace
-        page={page}
-        repositorySection={repositorySection}
-        onRepositorySectionChange={setRepositorySection}
-        onClosePage={closePage}
-        onOpenChat={openChat}
-        terminals={terminals}
-        changesOpen={changesOpen}
-        sidebarVisible={sidebarVisible}
-        onToggleSidebar={toggleSidebar}
-        onToggleTerminal={toggleTerminal}
-        onToggleChanges={toggleChanges}
-      />
-    </div>
+      </div>
+    </CanvasNavigationProvider>
   )
 }

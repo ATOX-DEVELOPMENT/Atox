@@ -1,0 +1,134 @@
+import { useSyncExternalStore, type MouseEvent } from 'react'
+import { ArrowUpRight, Ellipsis, History, LayoutDashboard, Scan } from 'lucide-react'
+import { CANVAS_NAME_MAX_LENGTH, type Canvas } from '../../../../shared/canvas'
+import { chatLabel, type CanvasOwner } from '../../lib/canvasOwner'
+import { InlineRename } from '../InlineRename'
+import type { ViewState } from './viewState'
+
+interface CanvasHeaderProps {
+  canvas: Canvas
+  owner: CanvasOwner
+  viewState: ViewState
+  renaming: boolean
+  onRenamingChange(renaming: boolean): void
+  historyOpen: boolean
+  onToggleHistory(): void
+  onFit(): void
+  onResetZoom(): void
+  onOpenChat(): void
+  onOpenMenu(event: MouseEvent<HTMLButtonElement>): void
+}
+
+/** Шапка холста: имя, проект, чат, масштаб и кнопки вида. */
+export function CanvasHeader({
+  canvas,
+  owner,
+  viewState,
+  renaming,
+  onRenamingChange,
+  historyOpen,
+  onToggleHistory,
+  onFit,
+  onResetZoom,
+  onOpenChat,
+  onOpenMenu
+}: CanvasHeaderProps) {
+  const hasScreens = canvas.screens.length > 0
+  const chatTitle = chatLabel(owner)
+
+  return (
+    <header className="canvas-header">
+      <h1 className="canvas-header__title">
+        <LayoutDashboard className="icon canvas-header__icon" aria-hidden />
+        {renaming ? (
+          <InlineRename
+            value={canvas.name}
+            label="Canvas name"
+            onSubmit={(name) => {
+              onRenamingChange(false)
+              void window.atox.canvas.rename(canvas.id, name.slice(0, CANVAS_NAME_MAX_LENGTH))
+            }}
+            onCancel={() => onRenamingChange(false)}
+          />
+        ) : (
+          <button
+            type="button"
+            className="canvas-header__name"
+            title="Rename canvas"
+            onClick={() => onRenamingChange(true)}
+          >
+            {canvas.name}
+          </button>
+        )}
+      </h1>
+      {owner.project && <span className="canvas-header__project">{owner.project.name}</span>}
+      <button
+        type="button"
+        className="canvas-header__chat"
+        disabled={!owner.chat}
+        title={owner.chat ? `Open chat “${chatTitle}”` : 'The chat of this canvas was deleted'}
+        onClick={onOpenChat}
+      >
+        <span className="canvas-header__chat-dot" aria-hidden />
+        <span className="canvas-header__chat-title">
+          {owner.chat ? `Chat: ${chatTitle}` : chatTitle}
+        </span>
+        {owner.chat && <ArrowUpRight className="canvas-header__chat-arrow" aria-hidden />}
+      </button>
+      {canvas.archived && <span className="canvas-header__badge">Archived</span>}
+
+      <div className="canvas-header__actions">
+        {hasScreens && (
+          <>
+            <ZoomButton viewState={viewState} onClick={onResetZoom} />
+            <button
+              type="button"
+              className="workspace-toolbar__button"
+              aria-label="Fit all screens"
+              title="Fit all screens"
+              onClick={onFit}
+            >
+              <Scan className="icon" />
+            </button>
+            <button
+              type="button"
+              className="workspace-toolbar__button"
+              data-active={historyOpen}
+              aria-pressed={historyOpen}
+              aria-label="History"
+              title="History"
+              onClick={onToggleHistory}
+            >
+              <History className="icon" />
+            </button>
+          </>
+        )}
+        <button
+          type="button"
+          className="workspace-toolbar__button"
+          aria-label="More"
+          title="More"
+          onClick={onOpenMenu}
+        >
+          <Ellipsis className="icon" />
+        </button>
+      </div>
+    </header>
+  )
+}
+
+/** Масштаб в процентах; клик возвращает 100%. Перерисовывается сам, без страницы холста. */
+function ZoomButton({ viewState, onClick }: { viewState: ViewState; onClick(): void }) {
+  const percent = useSyncExternalStore(viewState.subscribe, viewState.zoomPercent)
+  return (
+    <button
+      type="button"
+      className="canvas-header__zoom"
+      aria-label={percent === null ? 'Zoom' : `Zoom ${percent}%, reset to 100%`}
+      title="Reset to 100%"
+      onClick={onClick}
+    >
+      {percent === null ? '' : `${percent}%`}
+    </button>
+  )
+}

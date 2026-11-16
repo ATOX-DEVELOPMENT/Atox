@@ -85,6 +85,81 @@
   --changed-file-icon-size: 14px;
   --diff-font-size: 12px;
   --diff-sign-width: 20px;
+  /* Холсты: экраны, которые агент показывает на отдельной странице. */
+  --canvas-gutter: 8px;
+  --canvas-stage-radius: 12px;
+  --canvas-grid-size: 22px;
+  --canvas-grid-dot: 1.2px;
+  --canvas-overlay-inset: 14px;
+  --canvas-pill-height: 30px;
+  --canvas-button-height: 28px;
+  --canvas-chip-height: 26px;
+  /* Подпись над экраном и рамка выбора — в пикселях окна при любом масштабе. */
+  --canvas-label-height: 22px;
+  --canvas-label-gap: 8px;
+  --canvas-label-font-size: 13px;
+  --canvas-ring-gap: 8px;
+  --canvas-ring-width: 2px;
+  --canvas-hover-ring-width: 1.5px;
+  /* Рамки устройств — в пикселях холста; их толщину задаёт FRAME_INSETS в lib/canvasView. */
+  --canvas-phone-radius: 56px;
+  --canvas-phone-screen-radius: 44px;
+  --canvas-tablet-radius: 36px;
+  --canvas-tablet-screen-radius: 18px;
+  --canvas-window-radius: 14px;
+  --canvas-plain-radius: 6px;
+  --canvas-island-top: 11px;
+  --canvas-island-width: 110px;
+  --canvas-island-height: 32px;
+  --canvas-chrome-padding: 16px;
+  --canvas-light-size: 12px;
+  --canvas-light-gap: 8px;
+  --canvas-address-width: 360px;
+  --canvas-address-height: 28px;
+  --canvas-minimap-width: 110px;
+  --canvas-minimap-height: 84px;
+  --canvas-agent-bar-height: 40px;
+  --canvas-spinner-size: 14px;
+  --canvas-spin-duration: 1s;
+  --canvas-request-width: 320px;
+  --canvas-request-radius: 16px;
+  --canvas-request-field-height: 64px;
+  --canvas-request-field-max-height: 160px;
+  --canvas-history-width: 340px;
+  --canvas-history-radius: 14px;
+  --canvas-ghost-width: 230px;
+  --canvas-ghost-height: 150px;
+  --canvas-ghost-phone-width: 84px;
+  --canvas-ghost-phone-height: 172px;
+  --canvas-list-gutter: 28px;
+  --canvas-list-search-width: 220px;
+  --canvas-card-min-width: 260px;
+  --canvas-card-radius: 16px;
+  --canvas-thumbnail-height: 190px;
+  --canvas-thumbnail-grid-size: 16px;
+  /* Строка холста под чатом: насколько она глубже названия чата и линия к ней. */
+  --canvas-row-indent: 18px;
+  --canvas-row-icon-size: 14px;
+  --canvas-connector-width: 10px;
+  --canvas-connector-radius: 7px;
+  /* Цвета холста: фон и сетка — в теме окна; рамки устройств — как у настоящих устройств. */
+  --canvas-background: light-dark(#e9e8ef, #161618);
+  --canvas-dot: light-dark(rgba(50, 40, 100, 0.16), rgba(255, 255, 255, 0.12));
+  --canvas-ghost-border: light-dark(rgba(50, 40, 100, 0.24), rgba(255, 255, 255, 0.22));
+  --canvas-field-background: light-dark(rgba(50, 40, 100, 0.04), rgba(0, 0, 0, 0.25));
+  --canvas-card-background: light-dark(#ffffff, rgba(255, 255, 255, 0.035));
+  --canvas-screen-shadow-color: light-dark(rgba(40, 30, 90, 0.16), rgba(0, 0, 0, 0.5));
+  --canvas-screen-background: #ffffff;
+  --canvas-device-bezel: #101114;
+  --canvas-chrome-background: #f4f4f8;
+  --canvas-chrome-border: #e8e8ef;
+  --canvas-address-background: #ffffff;
+  --canvas-address-text: #7b7c8c;
+  --canvas-light-close: #ff5f57;
+  --canvas-light-minimize: #febc2e;
+  --canvas-light-zoom: #28c840;
+  --canvas-thumbnail-line: #efeefa;
+  --canvas-thumbnail-accent: #e6e3fb;
 
   --chat-column-width: 768px;
   --chat-gutter: 24px;
@@ -866,6 +941,62 @@ ul {
 .row__action:hover {
   color: var(--color-text);
   background: var(--color-hover);
+}
+
+/*
+ * Холст чата — строка под ним, глубже названия чата, с линией от чата к значку холста.
+ * Подсвечена, пока холст открыт, как строка открытого чата.
+ */
+.row--canvas {
+  --canvas-row-start: calc(var(--chat-indent) + var(--canvas-row-indent));
+  position: relative;
+}
+
+/* Под помощником строка начинается там же, где его название. */
+.row--canvas[data-compact='true'] {
+  --canvas-row-start: calc(
+    var(--chat-indent) + var(--icon-size) + var(--status-gap) + var(--canvas-row-indent)
+  );
+}
+
+/* Линия идёт от строки чата сверху и загибается к значку холста. */
+.row--canvas::before {
+  content: '';
+  position: absolute;
+  top: calc(var(--row-spacing) * -1 - var(--canvas-connector-radius));
+  left: calc(var(--canvas-row-start) - var(--canvas-row-indent) + var(--row-gap) / 2);
+  width: var(--canvas-connector-width);
+  height: calc(50% + var(--row-spacing) + var(--canvas-connector-radius));
+  border-bottom: 1.5px solid var(--color-border);
+  border-left: 1.5px solid var(--color-border);
+  border-bottom-left-radius: var(--canvas-connector-radius);
+  pointer-events: none;
+}
+
+.row--canvas[data-active='true'] {
+  background: var(--color-active);
+}
+
+.canvas-row {
+  gap: var(--status-gap);
+  padding-left: var(--canvas-row-start);
+}
+
+.canvas-row__icon {
+  width: var(--canvas-row-icon-size);
+  height: var(--canvas-row-icon-size);
+  color: var(--color-text-muted);
+}
+
+.row--canvas .row__label {
+  flex: 1;
+}
+
+.sidebar-button__count {
+  margin-left: auto;
+  font-size: var(--font-size-small);
+  color: var(--color-text-muted);
+  font-variant-numeric: tabular-nums;
 }
 
 /* Профиль внизу сайдбара: таблетка, которая парит над краем окна */
@@ -5352,4 +5483,1115 @@ ul {
 
 .start-task__message:focus {
   border-color: var(--color-accent-text);
+}
+
+/* Холст: страница с экранами, которые показывает агент */
+
+.canvas-page {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--color-surface);
+  user-select: none;
+}
+
+/* Шапка холста стоит поверх общей шапки рабочей области и так же перетаскивает окно. */
+.canvas-header {
+  position: relative;
+  z-index: 4;
+  display: flex;
+  align-items: center;
+  gap: var(--workspace-title-gap);
+  flex-shrink: 0;
+  min-width: 0;
+  height: var(--workspace-header-height);
+  padding: 0 var(--workspace-header-padding) 0 var(--workspace-title-inset);
+  -webkit-app-region: drag;
+}
+
+.app[data-sidebar='hidden'] .canvas-header {
+  padding-left: calc(var(--traffic-lights-width) + var(--workspace-title-inset));
+}
+
+.canvas-header button,
+.canvas-header input {
+  -webkit-app-region: no-drag;
+}
+
+.canvas-header__title {
+  display: flex;
+  align-items: center;
+  gap: var(--status-gap);
+  min-width: 0;
+  margin: 0;
+  font-size: var(--font-size);
+  font-weight: 600;
+}
+
+.canvas-header__icon {
+  color: var(--color-text-muted);
+}
+
+.canvas-header__name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 2px 4px;
+  margin: 0 -4px;
+  border-radius: calc(var(--radius) - 2px);
+  font-weight: 600;
+}
+
+.canvas-header__name:hover {
+  background: var(--color-hover);
+}
+
+.canvas-header__title .row__input {
+  --row-height: var(--toolbar-button-size);
+  width: var(--menu-min-width);
+  flex: none;
+  margin-left: 0;
+}
+
+.canvas-header__project {
+  flex-shrink: 0;
+  font-size: 13px;
+  color: var(--color-text-muted);
+  white-space: nowrap;
+}
+
+.canvas-header__chat {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  height: var(--canvas-chip-height);
+  padding: 0 10px 0 8px;
+  border-radius: 999px;
+  font-size: var(--font-size-small);
+  background: var(--color-hover);
+  box-shadow: 0 0 0 1px var(--color-border);
+}
+
+.canvas-header__chat:hover:not(:disabled) {
+  background: var(--color-active);
+}
+
+.canvas-header__chat:disabled {
+  color: var(--color-text-muted);
+}
+
+.canvas-header__chat-dot {
+  width: calc(var(--status-dot-size) - 1px);
+  height: calc(var(--status-dot-size) - 1px);
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: var(--color-accent);
+}
+
+.canvas-header__chat:disabled .canvas-header__chat-dot {
+  background: var(--color-status-idle);
+}
+
+.canvas-header__chat-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.canvas-header__chat-arrow {
+  width: 12px;
+  height: 12px;
+  flex-shrink: 0;
+  color: var(--color-text-muted);
+}
+
+.canvas-header__badge {
+  flex-shrink: 0;
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  color: var(--color-text-muted);
+  background: var(--color-hover);
+}
+
+.canvas-header__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--toolbar-gap);
+  flex-shrink: 0;
+  margin-left: auto;
+}
+
+.canvas-header__zoom {
+  min-width: calc(var(--toolbar-button-size) * 1.5);
+  height: var(--toolbar-button-size);
+  padding: 0 6px;
+  border-radius: var(--radius);
+  font-size: var(--font-size-small);
+  color: var(--color-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.canvas-header__zoom:hover {
+  color: var(--color-text);
+  background: var(--color-hover);
+}
+
+.canvas-page__body {
+  display: flex;
+  flex: 1;
+  gap: var(--canvas-gutter);
+  min-height: 0;
+  padding: 0 var(--canvas-gutter) var(--canvas-gutter);
+}
+
+/* Поле холста: точечная сетка, которая едет вместе с экранами. */
+.canvas-stage,
+.canvas-empty {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  border-radius: var(--canvas-stage-radius);
+  background-color: var(--canvas-background);
+  background-image: radial-gradient(
+    var(--canvas-dot) var(--canvas-grid-dot),
+    transparent var(--canvas-grid-dot)
+  );
+  background-size: var(--canvas-grid-size) var(--canvas-grid-size);
+  box-shadow: inset 0 0 0 1px var(--color-border);
+}
+
+.canvas-stage {
+  cursor: grab;
+  touch-action: none;
+}
+
+.canvas-stage[data-panning='true'] {
+  cursor: grabbing;
+}
+
+.canvas-stage__world {
+  --z: 1;
+  position: absolute;
+  left: 0;
+  top: 0;
+  transform-origin: 0 0;
+  will-change: transform;
+}
+
+.canvas-screen {
+  position: absolute;
+  left: 0;
+  top: 0;
+  --frame-radius: var(--canvas-window-radius);
+}
+
+.canvas-screen[data-frame='phone'] {
+  --frame-radius: var(--canvas-phone-radius);
+  --screen-radius: var(--canvas-phone-screen-radius);
+}
+
+.canvas-screen[data-frame='tablet'] {
+  --frame-radius: var(--canvas-tablet-radius);
+  --screen-radius: var(--canvas-tablet-screen-radius);
+}
+
+.canvas-screen[data-frame='none'] {
+  --frame-radius: var(--canvas-plain-radius);
+}
+
+/* Экраны далеко за краем окна не рисуются: их iframe остаются загруженными. */
+.canvas-screen[data-offscreen='true'] {
+  visibility: hidden;
+}
+
+.canvas-screen[data-selected='true'],
+.canvas-screen[data-dragging='true'] {
+  z-index: 1;
+}
+
+/* Подпись не масштабируется вместе с холстом и не шире своего экрана. */
+.canvas-screen__label {
+  position: absolute;
+  left: 0;
+  bottom: 100%;
+  display: flex;
+  align-items: center;
+  gap: var(--status-gap);
+  height: calc(var(--canvas-label-height) + var(--canvas-label-gap));
+  max-width: calc(var(--frame-width) * var(--z) * 1px);
+  padding-bottom: var(--canvas-label-gap);
+  font-size: var(--canvas-label-font-size);
+  line-height: 1;
+  color: var(--color-text-muted);
+  white-space: nowrap;
+  transform: scale(calc(1 / var(--z)));
+  transform-origin: 0 100%;
+}
+
+.canvas-screen__name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-weight: 500;
+  color: var(--color-text);
+}
+
+.canvas-screen__device {
+  flex-shrink: 2;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.canvas-screen__label .row__input {
+  --row-height: calc(var(--canvas-label-height) + 6px);
+  width: var(--menu-min-width);
+  flex: none;
+  margin-left: 0;
+  font-size: var(--canvas-label-font-size);
+}
+
+.canvas-screen__note {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--color-attention);
+}
+
+.canvas-screen__note .icon {
+  width: 12px;
+  height: 12px;
+}
+
+.canvas-screen__tag {
+  flex-shrink: 0;
+  padding: 3px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  color: var(--color-on-accent);
+  background: var(--color-accent);
+}
+
+.canvas-screen__device-frame {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  padding: var(--frame-top) var(--frame-side) var(--frame-side);
+  border-radius: var(--frame-radius);
+  background: var(--canvas-screen-background);
+  box-shadow: 0 24px 60px var(--canvas-screen-shadow-color);
+}
+
+.canvas-screen[data-frame='phone'] .canvas-screen__device-frame,
+.canvas-screen[data-frame='tablet'] .canvas-screen__device-frame {
+  background: var(--canvas-device-bezel);
+}
+
+.canvas-screen__content {
+  display: block;
+  border: none;
+  border-radius: var(--screen-radius, 0);
+  background: var(--canvas-screen-background);
+  pointer-events: none;
+}
+
+.canvas-screen__island {
+  position: absolute;
+  top: calc(var(--frame-top) + var(--canvas-island-top));
+  left: 50%;
+  width: var(--canvas-island-width);
+  height: var(--canvas-island-height);
+  border-radius: 999px;
+  background: var(--canvas-device-bezel);
+  translate: -50% 0;
+}
+
+.canvas-screen__chrome {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  align-items: center;
+  height: var(--frame-top);
+  padding: 0 var(--canvas-chrome-padding);
+  background: var(--canvas-chrome-background);
+  border-bottom: 1px solid var(--canvas-chrome-border);
+}
+
+.canvas-screen__lights {
+  display: flex;
+  gap: var(--canvas-light-gap);
+}
+
+.canvas-screen__lights i {
+  width: var(--canvas-light-size);
+  height: var(--canvas-light-size);
+  border-radius: 50%;
+  background: var(--canvas-light-close);
+}
+
+.canvas-screen__lights i:nth-child(2) {
+  background: var(--canvas-light-minimize);
+}
+
+.canvas-screen__lights i:nth-child(3) {
+  background: var(--canvas-light-zoom);
+}
+
+.canvas-screen__address {
+  position: absolute;
+  left: 50%;
+  width: min(var(--canvas-address-width), 50%);
+  height: var(--canvas-address-height);
+  overflow: hidden;
+  padding: 0 var(--canvas-chrome-padding);
+  border: 1px solid var(--canvas-chrome-border);
+  border-radius: var(--radius);
+  font-size: 13px;
+  line-height: calc(var(--canvas-address-height) - 2px);
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--canvas-address-text);
+  background: var(--canvas-address-background);
+  translate: -50% 0;
+}
+
+/* Прозрачный слой над дизайном: экран тянут и выбирают, а не нажимают его кнопки. */
+.canvas-screen__overlay {
+  position: absolute;
+  inset: 0;
+  border-radius: var(--frame-radius);
+  cursor: default;
+}
+
+.canvas-screen__overlay:hover {
+  box-shadow: 0 0 0 calc(var(--canvas-hover-ring-width) / var(--z))
+    color-mix(in srgb, var(--color-accent) 55%, transparent);
+}
+
+.canvas-screen__overlay:focus-visible {
+  outline: calc(var(--canvas-ring-width) / var(--z)) solid var(--color-accent);
+  outline-offset: calc(var(--canvas-ring-gap) / var(--z));
+}
+
+.canvas-screen[data-dragging='true'] .canvas-screen__overlay {
+  cursor: grabbing;
+}
+
+.canvas-screen__ring {
+  position: absolute;
+  inset: calc(var(--canvas-ring-gap) / var(--z) * -1);
+  border: calc(var(--canvas-ring-width) / var(--z)) solid var(--color-accent);
+  border-radius: calc(var(--frame-radius) + var(--canvas-ring-gap) / var(--z));
+  pointer-events: none;
+}
+
+/* Плашки поверх холста: подсказка, мини-карта, работа агента. */
+.canvas-hint {
+  position: absolute;
+  left: var(--canvas-overlay-inset);
+  bottom: var(--canvas-overlay-inset);
+  display: flex;
+  align-items: center;
+  gap: var(--status-gap);
+  max-width: calc(100% - var(--canvas-minimap-width) - var(--canvas-overlay-inset) * 3);
+  height: var(--canvas-pill-height);
+  margin: 0;
+  padding: 0 12px;
+  border-radius: 999px;
+  font-size: var(--font-size-small);
+  color: var(--color-text-muted);
+  background: var(--color-menu);
+  box-shadow: var(--shadow-menu);
+  pointer-events: none;
+}
+
+.canvas-hint .icon {
+  width: 14px;
+  height: 14px;
+}
+
+.canvas-hint__text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Пока агент работает, внизу его плашка — подсказка уступает ей место. */
+.canvas-stage:has(.agent-bar) .canvas-hint {
+  display: none;
+}
+
+.canvas-minimap {
+  position: absolute;
+  right: var(--canvas-overlay-inset);
+  bottom: var(--canvas-overlay-inset);
+  width: var(--canvas-minimap-width);
+  height: var(--canvas-minimap-height);
+  overflow: hidden;
+  border-radius: calc(var(--radius) + 1px);
+  background: var(--color-menu);
+  box-shadow: var(--shadow-menu);
+  cursor: default;
+}
+
+.canvas-minimap__screen {
+  position: absolute;
+  display: block;
+  border-radius: 2px;
+  background: var(--color-text-muted);
+  opacity: 0.4;
+}
+
+.canvas-minimap__viewport {
+  position: absolute;
+  border: 1.5px solid var(--color-accent);
+  border-radius: 3px;
+  background: color-mix(in srgb, var(--color-accent) 10%, transparent);
+}
+
+.agent-bar {
+  position: absolute;
+  left: 50%;
+  bottom: var(--canvas-overlay-inset);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: calc(100% - (var(--canvas-minimap-width) + var(--canvas-overlay-inset) * 2) * 2);
+  height: var(--canvas-agent-bar-height);
+  padding: 0 6px 0 14px;
+  border-radius: 999px;
+  font-size: 13px;
+  white-space: nowrap;
+  background: var(--color-menu);
+  box-shadow: var(--shadow-menu);
+  translate: -50% 0;
+  cursor: default;
+}
+
+.agent-bar__spinner {
+  width: var(--canvas-spinner-size);
+  height: var(--canvas-spinner-size);
+  flex-shrink: 0;
+  border: 2px solid var(--color-accent);
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: spin var(--canvas-spin-duration) linear infinite;
+}
+
+.agent-bar__text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.agent-bar__file {
+  font-weight: 600;
+}
+
+.agent-bar__chat {
+  color: var(--color-text-muted);
+}
+
+.agent-bar__button {
+  flex-shrink: 0;
+  height: var(--canvas-button-height);
+  padding: 0 12px;
+  border-radius: 999px;
+  font-size: var(--font-size-small);
+  background: var(--color-hover);
+}
+
+.agent-bar__button:hover {
+  background: var(--color-active);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .agent-bar__spinner {
+    animation: none;
+  }
+}
+
+/* Окно просьбы к агенту: «Fix» у экрана и «Ask here» у пустого холста. */
+.fix-box {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+}
+
+.fix-box .request-box {
+  position: absolute;
+  left: 0;
+  top: 0;
+  pointer-events: auto;
+}
+
+.request-box {
+  width: var(--canvas-request-width);
+  max-width: 100%;
+  padding: 12px;
+  border: 1px solid var(--color-menu-border);
+  border-radius: var(--canvas-request-radius);
+  font-size: 13px;
+  text-align: left;
+  background: var(--color-menu);
+  box-shadow: var(--shadow-menu);
+  cursor: default;
+}
+
+.request-box__top {
+  display: flex;
+  align-items: baseline;
+  gap: var(--status-gap);
+  margin-bottom: 10px;
+}
+
+.request-box__title {
+  font-weight: 600;
+}
+
+.request-box__subtitle {
+  min-width: 0;
+  margin-left: auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+  color: var(--color-text-muted);
+}
+
+.request-box__context {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.request-box__chip {
+  max-width: 100%;
+  overflow: hidden;
+  padding: 3px 8px;
+  border-radius: calc(var(--radius) - 2px);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--color-text-muted);
+  background: var(--color-code);
+}
+
+.request-box__field {
+  display: block;
+  width: 100%;
+  min-height: var(--canvas-request-field-height);
+  max-height: var(--canvas-request-field-max-height);
+  padding: 9px 11px;
+  border: none;
+  border-radius: calc(var(--radius) + 2px);
+  font: inherit;
+  line-height: 1.45;
+  color: var(--color-text);
+  background: var(--canvas-field-background);
+  box-shadow: inset 0 0 0 1px var(--color-border);
+  outline: none;
+  resize: none;
+  user-select: text;
+}
+
+.request-box__field:focus {
+  box-shadow: inset 0 0 0 1px var(--color-accent-text);
+}
+
+.request-box__field::placeholder {
+  color: var(--color-text-muted);
+}
+
+.request-box__error {
+  margin: 8px 0 0;
+  font-size: var(--font-size-small);
+  color: var(--color-danger);
+  user-select: text;
+}
+
+.request-box__footer {
+  display: flex;
+  align-items: center;
+  gap: var(--status-gap);
+  margin-top: 10px;
+}
+
+.request-box__chat {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  font-size: 11px;
+  color: var(--color-text-muted);
+}
+
+.request-box__dot {
+  width: calc(var(--status-dot-size) - 1px);
+  height: calc(var(--status-dot-size) - 1px);
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: var(--color-accent);
+}
+
+.request-box__chat-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.canvas-button {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 6px;
+  height: var(--canvas-button-height);
+  padding: 0 12px;
+  border-radius: var(--radius);
+  font-size: var(--font-size-small);
+  font-weight: 500;
+  white-space: nowrap;
+  background: var(--color-hover);
+}
+
+.canvas-button:hover:not(:disabled) {
+  background: var(--color-active);
+}
+
+.canvas-button--primary {
+  font-weight: 600;
+  color: var(--color-on-accent);
+  background: var(--color-accent);
+}
+
+.canvas-button--primary:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--color-accent) 88%, var(--color-text));
+}
+
+.canvas-button:disabled {
+  opacity: 0.5;
+}
+
+.canvas-button__key {
+  display: grid;
+  place-items: center;
+  padding: 1px 4px;
+  border-radius: 4px;
+  font: inherit;
+  background: color-mix(in srgb, currentColor 20%, transparent);
+}
+
+.canvas-button__key svg {
+  width: 11px;
+  height: 11px;
+}
+
+/* Холст без экранов. */
+.canvas-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+  padding: 24px;
+  text-align: center;
+}
+
+.canvas-empty__ghosts {
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 22px;
+  width: 100%;
+  margin-bottom: 6px;
+}
+
+.canvas-empty__ghost {
+  flex: 0 1 var(--canvas-ghost-width);
+  min-width: 0;
+  height: var(--canvas-ghost-height);
+  border: 1.5px dashed var(--canvas-ghost-border);
+  border-radius: var(--canvas-window-radius);
+}
+
+.canvas-empty__ghost--phone {
+  flex: none;
+  width: var(--canvas-ghost-phone-width);
+  height: var(--canvas-ghost-phone-height);
+  border-radius: calc(var(--canvas-window-radius) + var(--status-dot-size));
+}
+
+.canvas-empty__title {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 600;
+}
+
+.canvas-empty__text {
+  max-width: 420px;
+  margin: 0;
+  line-height: 1.5;
+  color: var(--color-text-muted);
+}
+
+.canvas-empty__actions {
+  display: flex;
+  gap: var(--status-gap);
+}
+
+.canvas-empty__actions .canvas-button {
+  height: calc(var(--canvas-button-height) + 4px);
+  padding: 0 14px;
+  font-size: 13px;
+}
+
+/* История версий экрана — панель справа от холста. */
+.history-drawer {
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  width: var(--canvas-history-width);
+  overflow: hidden;
+  border: 1px solid var(--color-menu-border);
+  border-radius: var(--canvas-history-radius);
+  background: var(--color-menu);
+  box-shadow: var(--shadow-menu);
+}
+
+.history-drawer__header {
+  display: flex;
+  align-items: baseline;
+  gap: var(--status-gap);
+  padding: 14px 16px 10px;
+}
+
+.history-drawer__title {
+  margin: 0;
+  font-size: var(--font-size);
+  font-weight: 600;
+}
+
+.history-drawer__canvas {
+  min-width: 0;
+  margin-left: auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--font-size-small);
+  color: var(--color-text-muted);
+}
+
+.history-drawer__screens {
+  padding: 0 16px 10px;
+}
+
+.history-drawer__screens .segmented {
+  overflow-x: auto;
+}
+
+.history-drawer__screens .segmented__item {
+  flex: 1 0 auto;
+  justify-content: center;
+  max-width: 50%;
+}
+
+.history-drawer__screen-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.history-drawer__body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.history-drawer__list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.history-drawer__message {
+  margin: 16px;
+  font-size: 13px;
+  color: var(--color-text-muted);
+}
+
+.version {
+  border-top: 1px solid var(--color-border);
+}
+
+.version[data-current='true'] {
+  background: color-mix(in srgb, var(--color-accent) 8%, transparent);
+}
+
+.version__main {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 100%;
+  padding: 12px 16px;
+  text-align: left;
+}
+
+.version__main:hover {
+  background: var(--color-hover);
+}
+
+/* Старая версия, которую сейчас показывает экран. */
+.version:not([data-current='true']) .version__main[aria-pressed='true'] {
+  background: var(--color-hover);
+  box-shadow: inset 2px 0 0 var(--color-accent);
+}
+
+.version__meta {
+  display: flex;
+  align-items: center;
+  gap: var(--status-gap);
+  font-size: var(--font-size-small);
+  color: var(--color-text-muted);
+}
+
+.version__badge {
+  padding: 1px 7px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  background: var(--color-hover);
+}
+
+.version__badge--current {
+  color: var(--color-on-accent);
+  background: var(--color-accent);
+}
+
+.version__text {
+  display: -webkit-box;
+  overflow: hidden;
+  font-size: 13px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+}
+
+.version__actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 16px 12px;
+}
+
+.version__question {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--font-size-small);
+  color: var(--color-text-muted);
+}
+
+/* Список холстов */
+
+.canvas-list {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  padding-top: var(--workspace-header-height);
+  background: var(--color-surface);
+  user-select: none;
+}
+
+.canvas-list__header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 8px 0 18px;
+  padding: 0 var(--canvas-list-gutter);
+}
+
+.canvas-list__title {
+  margin: 0 6px 0 0;
+  font-size: 22px;
+  font-weight: 600;
+}
+
+.canvas-list__search {
+  margin-left: auto;
+}
+
+.canvas-list__search input {
+  width: var(--canvas-list-search-width);
+}
+
+.canvas-list__body {
+  flex: 1;
+  min-height: 0;
+  padding: 0 var(--canvas-list-gutter) var(--canvas-list-gutter);
+  overflow-y: auto;
+}
+
+.canvas-list__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(var(--canvas-card-min-width), 1fr));
+  gap: 18px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.canvas-list__empty {
+  margin-top: 48px;
+  text-align: center;
+  color: var(--color-text-muted);
+}
+
+.canvas-list__empty-title {
+  margin: 0;
+  font-weight: 500;
+  color: var(--color-text);
+}
+
+.canvas-list__empty-hint {
+  margin: 6px 0 0;
+  font-size: 13px;
+}
+
+.canvas-list__code {
+  padding: 1px 5px;
+  border-radius: 4px;
+  font-family: var(--font-mono);
+  font-size: var(--font-size-small);
+  background: var(--color-code);
+}
+
+.canvas-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  overflow: hidden;
+  border-radius: var(--canvas-card-radius);
+  background: var(--canvas-card-background);
+  box-shadow: inset 0 0 0 1px var(--color-border);
+}
+
+.canvas-card:hover {
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-text) 18%, transparent);
+}
+
+.canvas-card__open {
+  display: block;
+  width: 100%;
+}
+
+.canvas-thumbnail {
+  height: var(--canvas-thumbnail-height);
+  background-color: var(--canvas-background);
+  background-image: radial-gradient(var(--canvas-dot) 1px, transparent 1px);
+  background-size: var(--canvas-thumbnail-grid-size) var(--canvas-thumbnail-grid-size);
+}
+
+.canvas-card[data-archived='true'] .canvas-thumbnail__map {
+  opacity: 0.6;
+}
+
+.canvas-thumbnail__map {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.canvas-thumbnail__screen > rect:first-child {
+  fill: var(--canvas-screen-background);
+  stroke: var(--color-border);
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+}
+
+.canvas-thumbnail__screen {
+  filter: drop-shadow(0 6px 12px var(--canvas-screen-shadow-color));
+}
+
+.canvas-thumbnail__line {
+  fill: var(--canvas-thumbnail-line);
+}
+
+.canvas-thumbnail__line[data-accent='true'] {
+  fill: var(--canvas-thumbnail-accent);
+}
+
+.canvas-card__info {
+  min-width: 0;
+  padding: 12px 14px 14px;
+}
+
+.canvas-card__name {
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--font-size);
+  font-weight: 600;
+}
+
+.canvas-card__info .row__input {
+  --row-height: calc(var(--canvas-button-height) + 4px);
+  width: 100%;
+}
+
+.canvas-card__details {
+  margin: 3px 0 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--font-size-small);
+  color: var(--color-text-muted);
+}
+
+.canvas-card__menu {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  display: grid;
+  place-items: center;
+  width: var(--canvas-button-height);
+  height: var(--canvas-button-height);
+  border-radius: var(--radius);
+  color: var(--color-text);
+  background: var(--color-menu);
+  box-shadow: var(--shadow-menu);
+  opacity: 0;
+}
+
+.canvas-card:hover .canvas-card__menu,
+.canvas-card:focus-within .canvas-card__menu {
+  opacity: 1;
+}
+
+.canvas-card__menu .icon {
+  width: 16px;
+  height: 16px;
 }
