@@ -50,6 +50,12 @@ export function screenFrame(screen: Pick<CanvasScreen, 'device'>): ScreenFrame {
   return screen.device === 'custom' ? 'none' : SCREEN_DEVICES[screen.device].frame
 }
 
+/**
+ * Место над экраном под его подпись, в пикселях окна: подпись не масштабируется вместе с холстом.
+ * Чуть больше высоты подписи (`--canvas-label-height` и `--canvas-label-gap` в global.css).
+ */
+export const SCREEN_LABEL_SPACE = 32
+
 /** Экран вместе с рамкой устройства: (x, y) экрана — угол самой рамки. */
 export function screenBounds(screen: CanvasScreen, position: Point = screen): Rect {
   const insets = FRAME_INSETS[screenFrame(screen)]

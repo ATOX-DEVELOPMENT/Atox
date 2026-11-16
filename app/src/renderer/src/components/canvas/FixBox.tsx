@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useRef } from 'react'
-import { placeBeside, toViewport, type Rect } from '../../lib/canvasView'
+import { placeBeside, SCREEN_LABEL_SPACE, toViewport, type Rect } from '../../lib/canvasView'
 import { RequestBox } from './RequestBox'
 import type { ViewState } from './viewState'
 
@@ -45,8 +45,14 @@ export function FixBox({
     if (!box || !view) {
       return
     }
+    // Окно не должно закрывать подпись экрана: на ней может быть и «Build error».
+    const screen = toViewport(view, target)
     const position = placeBeside(
-      toViewport(view, target),
+      {
+        ...screen,
+        y: screen.y - SCREEN_LABEL_SPACE,
+        height: screen.height + SCREEN_LABEL_SPACE
+      },
       { width: box.offsetWidth, height: box.offsetHeight },
       viewState.viewport(),
       obstacles.map((rect) => toViewport(view, rect)),
