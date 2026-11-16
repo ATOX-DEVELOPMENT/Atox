@@ -147,6 +147,7 @@ function normalizeScreen(raw: unknown, now: number): StoredScreen | null {
         ? revision
         : 0,
     missing: value['missing'] === true,
+    buildError: null,
     updatedAt: timestamp(value['updatedAt'], now),
     versions,
     ...(typeof pendingFix === 'string' && pendingFix.trim() && { pendingFix })

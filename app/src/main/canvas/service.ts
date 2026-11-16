@@ -393,6 +393,7 @@ export class CanvasService implements ScreenDocumentSource {
         ...placeNewScreen(canvas.screens, newLook.width),
         revision: 0,
         missing: false,
+        buildError: null,
         updatedAt: Date.now(),
         versions: []
       }
@@ -539,9 +540,6 @@ export class CanvasService implements ScreenDocumentSource {
     }
     if (content === null) {
       this.restoring.delete(key)
-      if (!canvas.archived) {
-        this.watcher.retryMissing(key)
-      }
       if (!screen.missing) {
         screen.missing = true
         this.changed()
