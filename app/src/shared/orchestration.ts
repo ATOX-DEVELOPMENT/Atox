@@ -60,6 +60,8 @@ export interface CanvasScreenInfo {
   file: string
   /** Файла нет или он не читается: холст показывает последнюю сохранённую версию. */
   missing: boolean
+  /** Экран-React не собирается: «файл:строка: что не так»; `null` — собирается. */
+  buildError: string | null
 }
 
 /** Команды и их параметры/результаты. */
@@ -86,8 +88,8 @@ export interface OrchestrationMethods {
     result: { name: string; screens: CanvasScreenInfo[] } | null
   }
   /**
-   * Ставит на холст чата экран из HTML-файла или обновляет экран с тем же именем (без учёта
-   * регистра). Холста нет — он создаётся. `file` — абсолютный путь, `size` — `WxH`.
+   * Ставит на холст чата экран из файла (HTML или React-компонент) или обновляет экран с тем же именем (без учёта
+   * регистра). Холста нет — он создаётся. `file` — абсолютный путь (.html, .tsx, .jsx), `size` — `WxH`.
    */
   canvasScreenSet: {
     params: { name: string; file: string; device?: string; size?: string }
@@ -102,12 +104,22 @@ export interface OrchestrationMethods {
       file: string
       /** Проблемы раскладки словами; пусто — всё помещается или измерить не удалось. */
       layout: string[]
+      /** Экран-React не собрался: «файл:строка: что не так»; `null` — собрался. */
+      buildError: string | null
+      /** Ошибки страницы при открытии: необработанные исключения, `console.error`. */
+      runtimeErrors: string[]
     }
   }
   /** Снимает экран в PNG, как он выглядит на холсте, и проверяет раскладку. */
   canvasScreenPreview: {
     params: { name: string }
-    result: { screen: string; path: string; layout: string[] }
+    result: {
+      screen: string
+      path: string
+      layout: string[]
+      buildError: string | null
+      runtimeErrors: string[]
+    }
   }
   /** Убирает экран с холста; HTML-файл остаётся. */
   canvasScreenRemove: { params: { name: string }; result: { screen: string } }

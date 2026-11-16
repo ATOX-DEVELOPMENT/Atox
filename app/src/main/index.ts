@@ -9,8 +9,10 @@ import { ConversationManager } from './conversations/manager'
 import { TranscriptStore } from './conversations/transcripts'
 import { installDesktopEntry } from './desktopEntry'
 import { GitBranchTracker } from './gitBranches'
+import { CANVAS_KIT_DIRECTORY, CANVAS_VENDOR_DIRECTORY } from '../shared/canvasRuntime'
 import { handleImageProtocol, IMAGE_SCHEME } from './imageProtocol'
 import { CANVAS_SCHEME, handleCanvasProtocol } from './canvas/protocol'
+import { canvasResourcePath } from './canvas/resources'
 import { CanvasService } from './canvas/service'
 import {
   broadcastBoard,
@@ -152,11 +154,16 @@ async function bootstrap(): Promise<void> {
     onAccountChanged: () => void planLimits.refreshAll()
   })
   const canvas = await CanvasService.load(
-    { store, conversations, onChange: broadcastCanvas },
+    {
+      store,
+      conversations,
+      kitDirectory: canvasResourcePath(CANVAS_KIT_DIRECTORY),
+      onChange: broadcastCanvas
+    },
     join(userData, CANVAS_FILE_NAME),
     join(userData, CANVAS_HISTORY_DIRECTORY_NAME)
   )
-  handleCanvasProtocol(canvas, APP_FRAME_SOURCE)
+  handleCanvasProtocol(canvas, APP_FRAME_SOURCE, canvasResourcePath(CANVAS_VENDOR_DIRECTORY))
   app.on('will-quit', () => canvas.dispose())
   const planLimits = await PlanLimitsMonitor.load(
     {

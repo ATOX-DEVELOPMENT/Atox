@@ -1,9 +1,11 @@
-import { extname, isAbsolute, relative, sep } from 'node:path'
+import { isAbsolute, relative, sep } from 'node:path'
 import {
   CANVAS_NAME_MAX_LENGTH,
+  CANVAS_PROTOCOL,
   SCREEN_DEVICES,
   SCREEN_GAP,
   SCREEN_SIZE,
+  screenSourceKind,
   type CanvasScreen,
   type ScreenDevice
 } from '../../shared/canvas'
@@ -22,8 +24,6 @@ export const CANVAS_ROW_WIDTH = 3600
 /** Экран — один лёгкий HTML-файл; больший файл не читается и не сохраняется в историю. */
 export const SCREEN_FILE_MAX_MB = 2
 export const SCREEN_FILE_MAX_BYTES = SCREEN_FILE_MAX_MB * 1024 * 1024
-
-const SCREEN_FILE_EXTENSIONS = new Set(['.html', '.htm'])
 
 /** Начало сообщений холста: по нему агент (и навык `atox-canvas`) узнаёт их. */
 export const CANVAS_MESSAGE_PREFIX = '[Atox canvas]'
@@ -116,7 +116,7 @@ export function deviceName(device: ScreenDevice): string {
 }
 
 export function isScreenFileName(path: string): boolean {
-  return SCREEN_FILE_EXTENSIONS.has(extname(path).toLowerCase())
+  return screenSourceKind(path) !== null
 }
 
 /** Путь лежит в папке или совпадает с ней; оба пути — абсолютные и без символических ссылок. */
@@ -185,6 +185,8 @@ export interface FixMessage {
   file: string
   /** Скриншот экрана; `null` — снять не удалось, строки в сообщении не будет. */
   screenshot: string | null
+  /** Ошибка сборки экрана; `null` — экран собирается, строки в сообщении не будет. */
+  buildError: string | null
 }
 
 /** Просьба человека поправить экран. Формат знает навык `atox-canvas`: менять его вместе. */
@@ -193,14 +195,16 @@ export function formatFixMessage({
   canvasName,
   text,
   file,
-  screenshot
+  screenshot,
+  buildError
 }: FixMessage): string {
   const lines = [
     `${CANVAS_MESSAGE_PREFIX} Fix the screen "${screenName}" on the canvas "${canvasName}":`,
     text.trim(),
     '',
     `File: ${file}`,
-    ...(screenshot ? [`Screenshot: ${screenshot}`] : [])
+    ...(screenshot ? [`Screenshot: ${screenshot}`] : []),
+    ...(buildError ? [`Build error: ${buildError}`] : [])
   ]
   return lines.join('\n')
 }
@@ -213,12 +217,15 @@ export function formatCanvasMessage(text: string): string {
 /**
  * Политика безопасности страницы экрана: только встроенные стили и скрипты, картинки
  * и шрифты из data:, никакой сети, форм и смены адреса. Встраивать страницу может только окно
- * приложения (`frameAncestor`).
+ * приложения (`frameAncestor`). Экран-React дополнительно берёт скрипты схемы `atox-canvas:`
+ * (общие react и Tailwind) и компилирует стили Tailwind через WebAssembly.
  */
-export function screenContentSecurityPolicy(frameAncestor: string): string {
+export function screenContentSecurityPolicy(frameAncestor: string, modules: boolean): string {
   return [
     "default-src 'none'",
-    "script-src 'unsafe-inline'",
+    modules
+      ? `script-src ${CANVAS_PROTOCOL}: 'unsafe-inline' 'wasm-unsafe-eval'`
+      : "script-src 'unsafe-inline'",
     "style-src 'unsafe-inline'",
     'img-src data: blob:',
     'font-src data:',

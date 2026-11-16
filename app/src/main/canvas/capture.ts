@@ -11,10 +11,28 @@ const SCREENSHOT_DIRECTORY = join(tmpdir(), 'atox-canvas')
 const SCREENSHOT_MAX_AGE_MS = 24 * 60 * 60 * 1000
 
 /** Дольше скриншот не ждём: просьба уходит агенту и без него. */
-const CAPTURE_TIMEOUT_MS = 5000
+const CAPTURE_TIMEOUT_MS = 10_000
 
 /** После загрузки страница ещё дорисовывает шрифты и анимации появления. */
 const SETTLE_MS = 300
+
+/**
+ * Tailwind собирает стили уже в окне, и в первый раз за запуск приложения это долго
+ * (разбор WebAssembly): снимок раньше показал бы экран без оформления.
+ */
+const STYLES_POLL_MS = 50
+const STYLES_WAIT_MS = 6000
+
+/** Страница с Tailwind готова, когда он собрал стили и перестал их менять. */
+const STYLES_STATE_SCRIPT = `(() => {
+  if (!document.querySelector('style[type="text/tailwindcss"]')) {
+    return null
+  }
+  const built = [...document.querySelectorAll('style')].find((style) =>
+    style.textContent.startsWith('/*! tailwindcss')
+  )
+  return built ? built.textContent.length : 0
+})()`
 
 /** Что страница экрана заняла по факту: её содержимое и окно, в котором её мерили. */
 export interface ContentSize {
@@ -24,12 +42,24 @@ export interface ContentSize {
   viewportHeight: number
 }
 
-export interface ScreenRender {
-  /** Путь к PNG. */
-  path: string
+/** Что показала страница экрана: размеры содержимого и ошибки, которые она вывела. */
+export interface ScreenInspection {
   /** Размеры содержимого; `null` — измерить не удалось. */
   size: ContentSize | null
+  /** Ошибки страницы: необработанные исключения, `console.error`, запреты политики. */
+  errors: string[]
 }
+
+export interface ScreenRender extends ScreenInspection {
+  /** Путь к PNG. */
+  path: string
+}
+
+/** Сколько ошибок страницы показывать: первые обычно и есть причина остальных. */
+const MAX_PAGE_ERRORS = 5
+
+/** Ошибка страницы в одну строку: стек агенту ни к чему. */
+const MAX_PAGE_ERROR_LENGTH = 300
 
 /**
  * Скрытое окно без Node и с песочницей размером ровно с экран: страница по адресу
@@ -41,7 +71,7 @@ async function inScreenWindow<Result>(
   url: string,
   width: number,
   height: number,
-  task: (window: BrowserWindow) => Promise<Result>
+  task: (window: BrowserWindow, errors: string[]) => Promise<Result>
 ): Promise<Result | null> {
   const window = new BrowserWindow({
     show: false,
@@ -61,6 +91,13 @@ async function inScreenWindow<Result>(
   window.webContents.setAudioMuted(true)
   window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
   window.webContents.on('will-navigate', (event) => event.preventDefault())
+  const errors: string[] = []
+  window.webContents.on('console-message', ({ level, message }) => {
+    const line = message.split('\n')[0]?.trim().slice(0, MAX_PAGE_ERROR_LENGTH)
+    if (level === 'error' && line && errors.length < MAX_PAGE_ERRORS && !errors.includes(line)) {
+      errors.push(line)
+    }
+  })
   let timer: NodeJS.Timeout | undefined
   try {
     const timeout = new Promise<never>((_resolve, reject) => {
@@ -70,7 +107,8 @@ async function inScreenWindow<Result>(
       (async () => {
         await window.loadURL(url)
         await new Promise((resolve) => setTimeout(resolve, SETTLE_MS))
-        return task(window)
+        await waitForStyles(window)
+        return task(window, errors)
       })(),
       timeout
     ])
@@ -80,6 +118,22 @@ async function inScreenWindow<Result>(
   } finally {
     clearTimeout(timer)
     window.destroy()
+  }
+}
+
+/** Ждёт, пока Tailwind соберёт стили; страницы без Tailwind и сбой ожидания — не ждут. */
+async function waitForStyles(window: BrowserWindow): Promise<void> {
+  const deadline = Date.now() + STYLES_WAIT_MS
+  let previous: unknown
+  while (Date.now() < deadline) {
+    const state: unknown = await window.webContents
+      .executeJavaScript(STYLES_STATE_SCRIPT)
+      .catch(() => null)
+    if (state === null || (typeof state === 'number' && state > 0 && state === previous)) {
+      return
+    }
+    previous = state
+    await new Promise((resolve) => setTimeout(resolve, STYLES_POLL_MS))
   }
 }
 
@@ -118,10 +172,10 @@ export async function captureScreen(
   width: number,
   height: number
 ): Promise<ScreenRender | null> {
-  const rendered = await inScreenWindow(url, width, height, async (window) => {
+  const rendered = await inScreenWindow(url, width, height, async (window, errors) => {
     const size = await measure(window)
     const image = await window.webContents.capturePage(undefined, { stayHidden: true })
-    return { size, png: image.isEmpty() ? null : image.toPNG() }
+    return { size, errors: [...errors], png: image.isEmpty() ? null : image.toPNG() }
   })
   if (!rendered?.png) {
     return null
@@ -131,20 +185,23 @@ export async function captureScreen(
     void removeOldScreenshots()
     const path = join(SCREENSHOT_DIRECTORY, `screen-${randomUUID()}.png`)
     await writeFile(path, rendered.png)
-    return { path, size: rendered.size }
+    return { path, size: rendered.size, errors: rendered.errors }
   } catch (error) {
     console.error('Failed to save a canvas screenshot', error)
     return null
   }
 }
 
-/** Только измерение, без снимка: для проверки экрана, который агент только что поставил. */
-export function measureScreen(
+/** Только проверка, без снимка: для экрана, который агент только что поставил. */
+export function inspectScreen(
   url: string,
   width: number,
   height: number
-): Promise<ContentSize | null> {
-  return inScreenWindow(url, width, height, measure).then((size) => size ?? null)
+): Promise<ScreenInspection | null> {
+  return inScreenWindow(url, width, height, async (window, errors) => ({
+    size: await measure(window),
+    errors: [...errors]
+  }))
 }
 
 async function removeOldScreenshots(): Promise<void> {
