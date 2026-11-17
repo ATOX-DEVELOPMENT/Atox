@@ -103,7 +103,8 @@ Quick reference (details and props are in \`kit.md\`):
 ## Commands
 
 \`\`\`sh
-atox canvas                                                    # this chat's canvas: screens with device, size, file and build status
+atox canvas                                                    # this chat's canvases: screens with device, size, file and build status
+atox canvas new "Pitch deck"                                   # one more canvas in this chat (see "Several canvases")
 atox canvas screen set Login .atox/canvas/login.tsx --device iphone
 atox canvas screen set "Admin dashboard" .atox/canvas/admin.tsx --device web
 atox canvas screen set Widget .atox/canvas/widget.tsx --size 360x640
@@ -145,6 +146,10 @@ When screens follow each other (a user flow, onboarding, checkout), connect them
 
 When the user wants to show the canvas to someone (a client, a teammate), run \`atox canvas share\`: it publishes a snapshot as a web page and prints a link. The page opens in any browser, also on a phone, with pan and zoom, and is view only (no comments, no editing). Give the link to the user. After you change screens, run the command again: the page updates and the link stays the same. \`atox canvas share stop\` closes the link. The user can do the same with the Share button on the canvas.
 
+## Several canvases
+
+A chat can have more than one canvas, for example the app screens and a separate presentation. Do not mix them: \`atox canvas new "<name>"\` adds one, only when the user asks for it or the new work clearly does not belong on the existing canvas. When the chat has several canvases, every canvas command needs \`--canvas "<name>"\` (for example \`atox canvas screen set Cover .atox/canvas/cover.tsx --device slide --canvas "Pitch deck"\`); without it the command refuses and lists the names. With one canvas you can leave it out. The "[Atox canvas] Fix the screen ..." message names the canvas: pass that name.
+
 ## Presentations and documents
 
 When the user asks for a presentation, slides, a commercial proposal, a report or "a PDF", make it on the canvas: one screen per slide or page, \`--device slide\` (1920x1080) or \`--device a4\` (794x1123), added in reading order (the export goes left to right, rows top to bottom). Follow section 8 of \`kit.md\`. Preview every page. When the user wants the file, run \`atox canvas export pdf\` and tell them the path it prints. The user can also export from the Export button on the canvas, and can ask for changes by clicking a page.
@@ -179,6 +184,7 @@ The user right-clicked a screen, chose Fix and asked for a change. The message h
 
 - Open the File, look at the Screenshot, make the change in the code. The canvas rebuilds by itself. If there is a Build error, fix it first.
 - Do not run \`atox canvas screen set\` again unless the device or size must change.
+- The canvas is named in the message; when the chat has several canvases, pass it with \`--canvas "<name>"\` to \`atox canvas\` commands.
 - Do not ask the user for screenshots or which file: both are in the message.
 - After a bigger change run \`atox canvas screen preview <name>\` to check the result.
 - Answer in one or two lines with what you changed.

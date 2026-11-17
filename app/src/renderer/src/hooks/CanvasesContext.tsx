@@ -70,8 +70,8 @@ export function useCanvas(canvasId: string): Canvas | undefined {
   return useSyncExternalStore(store.subscribe, select)
 }
 
-/** Холст чата вне архива; строка чата перерисовывается, только когда меняется он сам. */
-export function useChatCanvas(chatId: string): Canvas | undefined {
+/** Холсты чата вне архива: у чата их может быть несколько. */
+export function useChatCanvases(chatId: string): readonly Canvas[] {
   const store = useCanvasStore()
   const select = useCallback(() => store.activeOfChat(chatId), [store, chatId])
   return useSyncExternalStore(store.subscribe, select)

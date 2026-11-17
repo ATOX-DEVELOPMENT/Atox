@@ -15,7 +15,7 @@ import {
 } from '../../shared/orchestration'
 import type { AgentDetector } from '../agents'
 import { CanvasError } from '../canvas/rules'
-import type { CanvasService } from '../canvas/service'
+import type { CanvasService, CanvasTarget } from '../canvas/service'
 import { errorMessage } from '../conversations/display'
 import type { ConversationManager } from '../conversations/manager'
 import type { ChatLocation, ProjectStore } from '../store'
@@ -50,6 +50,11 @@ interface OrchestrationServices {
 
 /** Ошибка, понятная агенту: её текст уходит в ответ команды как есть. */
 class CommandError extends Error {}
+
+/** Холст, который назвал агент (`--canvas`), в чате вызывающего. */
+function targetOf(caller: ChatLocation, canvas: unknown): CanvasTarget {
+  return { chatId: caller.chat.id, ...(typeof canvas === 'string' && { canvas }) }
+}
 
 type Handlers = {
   [Method in OrchestrationMethod]: (
@@ -294,28 +299,36 @@ export class OrchestrationServer {
       return { removed: workers.map(({ id }) => id) }
     },
 
-    canvas: (caller) => this.services.canvas.describe(caller.chat.id),
+    canvas: (caller, { canvas }) => this.services.canvas.describe(targetOf(caller, canvas)),
 
-    canvasScreenSet: (caller, { name, file, device, size }) => {
+    canvasNew: (caller, { name }) => {
+      if (typeof name !== 'string' || !name.trim()) {
+        throw new CommandError('Specify the canvas name.')
+      }
+      return this.services.canvas.createForAgent(caller, name)
+    },
+
+    canvasScreenSet: (caller, { name, file, device, size, canvas }) => {
       if (typeof name !== 'string' || typeof file !== 'string') {
         throw new CommandError('Specify the screen name and its HTML file.')
       }
       return this.services.canvas.setScreen(caller, {
         name,
         file,
+        ...(typeof canvas === 'string' && { canvas }),
         ...(typeof device === 'string' && { device }),
         ...(typeof size === 'string' && { size })
       })
     },
 
-    canvasScreenPreview: (caller, { name }) => {
+    canvasScreenPreview: (caller, { name, canvas }) => {
       if (typeof name !== 'string' || !name.trim()) {
         throw new CommandError('Specify the name of the screen to preview.')
       }
-      return this.services.canvas.previewScreen(caller.chat.id, name)
+      return this.services.canvas.previewScreen(targetOf(caller, canvas), name)
     },
 
-    canvasArrange: (caller, { rows }) => {
+    canvasArrange: (caller, { rows, canvas }) => {
       if (
         !Array.isArray(rows) ||
         rows.length === 0 ||
@@ -323,27 +336,27 @@ export class OrchestrationServer {
       ) {
         throw new CommandError('Specify the rows: a list of screen names for each row.')
       }
-      return this.services.canvas.arrangeScreens(caller.chat.id, rows)
+      return this.services.canvas.arrangeScreens(targetOf(caller, canvas), rows)
     },
 
-    canvasLinkSet: (caller, { from, to, on }) => {
+    canvasLinkSet: (caller, { from, to, on, canvas }) => {
       if (typeof from !== 'string' || typeof to !== 'string' || !from.trim() || !to.trim()) {
         throw new CommandError('Specify the names of the two screens.')
       }
-      return this.services.canvas.setLink(caller.chat.id, {
+      return this.services.canvas.setLink(targetOf(caller, canvas), {
         from,
         to,
         ...(typeof on === 'string' && { on })
       })
     },
 
-    canvasLinkRemove: (caller, { from, to, on }) => {
+    canvasLinkRemove: (caller, { from, to, on, canvas }) => {
       if (typeof from !== 'string' || typeof to !== 'string' || !from.trim() || !to.trim()) {
         throw new CommandError('Specify the names of the two screens.')
       }
       return {
         removed: this.services.canvas.removeLink(
-          caller.chat.id,
+          targetOf(caller, canvas),
           from,
           to,
           typeof on === 'string' ? on : undefined
@@ -351,7 +364,7 @@ export class OrchestrationServer {
       }
     },
 
-    canvasGroupSet: (caller, { name, screens }) => {
+    canvasGroupSet: (caller, { name, screens, canvas }) => {
       if (
         typeof name !== 'string' ||
         !name.trim() ||
@@ -360,34 +373,37 @@ export class OrchestrationServer {
       ) {
         throw new CommandError('Specify the group name and the names of its screens.')
       }
-      return this.services.canvas.setGroup(caller.chat.id, name, screens)
+      return this.services.canvas.setGroup(targetOf(caller, canvas), name, screens)
     },
 
-    canvasGroupRemove: (caller, { name }) => {
+    canvasGroupRemove: (caller, { name, canvas }) => {
       if (typeof name !== 'string' || !name.trim()) {
         throw new CommandError('Specify the name of the group to remove.')
       }
-      return { name: this.services.canvas.removeGroup(caller.chat.id, name) }
+      return { name: this.services.canvas.removeGroup(targetOf(caller, canvas), name) }
     },
 
-    canvasShare: async (caller) => {
-      const { url } = await this.services.canvas.shareForAgent(caller.chat.id)
+    canvasShare: async (caller, { canvas }) => {
+      const { url } = await this.services.canvas.shareForAgent(targetOf(caller, canvas))
       return { url }
     },
 
-    canvasShareStop: async (caller) => {
-      await this.services.canvas.unshareForAgent(caller.chat.id)
+    canvasShareStop: async (caller, { canvas }) => {
+      await this.services.canvas.unshareForAgent(targetOf(caller, canvas))
       return {}
     },
 
-    canvasExport: async (caller, { format, screens, out }) => {
+    canvasExport: async (caller, { format, screens, out, canvas }) => {
       if (typeof format !== 'string') {
         throw new CommandError('Specify the format: pdf, png or pptx.')
       }
-      if (screens !== undefined && !(Array.isArray(screens) && screens.every((name) => typeof name === 'string'))) {
+      if (
+        screens !== undefined &&
+        !(Array.isArray(screens) && screens.every((name) => typeof name === 'string'))
+      ) {
         throw new CommandError('The screens must be a list of names.')
       }
-      const result = await this.services.canvas.exportForAgent(caller.chat.id, {
+      const result = await this.services.canvas.exportForAgent(targetOf(caller, canvas), {
         format,
         ...(screens !== undefined && { screens }),
         ...(typeof out === 'string' && { out })
@@ -395,11 +411,11 @@ export class OrchestrationServer {
       return { ...result, format }
     },
 
-    canvasScreenRemove: async (caller, { name }) => {
+    canvasScreenRemove: async (caller, { name, canvas }) => {
       if (typeof name !== 'string' || !name.trim()) {
         throw new CommandError('Specify the name of the screen to remove.')
       }
-      return { screen: await this.services.canvas.removeScreen(caller.chat.id, name) }
+      return { screen: await this.services.canvas.removeScreen(targetOf(caller, canvas), name) }
     },
 
     workers: (caller) =>

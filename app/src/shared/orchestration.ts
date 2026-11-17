@@ -50,6 +50,11 @@ export interface WorkerInfo {
 }
 
 /** Экран на холсте чата, как его видит агент. */
+/** Какой холст чата имеет в виду команда; не задан — единственный холст чата. */
+export interface CanvasTargetParams {
+  canvas?: string
+}
+
 export interface CanvasScreenInfo {
   name: string
   /** Устройство из списка холста или `custom` — свой размер. */
@@ -82,9 +87,11 @@ export interface OrchestrationMethods {
   workers: { params: Record<string, never>; result: WorkerInfo[] }
   /** Останавливает помощников и убирает их чаты из списка. */
   remove: { params: { chatIds: string[] }; result: { removed: string[] } }
-  /** Холст чата, его экраны и линии между ними; `null` — холста у чата нет. */
+  /**
+   * Холсты чата, их экраны и линии между ними: названный или все; пусто — холстов у чата нет.
+   */
   canvas: {
-    params: Record<string, never>
+    params: CanvasTargetParams
     result: {
       name: string
       screens: CanvasScreenInfo[]
@@ -92,14 +99,19 @@ export interface OrchestrationMethods {
       groups: { name: string; screens: string[] }[]
       /** Адрес страницы для просмотра; `null` — холст не опубликован. */
       share: string | null
-    } | null
+    }[]
+  }
+  /** Заводит ещё один холст чата; холст с таким именем уже есть — возвращает его. */
+  canvasNew: {
+    params: { name: string }
+    result: { canvas: string; created: boolean }
   }
   /**
    * Ставит на холст чата экран из файла (HTML или React-компонент) или обновляет экран с тем же именем (без учёта
    * регистра). Холста нет — он создаётся. `file` — абсолютный путь (.html, .tsx, .jsx), `size` — `WxH`.
    */
   canvasScreenSet: {
-    params: { name: string; file: string; device?: string; size?: string }
+    params: CanvasTargetParams & { name: string; file: string; device?: string; size?: string }
     result: {
       canvas: string
       screen: string
@@ -119,7 +131,7 @@ export interface OrchestrationMethods {
   }
   /** Снимает экран в PNG, как он выглядит на холсте, и проверяет раскладку. */
   canvasScreenPreview: {
-    params: { name: string }
+    params: CanvasTargetParams & { name: string }
     result: {
       screen: string
       path: string
@@ -133,7 +145,7 @@ export interface OrchestrationMethods {
    * экраны уходят отдельным рядом вниз.
    */
   canvasArrange: {
-    params: { rows: string[][] }
+    params: CanvasTargetParams & { rows: string[][] }
     result: { rows: number; screens: number; rest: string[] }
   }
   /**
@@ -141,7 +153,7 @@ export interface OrchestrationMethods {
    * у кнопки экрана `from` (её текст или CSS-селектор).
    */
   canvasLinkSet: {
-    params: { from: string; to: string; on?: string }
+    params: CanvasTargetParams & { from: string; to: string; on?: string }
     result: {
       from: string
       to: string
@@ -152,7 +164,7 @@ export interface OrchestrationMethods {
   }
   /** Убирает линии между экранами; с `on` — только от этой кнопки. */
   canvasLinkRemove: {
-    params: { from: string; to: string; on?: string }
+    params: CanvasTargetParams & { from: string; to: string; on?: string }
     result: { removed: number }
   }
   /**
@@ -160,26 +172,29 @@ export interface OrchestrationMethods {
    * уже есть — получает ровно эти экраны.
    */
   canvasGroupSet: {
-    params: { name: string; screens: string[] }
+    params: CanvasTargetParams & { name: string; screens: string[] }
     result: { name: string; screens: string[]; created: boolean }
   }
   /** Распускает группу по имени; экраны остаются на холсте. */
-  canvasGroupRemove: { params: { name: string }; result: { name: string } }
+  canvasGroupRemove: { params: CanvasTargetParams & { name: string }; result: { name: string } }
   /**
    * Публикует холст по ссылке для просмотра в браузере (клиенту, с телефона): снимок экранов
    * без комментариев и правок. Повторный вызов обновляет снимок по той же ссылке.
    */
-  canvasShare: { params: Record<string, never>; result: { url: string } }
+  canvasShare: { params: CanvasTargetParams; result: { url: string } }
   /** Закрывает ссылку на холст. */
-  canvasShareStop: { params: Record<string, never>; result: Record<string, never> }
+  canvasShareStop: { params: CanvasTargetParams; result: Record<string, never> }
   /** Убирает экран с холста; HTML-файл остаётся. */
-  canvasScreenRemove: { params: { name: string }; result: { screen: string } }
+  canvasScreenRemove: {
+    params: CanvasTargetParams & { name: string }
+    result: { screen: string }
+  }
   /**
    * Выгружает экраны холста в PDF, PNG (папка) или PPTX: ряды сверху вниз, в ряду слева направо.
    * `screens` — имена; не заданы — все. `out` — абсолютный путь; не задан — папка «Загрузки».
    */
   canvasExport: {
-    params: { format: string; screens?: string[]; out?: string }
+    params: CanvasTargetParams & { format: string; screens?: string[]; out?: string }
     result: { path: string; format: string; screens: number; warnings: string[] }
   }
 }

@@ -11,7 +11,7 @@ import {
 import { findAgent } from '../../../shared/agents'
 import type { Chat } from '../../../shared/models'
 import { isCommandClick } from '../../../shared/shortcuts'
-import { useCanvasNavigation, useChatCanvas } from '../hooks/CanvasesContext'
+import { useCanvasNavigation, useChatCanvases } from '../hooks/CanvasesContext'
 import { useChatActivity } from '../hooks/ChatActivityContext'
 import { useProjectActions } from '../hooks/ProjectsContext'
 import { showMenu } from '../lib/menu'
@@ -154,8 +154,8 @@ function ChatRow({
   // Только действия: строка перерисовывается, лишь когда меняются её собственные данные.
   const { selectChat, openChatBeside, renameChat, forkChat, archiveChat, removeChat } =
     useProjectActions()
-  // У чата не больше одного холста вне архива: пункт меню открывает его или создаёт новый.
-  const canvas = useChatCanvas(chat.id)
+  // Пункт меню открывает первый холст чата вне архива или создаёт его: остальные — свои строки.
+  const canvas = useChatCanvases(chat.id)[0]
   const { openCanvas } = useCanvasNavigation()
 
   const openContextMenu = async (event: MouseEvent) => {
@@ -168,7 +168,7 @@ function ChatRow({
                 action: 'open-beside' as const,
                 label: 'Open to the Side',
                 icon: <Columns2 />
-              },
+              }
             ]
           : []),
         {

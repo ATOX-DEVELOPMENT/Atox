@@ -45,6 +45,7 @@ import {
   arrangeRows,
   canvasNameFromTitle,
   describeOverflow,
+  findCanvasByName,
   findGroupByName,
   findScreenByName,
   formatCanvasMessage,
@@ -94,6 +95,15 @@ export interface AgentScreenRequest {
   device?: string
   /** `WxH` — свой размер экрана. */
   size?: string
+  /** Холст чата по имени; не задан — единственный холст чата. */
+  canvas?: string
+}
+
+/** Холст чата, к которому относится команда агента. */
+export interface CanvasTarget {
+  chatId: string
+  /** Имя холста; не задано — единственный холст чата. */
+  canvas?: string
 }
 
 export interface AgentScreenResult {
@@ -246,9 +256,9 @@ export class CanvasService implements ScreenDocumentSource {
     return { canvases: this.canvases.map(publicCanvas) }
   }
 
-  /** Холст чата вне архива; нет — создаётся пустой с названием чата. */
+  /** Первый холст чата вне архива; нет — создаётся пустой с названием чата. */
   create(chatId: string): string {
-    const existing = this.activeCanvasOf(chatId)
+    const existing = this.activeCanvasesOf(chatId)[0]
     if (existing) {
       return existing.id
     }
@@ -305,12 +315,6 @@ export class CanvasService implements ScreenDocumentSource {
     const canvas = this.getCanvas(canvasId)
     if (canvas.archived === archived) {
       return
-    }
-    if (!archived) {
-      const active = this.activeCanvasOf(canvas.chatId)
-      if (active) {
-        throw new CanvasError(`The chat already has the canvas “${active.name}”. Archive it first.`)
-      }
     }
     canvas.archived = archived
     if (archived) {
@@ -501,37 +505,55 @@ export class CanvasService implements ScreenDocumentSource {
     }
   }
 
-  /** Холст чата для `atox canvas`; `null` — холста нет. */
-  describe(chatId: string): AgentCanvasView | null {
-    const canvas = this.activeCanvasOf(chatId)
-    return canvas
-      ? {
-          name: canvas.name,
-          share: canvas.share && shareUrl(canvas.share.id),
-          groups: canvas.groups.map(({ name, screens }) => ({
-            name,
-            screens: screens.flatMap(
-              (id) => canvas.screens.find((screen) => screen.id === id)?.name ?? []
-            )
-          })),
-          links: canvas.links.flatMap(({ from, to, on }) => {
-            const source = canvas.screens.find(({ id }) => id === from)
-            const target = canvas.screens.find(({ id }) => id === to)
-            return source && target ? [{ from: source.name, to: target.name, on }] : []
-          }),
-          screens: canvas.screens.map(
-            ({ name, device, width, height, file, missing, buildError }) => ({
-              name,
-              device,
-              width,
-              height,
-              file,
-              missing,
-              buildError
-            })
-          )
-        }
-      : null
+  /** Холсты чата для `atox canvas`: названный или все. */
+  describe(target: CanvasTarget): AgentCanvasView[] {
+    const canvases =
+      target.canvas === undefined
+        ? this.activeCanvasesOf(target.chatId)
+        : [this.agentCanvas(target)]
+    return canvases.map((canvas) => this.viewOf(canvas))
+  }
+
+  private viewOf(canvas: StoredCanvas): AgentCanvasView {
+    return {
+      name: canvas.name,
+      share: canvas.share && shareUrl(canvas.share.id),
+      groups: canvas.groups.map(({ name, screens }) => ({
+        name,
+        screens: screens.flatMap(
+          (id) => canvas.screens.find((screen) => screen.id === id)?.name ?? []
+        )
+      })),
+      links: canvas.links.flatMap(({ from, to, on }) => {
+        const source = canvas.screens.find(({ id }) => id === from)
+        const target = canvas.screens.find(({ id }) => id === to)
+        return source && target ? [{ from: source.name, to: target.name, on }] : []
+      }),
+      screens: canvas.screens.map(({ name, device, width, height, file, missing, buildError }) => ({
+        name,
+        device,
+        width,
+        height,
+        file,
+        missing,
+        buildError
+      }))
+    }
+  }
+
+  /**
+   * Новый холст чата по команде агента. Холст с таким именем уже есть — он и возвращается:
+   * лишних холстов агент не плодит.
+   */
+  createForAgent(caller: ChatLocation, nameInput: string): { canvas: string; created: boolean } {
+    const name = parseName(nameInput, 'canvas')
+    const existing = findCanvasByName(this.activeCanvasesOf(caller.chat.id), name)
+    if (existing) {
+      return { canvas: existing.name, created: false }
+    }
+    const canvas = this.addCanvas(caller, name)
+    this.changed()
+    return { canvas: canvas.name, created: true }
   }
 
   /**
@@ -556,7 +578,10 @@ export class CanvasService implements ScreenDocumentSource {
     if (!location) {
       throw new CanvasError('This chat no longer exists.')
     }
-    const existing = this.activeCanvasOf(location.chat.id)
+    const existing = this.canvasOf({
+      chatId: location.chat.id,
+      ...(request.canvas !== undefined && { canvas: request.canvas })
+    })
     const canvas = existing ?? this.addCanvas(location)
     let screen = findScreenByName(canvas.screens, name)
     const created = screen === undefined
@@ -612,11 +637,8 @@ export class CanvasService implements ScreenDocumentSource {
    * Снимает экран так, как он выглядит на холсте, чтобы агент проверил свою работу, и
    * измеряет раскладку.
    */
-  async previewScreen(chatId: string, name: string): Promise<AgentScreenPreview> {
-    const canvas = this.activeCanvasOf(chatId)
-    if (!canvas) {
-      throw new CanvasError('This chat has no canvas.')
-    }
+  async previewScreen(target: CanvasTarget, name: string): Promise<AgentScreenPreview> {
+    const canvas = this.agentCanvas(target)
     const screen = findScreenByName(canvas.screens, name)
     if (!screen) {
       const names = canvas.screens.map((other) => `"${other.name}"`).join(', ') || 'none'
@@ -658,11 +680,11 @@ export class CanvasService implements ScreenDocumentSource {
   }
 
   /** Выгрузка по просьбе агента из `atox canvas export`. */
-  async exportForAgent(chatId: string, request: AgentExportRequest): Promise<CanvasExportResult> {
-    const canvas = this.activeCanvasOf(chatId)
-    if (!canvas) {
-      throw new CanvasError('This chat has no canvas.')
-    }
+  async exportForAgent(
+    target: CanvasTarget,
+    request: AgentExportRequest
+  ): Promise<CanvasExportResult> {
+    const canvas = this.agentCanvas(target)
     const { format, screens: names, out } = request
     if (!isCanvasExportFormat(format)) {
       throw new CanvasError('The format must be pdf, png or pptx.')
@@ -682,9 +704,9 @@ export class CanvasService implements ScreenDocumentSource {
     if (out !== undefined && !isAbsolute(out)) {
       throw new CanvasError('The output path must be absolute.')
     }
-    const target = out ?? (await freeExportPath(app.getPath('downloads'), canvas.name, format))
-    checkExportTarget(format, target)
-    return this.runExport(canvas, screens, format, target)
+    const destination = out ?? (await freeExportPath(app.getPath('downloads'), canvas.name, format))
+    checkExportTarget(format, destination)
+    return this.runExport(canvas, screens, format, destination)
   }
 
   private async runExport(
@@ -732,11 +754,8 @@ export class CanvasService implements ScreenDocumentSource {
    * линия начинается у этой кнопки: приложение находит её на экране и помнит, где она, пока
    * экран меняется.
    */
-  async setLink(chatId: string, request: AgentLinkRequest): Promise<AgentLinkResult> {
-    const canvas = this.activeCanvasOf(chatId)
-    if (!canvas) {
-      throw new CanvasError('This chat has no canvas. Put the screens on it first.')
-    }
+  async setLink(target: CanvasTarget, request: AgentLinkRequest): Promise<AgentLinkResult> {
+    const canvas = this.agentCanvas(target)
     const from = this.screenNamed(canvas, request.from)
     const to = this.screenNamed(canvas, request.to)
     if (from === to) {
@@ -772,11 +791,8 @@ export class CanvasService implements ScreenDocumentSource {
   }
 
   /** Убирает линии между экранами; с `on` — только те, что начинаются у этой кнопки. */
-  removeLink(chatId: string, fromName: string, toName: string, on?: string): number {
-    const canvas = this.activeCanvasOf(chatId)
-    if (!canvas) {
-      throw new CanvasError('This chat has no canvas.')
-    }
+  removeLink(target: CanvasTarget, fromName: string, toName: string, on?: string): number {
+    const canvas = this.agentCanvas(target)
     const from = this.screenNamed(canvas, fromName)
     const to = this.screenNamed(canvas, toName)
     const wanted = linkText(on, LINK_ON_MAX_LENGTH, 'element')?.toLowerCase()
@@ -800,11 +816,12 @@ export class CanvasService implements ScreenDocumentSource {
    * экраны. Экран входит в одну группу, поэтому из прежней группы он уходит; опустевшая
    * группа исчезает.
    */
-  setGroup(chatId: string, nameInput: string, screenNames: readonly string[]): AgentGroupResult {
-    const canvas = this.activeCanvasOf(chatId)
-    if (!canvas) {
-      throw new CanvasError('This chat has no canvas. Put the screens on it first.')
-    }
+  setGroup(
+    target: CanvasTarget,
+    nameInput: string,
+    screenNames: readonly string[]
+  ): AgentGroupResult {
+    const canvas = this.agentCanvas(target)
     const name = parseName(nameInput, 'group')
     const members = [
       ...new Set(screenNames.map((screenName) => this.screenNamed(canvas, screenName)))
@@ -839,11 +856,8 @@ export class CanvasService implements ScreenDocumentSource {
   }
 
   /** Распускает группу по имени: экраны остаются на холсте. */
-  removeGroup(chatId: string, name: string): string {
-    const canvas = this.activeCanvasOf(chatId)
-    if (!canvas) {
-      throw new CanvasError('This chat has no canvas.')
-    }
+  removeGroup(target: CanvasTarget, name: string): string {
+    const canvas = this.agentCanvas(target)
     const group = findGroupByName(canvas.groups, name)
     if (!group) {
       const names = canvas.groups.map((other) => `"${other.name}"`).join(', ') || 'none'
@@ -978,11 +992,8 @@ export class CanvasService implements ScreenDocumentSource {
    * идут сверху вниз. Не названные экраны уходят отдельным рядом вниз: ни один не пропадает и
    * не накладывается на другой. Так агент собирает потоки (вход → код → регистрация) в ряды.
    */
-  arrangeScreens(chatId: string, rows: readonly (readonly string[])[]): AgentArrangeResult {
-    const canvas = this.activeCanvasOf(chatId)
-    if (!canvas) {
-      throw new CanvasError('This chat has no canvas.')
-    }
+  arrangeScreens(target: CanvasTarget, rows: readonly (readonly string[])[]): AgentArrangeResult {
+    const canvas = this.agentCanvas(target)
     const placed = new Set<StoredScreen>()
     const named = rows
       .map((names) =>
@@ -1017,11 +1028,8 @@ export class CanvasService implements ScreenDocumentSource {
   }
 
   /** Убирает экран с холста чата по имени; файл экрана остаётся в проекте. */
-  async removeScreen(chatId: string, name: string): Promise<string> {
-    const canvas = this.activeCanvasOf(chatId)
-    if (!canvas) {
-      throw new CanvasError('This chat has no canvas.')
-    }
+  async removeScreen(target: CanvasTarget, name: string): Promise<string> {
+    const canvas = this.agentCanvas(target)
     const screen = findScreenByName(canvas.screens, name)
     if (!screen) {
       const names = canvas.screens.map((other) => `"${other.name}"`).join(', ') || 'none'
@@ -1039,11 +1047,8 @@ export class CanvasService implements ScreenDocumentSource {
     return this.publish(this.getCanvas(canvasId))
   }
 
-  async shareForAgent(chatId: string): Promise<CanvasShare> {
-    const canvas = this.activeCanvasOf(chatId)
-    if (!canvas) {
-      throw new CanvasError('This chat has no canvas.')
-    }
+  async shareForAgent(target: CanvasTarget): Promise<CanvasShare> {
+    const canvas = this.agentCanvas(target)
     return this.publish(canvas)
   }
 
@@ -1100,11 +1105,8 @@ export class CanvasService implements ScreenDocumentSource {
     await this.closeShare(this.getCanvas(canvasId))
   }
 
-  async unshareForAgent(chatId: string): Promise<void> {
-    const canvas = this.activeCanvasOf(chatId)
-    if (!canvas) {
-      throw new CanvasError('This chat has no canvas.')
-    }
+  async unshareForAgent(target: CanvasTarget): Promise<void> {
+    const canvas = this.agentCanvas(target)
     await this.closeShare(canvas)
   }
 
@@ -1174,11 +1176,11 @@ export class CanvasService implements ScreenDocumentSource {
     )
   }
 
-  private addCanvas({ project, chat }: ChatLocation): StoredCanvas {
+  private addCanvas({ project, chat }: ChatLocation, name?: string): StoredCanvas {
     const now = Date.now()
     const canvas: StoredCanvas = {
       id: randomUUID(),
-      name: canvasNameFromTitle(chat.title),
+      name: name ?? canvasNameFromTitle(chat.title),
       chatId: chat.id,
       projectId: project.id,
       screens: [],
@@ -1206,8 +1208,46 @@ export class CanvasService implements ScreenDocumentSource {
     )
   }
 
-  private activeCanvasOf(chatId: string): StoredCanvas | undefined {
-    return this.canvases.find((canvas) => canvas.chatId === chatId && !canvas.archived)
+  private activeCanvasesOf(chatId: string): StoredCanvas[] {
+    return this.canvases.filter((canvas) => canvas.chatId === chatId && !canvas.archived)
+  }
+
+  /**
+   * Холст чата для команды агента. Задано имя — холст с этим именем, нет такого — ошибка со
+   * списком. Имени нет — единственный холст чата; их несколько — просим назвать, чтобы экраны
+   * не попали не на тот холст; ни одного — `undefined`.
+   */
+  private canvasOf({ chatId, canvas: name }: CanvasTarget): StoredCanvas | undefined {
+    const own = this.activeCanvasesOf(chatId)
+    const names = own.map((canvas) => `“${canvas.name}”`).join(', ')
+    if (name === undefined) {
+      if (own.length > 1) {
+        throw new CanvasError(
+          `This chat has several canvases: ${names}. Specify one with --canvas "<name>".`
+        )
+      }
+      return own[0]
+    }
+    const found = findCanvasByName(own, name)
+    if (!found) {
+      throw new CanvasError(
+        own.length > 0
+          ? `This chat has no canvas “${name.trim()}”. Its canvases: ${names}.`
+          : `This chat has no canvas “${name.trim()}”. Create it with: atox canvas new "<name>".`
+      )
+    }
+    return found
+  }
+
+  /** Как `canvasOf`, но холст обязан быть. */
+  private agentCanvas(target: CanvasTarget): StoredCanvas {
+    const canvas = this.canvasOf(target)
+    if (!canvas) {
+      throw new CanvasError(
+        'This chat has no canvas. Put a screen on it first, or create one: atox canvas new "<name>".'
+      )
+    }
+    return canvas
   }
 
   private getCanvas(canvasId: string): StoredCanvas {

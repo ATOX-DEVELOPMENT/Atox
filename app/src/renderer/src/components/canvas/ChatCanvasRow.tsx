@@ -1,7 +1,8 @@
 import { memo, useState, type MouseEvent } from 'react'
 import { LayoutDashboard } from 'lucide-react'
 import { CANVAS_NAME_MAX_LENGTH } from '../../../../shared/canvas'
-import { useCanvasNavigation, useCanvasOpened, useChatCanvas } from '../../hooks/CanvasesContext'
+import { useCanvasNavigation, useCanvasOpened, useChatCanvases } from '../../hooks/CanvasesContext'
+import type { Canvas } from '../../../../shared/canvas'
 import { showCanvasMenu } from '../../lib/canvasMenu'
 import { InlineRename } from '../InlineRename'
 
@@ -12,21 +13,27 @@ interface ChatCanvasRowProps {
 }
 
 /**
- * Холст чата — строка под ним, со связующей линией. Холста нет или он в архиве — строки нет.
- * Сам чат не меняется: холст открывается своей строкой.
+ * Холсты чата — строки под ним, со связующей линией: у чата их может быть несколько. Холстов
+ * нет или они в архиве — строк нет. Сам чат не меняется: холст открывается своей строкой.
  */
 export const ChatCanvasRow = memo(function ChatCanvasRow({
   chatId,
   compact = false
 }: ChatCanvasRowProps) {
-  const canvas = useChatCanvas(chatId)
-  const opened = useCanvasOpened(canvas?.id ?? '')
+  const canvases = useChatCanvases(chatId)
+  return (
+    <>
+      {canvases.map((canvas) => (
+        <CanvasRow key={canvas.id} canvas={canvas} compact={compact} />
+      ))}
+    </>
+  )
+})
+
+function CanvasRow({ canvas, compact }: { canvas: Canvas; compact: boolean }) {
+  const opened = useCanvasOpened(canvas.id)
   const navigation = useCanvasNavigation()
   const [renaming, setRenaming] = useState(false)
-
-  if (!canvas) {
-    return null
-  }
 
   const rename = (name: string) => {
     setRenaming(false)
@@ -77,4 +84,4 @@ export const ChatCanvasRow = memo(function ChatCanvasRow({
       )}
     </div>
   )
-})
+}
