@@ -7,6 +7,8 @@ import type { Canvas, CanvasState } from '../../../shared/canvas'
  */
 export class CanvasStore {
   private state: CanvasState | null = null
+  /** Холсты чатов вне архива; сбрасывается с новым состоянием, чтобы снимок для React был стабилен. */
+  private activeByChat = new Map<string, readonly Canvas[]>()
   private openedId: string | null = null
   private readonly listeners = new Set<() => void>()
   private unsubscribe: (() => void) | null = null
@@ -40,9 +42,16 @@ export class CanvasStore {
     return this.state?.canvases.find(({ id }) => id === canvasId)
   }
 
-  /** Холст чата вне архива: у чата он не больше одного. */
-  activeOfChat(chatId: string): Canvas | undefined {
-    return this.state?.canvases.find((canvas) => canvas.chatId === chatId && !canvas.archived)
+  /** Холсты чата вне архива, в порядке создания. */
+  activeOfChat(chatId: string): readonly Canvas[] {
+    let canvases = this.activeByChat.get(chatId)
+    if (!canvases) {
+      canvases = (this.state?.canvases ?? []).filter(
+        (canvas) => canvas.chatId === chatId && !canvas.archived
+      )
+      this.activeByChat.set(chatId, canvases)
+    }
+    return canvases
   }
 
   opened = (): string | null => this.openedId
@@ -56,6 +65,7 @@ export class CanvasStore {
 
   private publish(state: CanvasState): void {
     this.state = state
+    this.activeByChat = new Map()
     this.notify()
   }
 

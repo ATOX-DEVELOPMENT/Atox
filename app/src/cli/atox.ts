@@ -36,7 +36,11 @@ Delegate work to another agent in a new Atox chat in the same folder.
 
 Show screens (app, website, desktop UI) to the user on this chat's canvas.
 
-  atox canvas                              Show this chat's canvas and its screens
+  atox canvas                              Show this chat's canvases and their screens
+  atox canvas new "<name>"                 Add another canvas to this chat (for a separate
+                                           presentation, document or flow). Then pass
+                                           --canvas "<name>" to every canvas command: it is
+                                           required when the chat has more than one canvas.
   atox canvas screen set <name> <file.tsx|.jsx|.html> [--device ${DEVICE_IDS}] [--size WxH]
                                            Put a React component (default export) or an HTML
                                            file on the canvas as a screen, or update the screen
@@ -202,31 +206,48 @@ function describeProblems({ buildError, runtimeErrors, layout }: ScreenProblems)
 }
 
 /** `atox canvas …`: холст чата и его экраны. */
-async function canvas(args: string[]): Promise<string> {
+async function canvas(rawArgs: string[]): Promise<string> {
+  // `--canvas "<name>"` стоит где угодно и выбирает холст чата; без него — единственный холст.
+  const { values: flags, positional: args } = parseFlags(rawArgs, ['canvas'])
+  const target = flags['canvas'] !== undefined ? { canvas: flags['canvas'] } : {}
   const [group, action, ...rest] = args
   if (group === undefined) {
-    const shown = await call('canvas', {})
-    if (!shown) {
+    const canvases = await call('canvas', target)
+    if (canvases.length === 0) {
       return `This chat has no canvas yet. Add a screen with: ${CANVAS_SET_COMMAND}`
     }
-    const count = shown.screens.length === 1 ? '1 screen' : `${shown.screens.length} screens`
-    const lines = shown.screens.map(
-      ({ name, device, width, height, file, missing, buildError }) =>
-        `${name}\t${device} ${width}x${height}\t${file}${missing ? '\tfile missing' : ''}${buildError ? `\tbuild failed: ${buildError}` : ''}`
-    )
-    const arrows = shown.links.map(
-      ({ from, to, on }) => `${from} -> ${to}${on ? `\tfrom "${on}"` : ''}`
-    )
-    const groups = shown.groups.map(
-      ({ name, screens }) => `${name}\t${screens.map((screen) => `"${screen}"`).join(', ')}`
-    )
-    return [
-      `Canvas "${shown.name}", ${count}. Edit a screen's file and the canvas updates by itself.`,
-      ...lines,
-      ...(shown.share ? [`Shared as a web page: ${shown.share}`] : []),
-      ...(groups.length > 0 ? ['Groups:', ...groups] : []),
-      ...(arrows.length > 0 ? ['Lines:', ...arrows] : [])
-    ].join('\n')
+    return canvases
+      .map((shown) => {
+        const count = shown.screens.length === 1 ? '1 screen' : `${shown.screens.length} screens`
+        const lines = shown.screens.map(
+          ({ name, device, width, height, file, missing, buildError }) =>
+            `${name}\t${device} ${width}x${height}\t${file}${missing ? '\tfile missing' : ''}${buildError ? `\tbuild failed: ${buildError}` : ''}`
+        )
+        const arrows = shown.links.map(
+          ({ from, to, on }) => `${from} -> ${to}${on ? `\tfrom "${on}"` : ''}`
+        )
+        const groups = shown.groups.map(
+          ({ name, screens }) => `${name}\t${screens.map((screen) => `"${screen}"`).join(', ')}`
+        )
+        return [
+          `Canvas "${shown.name}", ${count}. Edit a screen's file and the canvas updates by itself.`,
+          ...lines,
+          ...(shown.share ? [`Shared as a web page: ${shown.share}`] : []),
+          ...(groups.length > 0 ? ['Groups:', ...groups] : []),
+          ...(arrows.length > 0 ? ['Lines:', ...arrows] : [])
+        ].join('\n')
+      })
+      .join('\n\n')
+  }
+  if (group === 'new') {
+    const name = [action, ...rest].filter((part) => part !== undefined).join(' ')
+    if (!name.trim()) {
+      throw new UsageError('Usage: atox canvas new "<name>"')
+    }
+    const result = await call('canvasNew', { name })
+    return result.created
+      ? `Created the canvas "${result.canvas}". Put screens on it with --canvas "${result.canvas}", e.g. atox canvas screen set <name> <file.tsx> --canvas "${result.canvas}".`
+      : `The canvas "${result.canvas}" already exists; use --canvas "${result.canvas}".`
   }
   if (group === 'screen' && action === 'set') {
     const { values, positional } = parseFlags(rest, ['device', 'size'])
@@ -235,6 +256,7 @@ async function canvas(args: string[]): Promise<string> {
       throw new UsageError(CANVAS_SET_USAGE)
     }
     const result = await call('canvasScreenSet', {
+      ...target,
       name,
       // Путь считается от папки, в которой агент запустил команду.
       file: resolve(file),
@@ -259,7 +281,7 @@ async function canvas(args: string[]): Promise<string> {
     if (!name.trim()) {
       throw new UsageError('Usage: atox canvas screen preview <name>')
     }
-    const preview = await call('canvasScreenPreview', { name })
+    const preview = await call('canvasScreenPreview', { ...target, name })
     return [`Screenshot of "${preview.screen}": ${preview.path}`, ...describeProblems(preview)].join(
       '\n'
     )
@@ -269,7 +291,7 @@ async function canvas(args: string[]): Promise<string> {
     if (!name.trim()) {
       throw new UsageError('Usage: atox canvas screen remove <name>')
     }
-    const { screen } = await call('canvasScreenRemove', { name })
+    const { screen } = await call('canvasScreenRemove', { ...target, name })
     return `Removed the screen "${screen}" from the canvas. Its file stays in the project.`
   }
   if (group === 'arrange') {
@@ -285,7 +307,7 @@ async function canvas(args: string[]): Promise<string> {
     if (rows.length === 0) {
       throw new UsageError('Usage: atox canvas arrange "<A>,<B>,<C>" "<D>,<E>" ...')
     }
-    const result = await call('canvasArrange', { rows })
+    const result = await call('canvasArrange', { ...target, rows })
     return [
       `Arranged ${result.screens === 1 ? '1 screen' : `${result.screens} screens`} in ${result.rows === 1 ? '1 row' : `${result.rows} rows`}.`,
       ...(result.rest.length > 0
@@ -306,10 +328,10 @@ async function canvas(args: string[]): Promise<string> {
       )
     }
     if (removing) {
-      const result = await call('canvasGroupRemove', { name })
+      const result = await call('canvasGroupRemove', { ...target, name })
       return `Removed the group "${result.name}". Its screens stay on the canvas.`
     }
-    const result = await call('canvasGroupSet', { name, screens })
+    const result = await call('canvasGroupSet', { ...target, name, screens })
     return `${result.created ? 'Created' : 'Updated'} the group "${result.name}" with ${result.screens.length === 1 ? '1 screen' : `${result.screens.length} screens`}.`
   }
   if (group === 'link') {
@@ -328,6 +350,7 @@ async function canvas(args: string[]): Promise<string> {
     }
     if (removing) {
       const { removed } = await call('canvasLinkRemove', {
+        ...target,
         from,
         to,
         ...(values['on'] !== undefined && { on: values['on'] })
@@ -337,6 +360,7 @@ async function canvas(args: string[]): Promise<string> {
         : `Removed ${removed === 1 ? '1 line' : `${removed} lines`} from "${from}" to "${to}".`
     }
     const result = await call('canvasLinkSet', {
+      ...target,
       from,
       to,
       ...(values['on'] !== undefined && { on: values['on'] })
@@ -353,13 +377,13 @@ async function canvas(args: string[]): Promise<string> {
   }
   if (group === 'share') {
     if (action === 'stop') {
-      await call('canvasShareStop', {})
+      await call('canvasShareStop', target)
       return 'The link is closed. The page no longer opens.'
     }
     if (action !== undefined || rest.length > 0) {
       throw new UsageError('Usage: atox canvas share [stop]')
     }
-    const { url } = await call('canvasShare', {})
+    const { url } = await call('canvasShare', target)
     return `The canvas is published: ${url}\nGive this link to the user. It shows a snapshot (view only); run the command again after changes to update it.`
   }
   if (group === 'export') {
@@ -376,6 +400,7 @@ async function canvas(args: string[]): Promise<string> {
       .map((name) => name.trim())
       .filter(Boolean)
     const result = await call('canvasExport', {
+      ...target,
       format,
       ...(names && names.length > 0 && { screens: names }),
       // Путь считается от папки, в которой агент запустил команду.

@@ -82,17 +82,12 @@ export function normalizeCanvases(
 ): StoredCanvas[] {
   const canvases: StoredCanvas[] = []
   const seen = new Set<string>()
-  const activeChats = new Set<string>()
   for (const raw of Array.isArray(data?.canvases) ? data.canvases : []) {
     const canvas = normalizeCanvas(raw, now)
     if (!canvas || seen.has(canvas.id) || !projectIds.has(canvas.projectId)) {
       continue
     }
     seen.add(canvas.id)
-    if (!canvas.archived) {
-      canvas.archived = activeChats.has(canvas.chatId)
-      activeChats.add(canvas.chatId)
-    }
     canvases.push(canvas)
   }
   return canvases

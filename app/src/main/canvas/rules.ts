@@ -129,6 +129,15 @@ export function findScreenByName<Screen extends Pick<CanvasScreen, 'name'>>(
   return screens.find((screen) => screen.name.toLowerCase() === wanted)
 }
 
+/** Холст по имени: как и у экрана, без учёта регистра и пробелов по краям. */
+export function findCanvasByName<Canvas extends { name: string }>(
+  canvases: readonly Canvas[],
+  name: string
+): Canvas | undefined {
+  const wanted = name.trim().toLowerCase()
+  return canvases.find((canvas) => canvas.name.toLowerCase() === wanted)
+}
+
 /** Группа по имени: как и у экрана, без учёта регистра и пробелов по краям. */
 export function findGroupByName<Group extends Pick<CanvasGroup, 'name'>>(
   groups: readonly Group[],
