@@ -199,6 +199,13 @@ const CSS_PIXELS_PER_INCH = 96
 const EXPORT_SHARP_BELOW_WIDTH = 1600
 
 /**
+ * Тени в PDF не переносятся: Preview и Quick Look на macOS рисуют размытую тень сплошным
+ * чёрным прямоугольником поверх слайда. На экране и в PNG тени остаются, из PDF их убирают.
+ */
+const PDF_WITHOUT_SHADOWS_CSS =
+  '*, *::before, *::after { box-shadow: none !important; text-shadow: none !important; }'
+
+/**
  * Экран как PDF-страница ровно его размера, с настоящим текстом и векторной графикой. То, что
  * не поместилось по высоте, обрезается: лишних страниц у экрана не бывает.
  */
@@ -207,14 +214,15 @@ export function renderScreenPdf(
   width: number,
   height: number
 ): Promise<Buffer | null> {
-  return inScreenWindow(url, width, height, (window) =>
-    window.webContents.printToPDF({
+  return inScreenWindow(url, width, height, async (window) => {
+    await window.webContents.insertCSS(PDF_WITHOUT_SHADOWS_CSS)
+    return window.webContents.printToPDF({
       pageSize: { width: width / CSS_PIXELS_PER_INCH, height: height / CSS_PIXELS_PER_INCH },
       margins: { top: 0, bottom: 0, left: 0, right: 0 },
       printBackground: true,
       pageRanges: '1'
     })
-  )
+  })
 }
 
 /**
