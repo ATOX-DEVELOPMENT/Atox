@@ -42,6 +42,11 @@ export class CanvasStore {
   /** Все холсты, и в архиве тоже; `null` — ещё не загружены. */
   canvases = (): readonly Canvas[] | null => this.state?.canvases ?? null
 
+  /** Публикуется ли холст чата по ссылке прямо сейчас. */
+  sharing(chatId: string): boolean {
+    return this.state?.sharing.includes(chatId) ?? false
+  }
+
   find(canvasId: string): Canvas | undefined {
     return this.state?.canvases.find(({ id }) => id === canvasId)
   }

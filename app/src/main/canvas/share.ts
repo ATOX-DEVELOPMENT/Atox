@@ -15,7 +15,7 @@ export const SHARE_ORIGIN = (process.env['ATOX_SHARE_ORIGIN'] ?? 'https://share.
   ''
 )
 
-/** Сколько ждать ответа службы: публикация несёт страницы всех экранов. */
+/** Сколько ждать ответа службы на один запрос: крупные файлы идут отдельными запросами. */
 const REQUEST_TIMEOUT_MS = 120_000
 
 /** Секрет и адрес публикации: по секрету холст обновляет и закрывает свою ссылку. */
@@ -71,28 +71,72 @@ export interface SharedScreenPage {
  */
 const RESTORE_SCROLL_SCRIPT = `<script>addEventListener('load',()=>{for(const e of document.querySelectorAll('[data-share-scroll]')){const[t,l]=e.dataset.shareScroll.split(',');e.scrollTop=+t;e.scrollLeft=+l}})</script>`
 
+/** Файл холста на сайте: картинка, шрифт или стили, по хешу содержимого. */
+export interface SharedAsset {
+  hash: string
+  type: string
+  data: Buffer
+}
+
+/** Встроенные в страницу файлы меньше этого остаются в ней: отдельный запрос дороже. */
+const ASSET_MIN_BYTES = 2048
+
+/** Какие встроенные файлы служба принимает отдельно; то же правило в share/server.js. */
+const ASSET_TYPES =
+  /^(image\/(png|jpeg|gif|webp|avif|svg\+xml)|font\/[\w.+-]+|application\/(x-)?font-[\w.+-]+|application\/vnd\.ms-fontobject|text\/css)$/
+
+/** Встроенный файл `data:<тип>;base64,<данные>` — в HTML-атрибуте или в `url()` стилей. */
+const DATA_URI = /data:([a-z]+\/[a-z0-9.+-]+)((?:;[a-z0-9-]+=[^;,"')\s]+)*);base64,([A-Za-z0-9+/]+={0,2})/gi
+
+function sha256(data: string | Buffer): string {
+  return createHash('sha256').update(data).digest('hex')
+}
+
+function addAsset(assets: Map<string, SharedAsset>, type: string, data: Buffer): string {
+  const hash = sha256(data)
+  if (!assets.has(hash)) {
+    assets.set(hash, { hash, type, data })
+  }
+  return `/a/${hash}`
+}
+
 /**
- * Страницы экранов для службы. Одинаковые стили (у экранов одного проекта они обычно общие)
- * уходят один раз: страница подключает их по хешу, и браузер берёт их из кэша.
+ * Выносит крупные встроенные файлы (фото, шрифты) из текста страницы или стилей в отдельные
+ * файлы: в тексте остаётся ссылка на них. Одинаковый файл на разных экранах уходит один раз,
+ * а уже лежащий на сайте — не уходит вовсе.
+ */
+function extractAssets(text: string, assets: Map<string, SharedAsset>): string {
+  return text.replace(DATA_URI, (whole, rawType: string, _parameters: string, base64: string) => {
+    const type = rawType.toLowerCase()
+    if (!ASSET_TYPES.test(type) || base64.length * 0.75 < ASSET_MIN_BYTES) {
+      return whole
+    }
+    return addAsset(assets, type, Buffer.from(base64, 'base64'))
+  })
+}
+
+/**
+ * Страницы экранов для службы. Стили и крупные встроенные файлы уходят отдельными файлами по
+ * хешу: у экранов одного проекта они обычно общие, и повторная публикация их не шлёт.
  */
 export function sharedPages(screens: ReadonlyMap<string, SharedScreenPage>): {
   docs: Record<string, string>
   thumbs: Record<string, string>
-  styles: Record<string, string>
+  assets: Map<string, SharedAsset>
 } {
   const docs: Record<string, string> = {}
   const thumbs: Record<string, string> = {}
-  const styles: Record<string, string> = {}
+  const assets = new Map<string, SharedAsset>()
   for (const [id, { html, css, thumbnail }] of screens) {
-    const hash = createHash('sha256').update(css).digest('hex')
-    styles[hash] = css
-    const head = `<link rel="stylesheet" href="/c/${hash}.css">${RESTORE_SCROLL_SCRIPT}`
-    docs[id] = html.includes('</head>') ? html.replace('</head>', `${head}</head>`) : head + html
+    const stylesheet = addAsset(assets, 'text/css', Buffer.from(extractAssets(css, assets)))
+    const head = `<link rel="stylesheet" href="${stylesheet}">${RESTORE_SCROLL_SCRIPT}`
+    const page = extractAssets(html, assets)
+    docs[id] = page.includes('</head>') ? page.replace('</head>', `${head}</head>`) : head + page
     if (thumbnail) {
       thumbs[id] = thumbnail.toString('base64')
     }
   }
-  return { docs, thumbs, styles }
+  return { docs, thumbs, assets }
 }
 
 interface PublishRequest {
@@ -100,19 +144,16 @@ interface PublishRequest {
   screens: ReadonlyMap<string, SharedScreenPage>
 }
 
-async function call(
-  method: 'PUT' | 'DELETE',
-  { id, token }: ShareCredentials,
-  body?: Buffer
-): Promise<Response> {
+/** Сколько файлов холста грузится одновременно и сколько попыток у каждого. */
+const ASSET_CONCURRENCY = 4
+const ASSET_ATTEMPTS = 3
+/** Пауза перед повтором после сбоя сети, мс. */
+const RETRY_DELAY_MS = 1500
+
+async function request(path: string, init: RequestInit): Promise<Response> {
   try {
-    return await fetch(`${SHARE_ORIGIN}/api/shares/${id}`, {
-      method,
-      headers: {
-        Authorization: `Bearer ${token}`,
-        ...(body && { 'Content-Type': 'application/json', 'Content-Encoding': 'gzip' })
-      },
-      ...(body && { body: new Uint8Array(body) }),
+    return await fetch(`${SHARE_ORIGIN}${path}`, {
+      ...init,
       signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS)
     })
   } catch (error) {
@@ -121,6 +162,27 @@ async function call(
       'Could not reach the sharing service. Check the connection and try again.'
     )
   }
+}
+
+/** Запрос, который при сбое сети или ответе 5xx повторяется: загрузка файла безопасна для повтора. */
+async function requestWithRetry(path: string, init: () => RequestInit): Promise<Response> {
+  for (let attempt = 1; ; attempt += 1) {
+    try {
+      const response = await request(path, init())
+      if (response.status < 500 || attempt >= ASSET_ATTEMPTS) {
+        return response
+      }
+    } catch (error) {
+      if (attempt >= ASSET_ATTEMPTS) {
+        throw error
+      }
+    }
+    await new Promise((resolve) => setTimeout(resolve, RETRY_DELAY_MS * attempt))
+  }
+}
+
+function auth({ token }: ShareCredentials): Record<string, string> {
+  return { Authorization: `Bearer ${token}` }
 }
 
 async function failure(response: Response): Promise<CanvasError> {
@@ -136,13 +198,86 @@ async function failure(response: Response): Promise<CanvasError> {
   )
 }
 
-/** Публикует холст по ссылке: снимки экранов всех страниц, их места, группы и линии. */
+async function gzipJson(value: unknown): Promise<Uint8Array> {
+  return new Uint8Array(await gzipAsync(Buffer.from(JSON.stringify(value))))
+}
+
+/** Каких файлов из списка у службы ещё нет. */
+async function missingAssets(credentials: ShareCredentials, hashes: string[]): Promise<string[]> {
+  const body = await gzipJson({ hashes })
+  const response = await requestWithRetry('/api/assets/missing', () => ({
+    method: 'POST',
+    headers: {
+      ...auth(credentials),
+      'Content-Type': 'application/json',
+      'Content-Encoding': 'gzip'
+    },
+    body
+  }))
+  if (!response.ok) {
+    throw await failure(response)
+  }
+  const { missing } = (await response.json()) as { missing?: unknown }
+  return Array.isArray(missing) ? missing.filter((hash) => typeof hash === 'string') : hashes
+}
+
+/** Загружает файлы по нескольку сразу; каждый — своим запросом, с повтором при сбое сети. */
+async function uploadAssets(
+  credentials: ShareCredentials,
+  assets: readonly SharedAsset[]
+): Promise<void> {
+  const queue = [...assets]
+  const worker = async () => {
+    for (let asset = queue.shift(); asset; asset = queue.shift()) {
+      const { hash, type, data } = asset
+      const response = await requestWithRetry(`/api/assets/${hash}`, () => ({
+        method: 'PUT',
+        headers: { ...auth(credentials), 'Content-Type': type },
+        body: new Uint8Array(data)
+      }))
+      if (!response.ok) {
+        throw await failure(response)
+      }
+    }
+  }
+  await Promise.all(Array.from({ length: ASSET_CONCURRENCY }, worker))
+}
+
+/**
+ * Публикует холст по ссылке: сначала файлы, которых у службы ещё нет (стили, фото, шрифты), потом
+ * сам холст — экраны, их места, группы и линии. Холст лёгкий, поэтому его запрос не упирается
+ * в медленную сеть; файлы грузятся по одному и повторяются при сбое.
+ */
 export async function publishShare(
   credentials: ShareCredentials,
   { canvas, screens }: PublishRequest
 ): Promise<void> {
-  const payload = JSON.stringify({ canvas, ...sharedPages(screens) })
-  const response = await call('PUT', credentials, await gzipAsync(Buffer.from(payload)))
+  const { docs, thumbs, assets } = sharedPages(screens)
+  const hashes = [...assets.keys()]
+  const missing = await missingAssets(credentials, hashes)
+  await uploadAssets(
+    credentials,
+    missing.flatMap((hash) => assets.get(hash) ?? [])
+  )
+  const body = await gzipJson({ canvas, docs, thumbs, styles: {}, assets: hashes })
+  const publish = () =>
+    request(`/api/shares/${credentials.id}`, {
+      method: 'PUT',
+      headers: {
+        ...auth(credentials),
+        'Content-Type': 'application/json',
+        'Content-Encoding': 'gzip'
+      },
+      body
+    })
+  let response = await publish()
+  // Файл могли удалить между проверкой и публикацией: служба называет недостающие.
+  if (response.status === 409) {
+    const { missing: lost } = (await response.json().catch(() => ({}))) as { missing?: unknown }
+    const again = Array.isArray(lost) ? lost.flatMap((hash) => assets.get(String(hash)) ?? []) : []
+    await uploadAssets(credentials, again)
+    response = await publish()
+  }
   if (!response.ok) {
     throw await failure(response)
   }
@@ -150,7 +285,10 @@ export async function publishShare(
 
 /** Закрывает ссылку: страница по ней больше не открывается. Уже закрытая — не ошибка. */
 export async function unpublishShare(credentials: ShareCredentials): Promise<void> {
-  const response = await call('DELETE', credentials)
+  const response = await request(`/api/shares/${credentials.id}`, {
+    method: 'DELETE',
+    headers: auth(credentials)
+  })
   if (!response.ok && response.status !== 404) {
     throw await failure(response)
   }
