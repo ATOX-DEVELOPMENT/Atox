@@ -150,28 +150,8 @@ export function toViewport(view: CanvasView, rect: Rect): Rect {
   }
 }
 
-/** Видимая часть холста в его координатах. */
-export function visibleArea(view: CanvasView, viewport: Size): Rect {
-  return {
-    x: -view.x / view.zoom,
-    y: -view.y / view.zoom,
-    width: viewport.width / view.zoom,
-    height: viewport.height / view.zoom
-  }
-}
-
 export function intersects(a: Rect, b: Rect): boolean {
   return a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height
-}
-
-/** Прямоугольник, раздвинутый на `amount` во все стороны. */
-export function inflate(rect: Rect, amount: number): Rect {
-  return {
-    x: rect.x - amount,
-    y: rect.y - amount,
-    width: rect.width + amount * 2,
-    height: rect.height + amount * 2
-  }
 }
 
 /** Множитель масштаба за одно событие колеса: щипок трекпада даёт мелкие шаги, колесо — крупные. */
