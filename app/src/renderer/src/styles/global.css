@@ -123,8 +123,6 @@
   --canvas-light-gap: 8px;
   --canvas-address-width: 360px;
   --canvas-address-height: 28px;
-  --canvas-minimap-width: 110px;
-  --canvas-minimap-height: 84px;
   --canvas-agent-bar-height: 40px;
   --canvas-spinner-size: 14px;
   --canvas-spin-duration: 1s;
@@ -5989,35 +5987,7 @@ ul {
   pointer-events: none;
 }
 
-/* Плашки поверх холста: мини-карта, работа агента. */
-.canvas-minimap {
-  position: absolute;
-  right: var(--canvas-overlay-inset);
-  bottom: var(--canvas-overlay-inset);
-  width: var(--canvas-minimap-width);
-  height: var(--canvas-minimap-height);
-  overflow: hidden;
-  border-radius: calc(var(--radius) + 1px);
-  background: var(--color-menu);
-  box-shadow: var(--shadow-menu);
-  cursor: default;
-}
-
-.canvas-minimap__screen {
-  position: absolute;
-  display: block;
-  border-radius: 2px;
-  background: var(--color-text-muted);
-  opacity: 0.4;
-}
-
-.canvas-minimap__viewport {
-  position: absolute;
-  border: 1.5px solid var(--color-accent);
-  border-radius: 3px;
-  background: color-mix(in srgb, var(--color-accent) 10%, transparent);
-}
-
+/* Плашка поверх холста: работа агента. */
 .agent-bar {
   position: absolute;
   left: 50%;
@@ -6025,7 +5995,7 @@ ul {
   display: flex;
   align-items: center;
   gap: 10px;
-  max-width: calc(100% - (var(--canvas-minimap-width) + var(--canvas-overlay-inset) * 2) * 2);
+  max-width: calc(100% - var(--canvas-overlay-inset) * 2);
   height: var(--canvas-agent-bar-height);
   padding: 0 6px 0 14px;
   border-radius: 999px;

@@ -23,7 +23,6 @@ import {
   type Rect
 } from '../../lib/canvasView'
 import { CanvasLinks } from './CanvasLinks'
-import { CanvasMinimap } from './CanvasMinimap'
 import { FixBox } from './FixBox'
 import { GroupFrame } from './GroupFrame'
 import { ScreenFrame } from './ScreenFrame'
@@ -524,28 +523,12 @@ export function CanvasStage({
     [canvasId, startMove, focusGroup]
   )
 
-  const centerAt = useCallback(
-    (point: Point) => {
-      const view = viewState.view()
-      const { width, height } = viewState.viewport()
-      if (view) {
-        commitView({
-          ...view,
-          x: width / 2 - point.x * view.zoom,
-          y: height / 2 - point.y * view.zoom
-        })
-      }
-    },
-    [viewState, commitView]
-  )
-
   const selected = screens.find(({ id }) => id === selectedScreenId)
   const selectedBounds = selected && bounds.get(selected.id)
   const otherBounds = useMemo(
     () => [...bounds].filter(([id]) => id !== selectedScreenId).map(([, rect]) => rect),
     [bounds, selectedScreenId]
   )
-  const allBounds = useMemo((): Rect[] => [...bounds.values()], [bounds])
 
   return (
     <div ref={stageRef} className="canvas-stage" data-panning={panning} onPointerDown={startPan}>
@@ -578,7 +561,6 @@ export function CanvasStage({
         <CanvasLinks links={canvas.links} screens={screens} bounds={bounds} />
       </div>
       {children}
-      <CanvasMinimap viewState={viewState} rects={allBounds} onCenter={centerAt} />
       {selected && selectedBounds && (
         <FixBox
           // Новый экран — новое окно: текст просьбы к другому экрану не переносится.
