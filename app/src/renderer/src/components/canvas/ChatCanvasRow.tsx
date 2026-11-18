@@ -1,10 +1,11 @@
-import { memo, useState, type MouseEvent } from 'react'
+import { memo, type MouseEvent } from 'react'
 import { LayoutDashboard } from 'lucide-react'
-import { CANVAS_NAME_MAX_LENGTH } from '../../../../shared/canvas'
-import { useCanvasNavigation, useCanvasOpened, useChatCanvases } from '../../hooks/CanvasesContext'
-import type { Canvas } from '../../../../shared/canvas'
+import {
+  useCanvasNavigation,
+  useChatCanvases,
+  useChatCanvasOpened
+} from '../../hooks/CanvasesContext'
 import { showCanvasMenu } from '../../lib/canvasMenu'
-import { InlineRename } from '../InlineRename'
 
 interface ChatCanvasRowProps {
   chatId: string
@@ -13,45 +14,31 @@ interface ChatCanvasRowProps {
 }
 
 /**
- * Холсты чата — строки под ним, со связующей линией: у чата их может быть несколько. Холстов
- * нет или они в архиве — строк нет. Сам чат не меняется: холст открывается своей строкой.
+ * Холст чата — одна строка под ним, со связующей линией; страницы холста выбираются на нём
+ * самом. Холста нет или он в архиве — строки нет. Сам чат не меняется: холст открывается
+ * своей строкой, на странице, где человек был в нём в прошлый раз.
  */
 export const ChatCanvasRow = memo(function ChatCanvasRow({
   chatId,
   compact = false
 }: ChatCanvasRowProps) {
-  const canvases = useChatCanvases(chatId)
-  return (
-    <>
-      {canvases.map((canvas) => (
-        <CanvasRow key={canvas.id} canvas={canvas} compact={compact} />
-      ))}
-    </>
-  )
-})
-
-function CanvasRow({ canvas, compact }: { canvas: Canvas; compact: boolean }) {
-  const opened = useCanvasOpened(canvas.id)
+  const pages = useChatCanvases(chatId)
+  const opened = useChatCanvasOpened(chatId)
   const navigation = useCanvasNavigation()
-  const [renaming, setRenaming] = useState(false)
-
-  const rename = (name: string) => {
-    setRenaming(false)
-    void window.atox.canvas.rename(canvas.id, name.slice(0, CANVAS_NAME_MAX_LENGTH))
+  const [first] = pages
+  if (!first) {
+    return null
   }
 
   const openContextMenu = (event: MouseEvent) => {
     event.preventDefault()
-    void showCanvasMenu(canvas, event, {
+    void showCanvasMenu(first, event, {
       withOpen: true,
       // Строка стоит под своим чатом: значит, чат есть.
       chatAvailable: true,
-      navigation,
-      onRename: () => setRenaming(true)
+      navigation
     })
   }
-
-  const icon = <LayoutDashboard className="icon canvas-row__icon" aria-hidden />
 
   return (
     <div
@@ -60,28 +47,16 @@ function CanvasRow({ canvas, compact }: { canvas: Canvas; compact: boolean }) {
       data-active={opened}
       onContextMenu={openContextMenu}
     >
-      {renaming ? (
-        <div className="row__main canvas-row">
-          {icon}
-          <InlineRename
-            value={canvas.name}
-            label="Canvas name"
-            onSubmit={rename}
-            onCancel={() => setRenaming(false)}
-          />
-        </div>
-      ) : (
-        <button
-          type="button"
-          className="row__main canvas-row"
-          aria-current={opened ? 'page' : undefined}
-          onClick={() => navigation.openCanvas(canvas.id)}
-          onDoubleClick={() => setRenaming(true)}
-        >
-          {icon}
-          <span className="row__label">{canvas.name}</span>
-        </button>
-      )}
+      <button
+        type="button"
+        className="row__main canvas-row"
+        aria-current={opened ? 'page' : undefined}
+        onClick={() => navigation.openChatCanvas(chatId)}
+      >
+        <LayoutDashboard className="icon canvas-row__icon" aria-hidden />
+        <span className="row__label">Canvas</span>
+        {pages.length > 1 && <span className="canvas-row__count">{pages.length} pages</span>}
+      </button>
     </div>
   )
-}
+})

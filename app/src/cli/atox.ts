@@ -36,11 +36,11 @@ Delegate work to another agent in a new Atox chat in the same folder.
 
 Show screens (app, website, desktop UI) to the user on this chat's canvas.
 
-  atox canvas                              Show this chat's canvases and their screens
-  atox canvas new "<name>"                 Add another canvas to this chat (for a separate
+  atox canvas                              Show this chat's canvas: its pages and their screens
+  atox canvas new "<name>"                 Add another page to this chat's canvas (for a separate
                                            presentation, document or flow). Then pass
-                                           --canvas "<name>" to every canvas command: it is
-                                           required when the chat has more than one canvas.
+                                           --page "<name>" to every canvas command: it is
+                                           required when the canvas has more than one page.
   atox canvas screen set <name> <file.tsx|.jsx|.html> [--device ${DEVICE_IDS}] [--size WxH]
                                            Put a React component (default export) or an HTML
                                            file on the canvas as a screen, or update the screen
@@ -207,9 +207,11 @@ function describeProblems({ buildError, runtimeErrors, layout }: ScreenProblems)
 
 /** `atox canvas …`: холст чата и его экраны. */
 async function canvas(rawArgs: string[]): Promise<string> {
-  // `--canvas "<name>"` стоит где угодно и выбирает холст чата; без него — единственный холст.
-  const { values: flags, positional: args } = parseFlags(rawArgs, ['canvas'])
-  const target = flags['canvas'] !== undefined ? { canvas: flags['canvas'] } : {}
+  // `--page "<name>"` (или прежнее `--canvas`) стоит где угодно и выбирает страницу холста
+  // чата; без него — единственная страница.
+  const { values: flags, positional: args } = parseFlags(rawArgs, ['page', 'canvas'])
+  const page = flags['page'] ?? flags['canvas']
+  const target = page !== undefined ? { canvas: page } : {}
   const [group, action, ...rest] = args
   if (group === undefined) {
     const canvases = await call('canvas', target)
@@ -230,7 +232,7 @@ async function canvas(rawArgs: string[]): Promise<string> {
           ({ name, screens }) => `${name}\t${screens.map((screen) => `"${screen}"`).join(', ')}`
         )
         return [
-          `Canvas "${shown.name}", ${count}. Edit a screen's file and the canvas updates by itself.`,
+          `Page "${shown.name}", ${count}. Edit a screen's file and the canvas updates by itself.`,
           ...lines,
           ...(shown.share ? [`Shared as a web page: ${shown.share}`] : []),
           ...(groups.length > 0 ? ['Groups:', ...groups] : []),
@@ -246,8 +248,8 @@ async function canvas(rawArgs: string[]): Promise<string> {
     }
     const result = await call('canvasNew', { name })
     return result.created
-      ? `Created the canvas "${result.canvas}". Put screens on it with --canvas "${result.canvas}", e.g. atox canvas screen set <name> <file.tsx> --canvas "${result.canvas}".`
-      : `The canvas "${result.canvas}" already exists; use --canvas "${result.canvas}".`
+      ? `Added the page "${result.canvas}" to the canvas. Put screens on it with --page "${result.canvas}", e.g. atox canvas screen set <name> <file.tsx> --page "${result.canvas}".`
+      : `The page "${result.canvas}" already exists; use --page "${result.canvas}".`
   }
   if (group === 'screen' && action === 'set') {
     const { values, positional } = parseFlags(rest, ['device', 'size'])
@@ -265,11 +267,11 @@ async function canvas(rawArgs: string[]): Promise<string> {
     })
     const look = `${result.device}, ${result.width}x${result.height}`
     const done = result.created
-      ? `Added the screen "${result.screen}" (${look}) to the canvas "${result.canvas}". The user sees it now.`
-      : `Updated the screen "${result.screen}" (${look}) on the canvas "${result.canvas}".`
+      ? `Added the screen "${result.screen}" (${look}) to the page "${result.canvas}". The user sees it now.`
+      : `Updated the screen "${result.screen}" (${look}) on the page "${result.canvas}".`
     return [
       [
-        ...(result.canvasCreated ? [`Created the canvas "${result.canvas}" for this chat.`] : []),
+        ...(result.canvasCreated ? [`Created the canvas with the page "${result.canvas}" for this chat.`] : []),
         done,
         `From now on just edit ${result.file} (and the files it imports): the canvas updates by itself. Run this command again only to change the device or size.`
       ].join(' '),

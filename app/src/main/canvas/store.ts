@@ -71,9 +71,10 @@ export function publicCanvas({ screens, share, ...canvas }: StoredCanvas): Canva
 }
 
 /**
- * Холсты из файла, который мог поправить человек: неверные записи отбрасываются или
- * чинятся, а не роняют приложение. Холсты удалённых проектов не загружаются. У чата остаётся
- * не больше одного холста вне архива: лишние уходят в архив.
+ * Страницы из файла, который мог поправить человек: неверные записи отбрасываются или
+ * чинятся, а не роняют приложение. Страницы удалённых проектов не загружаются. Холст чата
+ * в архиве целиком или нет: есть страница вне архива — остальные возвращаются из него, ничего
+ * не теряется. Ссылка холста одна на чат: её получают все его страницы.
  */
 export function normalizeCanvases(
   data: Partial<CanvasFile> | undefined,
@@ -89,6 +90,17 @@ export function normalizeCanvases(
     }
     seen.add(canvas.id)
     canvases.push(canvas)
+  }
+  const active = new Set(canvases.filter(({ archived }) => !archived).map(({ chatId }) => chatId))
+  const shares = new Map<string, StoredShare>()
+  for (const canvas of canvases) {
+    if (canvas.share && !shares.has(canvas.chatId)) {
+      shares.set(canvas.chatId, canvas.share)
+    }
+  }
+  for (const canvas of canvases) {
+    canvas.archived = !active.has(canvas.chatId)
+    canvas.share = shares.get(canvas.chatId) ?? null
   }
   return canvases
 }

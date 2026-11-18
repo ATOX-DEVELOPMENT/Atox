@@ -6,6 +6,7 @@ import {
   SCREEN_GAP,
   SCREEN_SIZE,
   screenSourceKind,
+  snapUpToGrid,
   type CanvasGroup,
   type CanvasScreen,
   type ScreenDevice
@@ -29,7 +30,7 @@ export const SCREEN_FILE_MAX_BYTES = SCREEN_FILE_MAX_MB * 1024 * 1024
 /** Начало сообщений холста: по нему агент (и навык `atox-canvas`) узнаёт их. */
 export const CANVAS_MESSAGE_PREFIX = '[Atox canvas]'
 
-/** Имя холста, когда у чата нет названия. */
+/** Имя первой страницы, когда у чата нет названия. */
 export const DEFAULT_CANVAS_NAME = 'Canvas'
 
 export interface ScreenPlacement {
@@ -38,8 +39,8 @@ export interface ScreenPlacement {
 }
 
 /**
- * Где встанет новый экран: правее самого правого, по верхнему краю его ряда. Если так он
- * вышел бы за `CANVAS_ROW_WIDTH`, — в новый ряд под всеми экранами, от левого края.
+ * Где встанет новый экран: правее самого правого, по верхнему краю его ряда, по линиям сетки.
+ * Если так он вышел бы за `CANVAS_ROW_WIDTH`, — в новый ряд под всеми экранами, от левого края.
  */
 export function placeNewScreen(
   screens: readonly Pick<CanvasScreen, 'x' | 'y' | 'width' | 'height'>[],
@@ -51,13 +52,13 @@ export function placeNewScreen(
   const rightmost = screens.reduce((best, screen) =>
     screen.x + screen.width > best.x + best.width ? screen : best
   )
-  const x = rightmost.x + rightmost.width + SCREEN_GAP
+  const x = snapUpToGrid(rightmost.x + rightmost.width + SCREEN_GAP)
   if (x + width <= CANVAS_ROW_WIDTH) {
     return { x, y: rightmost.y }
   }
   return {
     x: Math.min(...screens.map((screen) => screen.x)),
-    y: Math.max(...screens.map((screen) => screen.y + screen.height)) + SCREEN_GAP
+    y: snapUpToGrid(Math.max(...screens.map((screen) => screen.y + screen.height)) + SCREEN_GAP)
   }
 }
 
@@ -69,7 +70,7 @@ export const ARRANGE_ROW_GAP = 520
 
 /**
  * Раскладка рядами: экраны ряда идут слева направо с обычным зазором, по верхнему краю; ряды —
- * сверху вниз. Возвращает левый верхний угол каждого экрана.
+ * сверху вниз; всё по линиям сетки. Возвращает левый верхний угол каждого экрана.
  */
 export function arrangeRows<Screen extends Pick<CanvasScreen, 'width' | 'height'>>(
   rows: readonly (readonly Screen[])[]
@@ -80,9 +81,9 @@ export function arrangeRows<Screen extends Pick<CanvasScreen, 'width' | 'height'
     let x = 0
     for (const screen of row) {
       places.set(screen, { x, y })
-      x += screen.width + SCREEN_GAP
+      x = snapUpToGrid(x + screen.width + SCREEN_GAP)
     }
-    y += Math.max(0, ...row.map(({ height }) => height)) + ARRANGE_ROW_GAP
+    y = snapUpToGrid(y + Math.max(0, ...row.map(({ height }) => height)) + ARRANGE_ROW_GAP)
   }
   return places
 }
@@ -129,7 +130,7 @@ export function findScreenByName<Screen extends Pick<CanvasScreen, 'name'>>(
   return screens.find((screen) => screen.name.toLowerCase() === wanted)
 }
 
-/** Холст по имени: как и у экрана, без учёта регистра и пробелов по краям. */
+/** Страница по имени: как и у экрана, без учёта регистра и пробелов по краям. */
 export function findCanvasByName<Canvas extends { name: string }>(
   canvases: readonly Canvas[],
   name: string
@@ -259,7 +260,8 @@ export function describeOverflow(
 
 export interface FixMessage {
   screenName: string
-  canvasName: string
+  /** Страница холста, на которой стоит экран. */
+  pageName: string
   text: string
   file: string
   /** Скриншот экрана; `null` — снять не удалось, строки в сообщении не будет. */
@@ -271,14 +273,14 @@ export interface FixMessage {
 /** Просьба человека поправить экран. Формат знает навык `atox-canvas`: менять его вместе. */
 export function formatFixMessage({
   screenName,
-  canvasName,
+  pageName,
   text,
   file,
   screenshot,
   buildError
 }: FixMessage): string {
   const lines = [
-    `${CANVAS_MESSAGE_PREFIX} Fix the screen "${screenName}" on the canvas "${canvasName}":`,
+    `${CANVAS_MESSAGE_PREFIX} Fix the screen "${screenName}" on the canvas page "${pageName}":`,
     text.trim(),
     '',
     `File: ${file}`,
@@ -288,9 +290,9 @@ export function formatFixMessage({
   return lines.join('\n')
 }
 
-/** Просьба человека с холста, не про один экран. */
-export function formatCanvasMessage(text: string): string {
-  return `${CANVAS_MESSAGE_PREFIX} ${text.trim()}`
+/** Просьба человека со страницы холста, не про один экран: агент узнаёт, на какую страницу её класть. */
+export function formatCanvasMessage(text: string, pageName: string): string {
+  return `${CANVAS_MESSAGE_PREFIX} On the canvas page "${pageName}": ${text.trim()}`
 }
 
 /**

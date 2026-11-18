@@ -64,16 +64,23 @@ function Layout() {
     () => setPage((current) => (current?.kind === 'canvasList' ? null : { kind: 'canvasList' })),
     []
   )
+  const canvasStore = useCanvasStore()
   const canvasNavigation = useMemo<CanvasNavigation>(
     () => ({
       openCanvas: (canvasId) => setPage({ kind: 'canvas', canvasId }),
+      openChatCanvas: (chatId) => {
+        void (async () => {
+          const canvasId =
+            canvasStore.entryPage(chatId)?.id ?? (await window.atox.canvas.create(chatId))
+          setPage({ kind: 'canvas', canvasId })
+        })()
+      },
       openCanvasList: () => setPage({ kind: 'canvasList' }),
       openChat
     }),
-    [openChat]
+    [openChat, canvasStore]
   )
   // Строка открытого холста в сайдбаре подсвечена; узнаёт она об этом из хранилища холстов.
-  const canvasStore = useCanvasStore()
   const openedCanvasId = page?.kind === 'canvas' ? page.canvasId : null
   useEffect(() => canvasStore.setOpened(openedCanvasId), [canvasStore, openedCanvasId])
   const openRepository = useCallback(

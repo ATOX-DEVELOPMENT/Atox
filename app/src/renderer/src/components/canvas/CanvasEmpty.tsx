@@ -8,7 +8,7 @@ interface CanvasEmptyProps {
   onOpenChat(): void
 }
 
-/** Холст без экранов: что здесь появится и откуда. */
+/** Страница без экранов: что здесь появится и откуда. */
 export function CanvasEmpty({ canvasId, chatTitle, onOpenChat }: CanvasEmptyProps) {
   const [asking, setAsking] = useState(false)
 
@@ -23,7 +23,7 @@ export function CanvasEmpty({ canvasId, chatTitle, onOpenChat }: CanvasEmptyProp
       <p className="canvas-empty__text">
         {chatTitle === null
           ? 'The chat of this canvas was deleted, so no agent can add screens to it.'
-          : `This canvas is linked to the chat “${chatTitle}”. Ask the agent there to design something, and it will show up here.`}
+          : `This canvas is linked to the chat “${chatTitle}”. Ask the agent there to design something on this page, and it will show up here.`}
       </p>
       {chatTitle !== null &&
         (asking ? (
