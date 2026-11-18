@@ -537,6 +537,15 @@ export function registerIpcHandlers({
   ipcMain.handle(IpcChannel.CanvasCreate, (_event, chatId: unknown) =>
     canvas.create(requireId(chatId))
   )
+  ipcMain.handle(IpcChannel.CanvasAddPage, (_event, chatId: unknown) =>
+    canvas.addPage(requireId(chatId))
+  )
+  ipcMain.handle(IpcChannel.CanvasReorderPages, (_event, chatId: unknown, pageIds: unknown) => {
+    if (!Array.isArray(pageIds) || !pageIds.every((id) => typeof id === 'string')) {
+      throw new Error('Invalid page list')
+    }
+    canvas.reorderPages(requireId(chatId), pageIds)
+  })
   ipcMain.handle(IpcChannel.CanvasRename, (_event, canvasId: unknown, name: unknown) =>
     canvas.rename(requireId(canvasId), name)
   )
@@ -614,12 +623,30 @@ export function registerIpcHandlers({
       throw new Error('The canvas was not found.')
     }
     const confirmed = await confirm(BrowserWindow.fromWebContents(event.sender), {
-      message: `Delete “${target.name}”?`,
+      message: `Delete the page “${target.name}”?`,
       detail: 'Screen files stay in the project.',
       confirmLabel: 'Delete'
     })
     if (confirmed) {
       await canvas.remove(id)
+    }
+  })
+  ipcMain.handle(IpcChannel.CanvasRemoveCanvas, async (event, chatId: unknown) => {
+    const id = requireId(chatId)
+    const pages = canvas.state().canvases.filter((other) => other.chatId === id)
+    if (pages.length === 0) {
+      throw new Error('The canvas was not found.')
+    }
+    const confirmed = await confirm(BrowserWindow.fromWebContents(event.sender), {
+      message: 'Delete this canvas?',
+      detail:
+        pages.length === 1
+          ? 'Screen files stay in the project.'
+          : `All ${pages.length} pages are deleted. Screen files stay in the project.`,
+      confirmLabel: 'Delete'
+    })
+    if (confirmed) {
+      await canvas.removeChatCanvas(id)
     }
   })
   ipcMain.handle(

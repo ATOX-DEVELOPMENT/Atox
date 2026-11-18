@@ -154,9 +154,9 @@ function ChatRow({
   // Только действия: строка перерисовывается, лишь когда меняются её собственные данные.
   const { selectChat, openChatBeside, renameChat, forkChat, archiveChat, removeChat } =
     useProjectActions()
-  // Пункт меню открывает первый холст чата вне архива или создаёт его: остальные — свои строки.
-  const canvas = useChatCanvases(chat.id)[0]
-  const { openCanvas } = useCanvasNavigation()
+  // Пункт меню открывает холст чата или создаёт его.
+  const hasCanvas = useChatCanvases(chat.id).length > 0
+  const { openChatCanvas } = useCanvasNavigation()
 
   const openContextMenu = async (event: MouseEvent) => {
     event.preventDefault()
@@ -173,7 +173,7 @@ function ChatRow({
           : []),
         {
           action: 'canvas',
-          label: canvas ? 'Open canvas' : 'Create canvas',
+          label: hasCanvas ? 'Open canvas' : 'Create canvas',
           icon: <LayoutDashboard />
         },
         { type: 'separator' },
@@ -188,7 +188,7 @@ function ChatRow({
     if (action === 'open-beside') {
       openChatBeside(chat.id)
     } else if (action === 'canvas') {
-      openCanvas(canvas?.id ?? (await window.atox.canvas.create(chat.id)))
+      openChatCanvas(chat.id)
     } else if (action === 'rename') {
       onRenamingChange(true)
     } else if (action === 'fork') {

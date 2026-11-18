@@ -1,15 +1,14 @@
-import { memo, useState } from 'react'
+import { memo } from 'react'
 import { Ellipsis } from 'lucide-react'
-import { CANVAS_NAME_MAX_LENGTH, type Canvas } from '../../../../shared/canvas'
 import { useCanvasNavigation } from '../../hooks/CanvasesContext'
 import { showCanvasMenu } from '../../lib/canvasMenu'
 import { CHAT_DELETED_LABEL } from '../../lib/canvasOwner'
+import type { ChatCanvas } from '../../lib/chatCanvas'
 import { formatFullDate, formatRelativeTime } from '../../lib/relativeTime'
-import { InlineRename } from '../InlineRename'
 import { CanvasThumbnail } from './CanvasThumbnail'
 
 interface CanvasCardProps {
-  canvas: Canvas
+  canvas: ChatCanvas
   /** Проекта нет — его убрали из списка. */
   projectName: string | undefined
   /** Чата нет — его удалили или убрали в архив. */
@@ -17,7 +16,15 @@ interface CanvasCardProps {
   now: number
 }
 
-/** Карточка холста в списке: схема экранов, имя, проект, чат, число экранов и время правки. */
+/** Подпись «3 pages». */
+function plural(count: number, noun: string): string {
+  return `${count} ${noun}${count === 1 ? '' : 's'}`
+}
+
+/**
+ * Карточка холста чата в списке: схема экранов первой страницы, название чата, проект, число
+ * страниц и экранов и время правки. Страницы выбираются уже на самом холсте.
+ */
 export const CanvasCard = memo(function CanvasCard({
   canvas,
   projectName,
@@ -25,12 +32,16 @@ export const CanvasCard = memo(function CanvasCard({
   now
 }: CanvasCardProps) {
   const navigation = useCanvasNavigation()
-  const [renaming, setRenaming] = useState(false)
-  const count = canvas.screens.length
+  const [first] = canvas.pages
+  if (!first) {
+    return null
+  }
+  const name = chatTitle ?? first.name
   const details = [
     projectName,
-    chatTitle === undefined ? CHAT_DELETED_LABEL : `chat ${chatTitle}`,
-    count === 1 ? '1 screen' : `${count} screens`
+    chatTitle === undefined && CHAT_DELETED_LABEL,
+    canvas.pages.length > 1 && plural(canvas.pages.length, 'page'),
+    plural(canvas.screenCount, 'screen')
   ]
     .filter(Boolean)
     .join(' · ')
@@ -40,27 +51,15 @@ export const CanvasCard = memo(function CanvasCard({
       <button
         type="button"
         className="canvas-card__open"
-        aria-label={`Open ${canvas.name}`}
-        onClick={() => navigation.openCanvas(canvas.id)}
+        aria-label={`Open ${name}`}
+        onClick={() => navigation.openChatCanvas(canvas.chatId)}
       >
-        <CanvasThumbnail screens={canvas.screens} />
+        <CanvasThumbnail screens={first.screens} />
       </button>
       <div className="canvas-card__info">
-        {renaming ? (
-          <InlineRename
-            value={canvas.name}
-            label="Canvas name"
-            onSubmit={(name) => {
-              setRenaming(false)
-              void window.atox.canvas.rename(canvas.id, name.slice(0, CANVAS_NAME_MAX_LENGTH))
-            }}
-            onCancel={() => setRenaming(false)}
-          />
-        ) : (
-          <h2 className="canvas-card__name" title={canvas.name}>
-            {canvas.name}
-          </h2>
-        )}
+        <h2 className="canvas-card__name" title={name}>
+          {name}
+        </h2>
         <p className="canvas-card__details" title={details}>
           <span className="canvas-card__place">{details}</span>
           <span aria-hidden> · </span>
@@ -75,14 +74,13 @@ export const CanvasCard = memo(function CanvasCard({
       <button
         type="button"
         className="canvas-card__menu"
-        aria-label={`More actions for ${canvas.name}`}
+        aria-label={`More actions for ${name}`}
         title="More"
         onClick={(event) =>
-          void showCanvasMenu(canvas, event.currentTarget, {
+          void showCanvasMenu(first, event.currentTarget, {
             withOpen: true,
             chatAvailable: chatTitle !== undefined,
-            navigation,
-            onRename: () => setRenaming(true)
+            navigation
           })
         }
       >

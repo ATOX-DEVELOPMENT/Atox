@@ -1,5 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { useCanvas, useCanvasNavigation } from '../../hooks/CanvasesContext'
+import {
+  useCanvas,
+  useCanvasNavigation,
+  useCanvasStore,
+  useChatPages
+} from '../../hooks/CanvasesContext'
 import { useProjectsContext } from '../../hooks/ProjectsContext'
 import { canvasOwner, chatLabel } from '../../lib/canvasOwner'
 import { showCanvasMenu, showExportMenu, showShareMenu } from '../../lib/canvasMenu'
@@ -8,6 +13,7 @@ import { CanvasEmpty } from './CanvasEmpty'
 import { CanvasHeader } from './CanvasHeader'
 import { CanvasStage, type CanvasStageHandle } from './CanvasStage'
 import { HistoryDrawer } from './HistoryDrawer'
+import { PagesPanel } from './PagesPanel'
 import { ViewState } from './viewState'
 
 interface CanvasPageProps {
@@ -15,12 +21,17 @@ interface CanvasPageProps {
   onClose(): void
 }
 
-/** Страница холста: шапка, холст с экранами и история версий справа. */
 /** Сколько кнопка Share показывает «ссылка скопирована», мс. */
 const LINK_COPIED_MS = 2000
 
+/**
+ * Страница холста: шапка, поле с экранами открытой страницы, список страниц поверх него слева
+ * и история версий справа.
+ */
 export function CanvasPage({ canvasId, onClose }: CanvasPageProps) {
   const canvas = useCanvas(canvasId)
+  const store = useCanvasStore()
+  const pages = useChatPages(canvas?.chatId ?? '')
   const { projects } = useProjectsContext()
   const navigation = useCanvasNavigation()
   const [viewState] = useState(() => new ViewState())
@@ -45,16 +56,22 @@ export function CanvasPage({ canvasId, onClose }: CanvasPageProps) {
     return () => window.clearTimeout(timer)
   }, [linkCopied])
 
-  // Холст, который был на экране и пропал (его удалили), закрывает страницу. Только что
-  // созданный холст может прийти чуть позже самой страницы — его ждём.
-  const seenRef = useRef(false)
+  // Страница, которая была на экране и пропала (её удалили), уступает место другой странице
+  // холста, а если страниц не осталось — закрывается. Только что созданная страница может
+  // прийти чуть позже самого экрана — её ждём.
+  const seenChatRef = useRef<string | null>(null)
   useEffect(() => {
     if (canvas) {
-      seenRef.current = true
-    } else if (seenRef.current) {
-      onClose()
+      seenChatRef.current = canvas.chatId
+    } else if (seenChatRef.current !== null) {
+      const next = store.entryPage(seenChatRef.current)
+      if (next) {
+        navigation.openCanvas(next.id)
+      } else {
+        onClose()
+      }
     }
-  }, [canvas, onClose])
+  }, [canvas, store, navigation, onClose])
 
   // Esc, который уже обработало поле (переименование, «Fix»), страницу не закрывает.
   useEffect(() => {
@@ -164,13 +181,13 @@ export function CanvasPage({ canvasId, onClose }: CanvasPageProps) {
           void showCanvasMenu(canvas, event.currentTarget, {
             withOpen: false,
             chatAvailable: Boolean(owner.chat),
-            renameLabel: 'Rename canvas',
             navigation,
             onRename: () => setRenaming(true)
           })
         }
       />
       <div className="canvas-page__body">
+        <PagesPanel chatId={canvas.chatId} pages={pages} activeId={canvas.id} />
         {hasScreens ? (
           <CanvasStage
             ref={stageRef}

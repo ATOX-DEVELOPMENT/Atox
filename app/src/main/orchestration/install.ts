@@ -103,8 +103,8 @@ Quick reference (details and props are in \`kit.md\`):
 ## Commands
 
 \`\`\`sh
-atox canvas                                                    # this chat's canvases: screens with device, size, file and build status
-atox canvas new "Pitch deck"                                   # one more canvas in this chat (see "Several canvases")
+atox canvas                                                    # this chat's canvas: pages and their screens with device, size, file and build status
+atox canvas new "Pitch deck"                                   # one more page of the canvas (see "Several pages")
 atox canvas screen set Login .atox/canvas/login.tsx --device iphone
 atox canvas screen set "Admin dashboard" .atox/canvas/admin.tsx --device web
 atox canvas screen set Widget .atox/canvas/widget.tsx --size 360x640
@@ -146,9 +146,9 @@ When screens follow each other (a user flow, onboarding, checkout), connect them
 
 When the user wants to show the canvas to someone (a client, a teammate), run \`atox canvas share\`: it publishes a snapshot as a web page and prints a link. The page opens in any browser, also on a phone, with pan and zoom, and is view only (no comments, no editing). Give the link to the user. After you change screens, run the command again: the page updates and the link stays the same. \`atox canvas share stop\` closes the link. The user can do the same with the Share button on the canvas.
 
-## Several canvases
+## Several pages
 
-A chat can have more than one canvas, for example the app screens and a separate presentation. Do not mix them: \`atox canvas new "<name>"\` adds one, only when the user asks for it or the new work clearly does not belong on the existing canvas. When the chat has several canvases, every canvas command needs \`--canvas "<name>"\` (for example \`atox canvas screen set Cover .atox/canvas/cover.tsx --device slide --canvas "Pitch deck"\`); without it the command refuses and lists the names. With one canvas you can leave it out. The "[Atox canvas] Fix the screen ..." message names the canvas: pass that name.
+A chat has one canvas, and the canvas can have several pages (like pages in Figma), for example the app screens and a separate presentation. The user adds and renames pages in the Pages panel on the canvas. Do not mix them: \`atox canvas new "<name>"\` adds a page, only when the user asks for it or the new work clearly does not belong on an existing page. When the canvas has several pages, every canvas command needs \`--page "<name>"\` (for example \`atox canvas screen set Cover .atox/canvas/cover.tsx --device slide --page "Pitch deck"\`); without it the command refuses and lists the names. With one page you can leave it out. The messages "[Atox canvas] On the canvas page ..." and "[Atox canvas] Fix the screen ..." name the page: pass that name. \`atox canvas share\` publishes all pages under one link.
 
 ## Presentations and documents
 
@@ -184,12 +184,12 @@ The user right-clicked a screen, chose Fix and asked for a change. The message h
 
 - Open the File, look at the Screenshot, make the change in the code. The canvas rebuilds by itself. If there is a Build error, fix it first.
 - Do not run \`atox canvas screen set\` again unless the device or size must change.
-- The canvas is named in the message; when the chat has several canvases, pass it with \`--canvas "<name>"\` to \`atox canvas\` commands.
+- The page is named in the message; when the canvas has several pages, pass it with \`--page "<name>"\` to \`atox canvas\` commands.
 - Do not ask the user for screenshots or which file: both are in the message.
 - After a bigger change run \`atox canvas screen preview <name>\` to check the result.
 - Answer in one or two lines with what you changed.
 
-Other "${CANVAS_MESSAGE_PREFIX} ..." messages are requests about the canvas as a whole, for example a new screen.
+Other "${CANVAS_MESSAGE_PREFIX} On the canvas page ..." messages are requests about one page as a whole, for example a new screen: put it on that page.
 
 ## Troubleshooting
 

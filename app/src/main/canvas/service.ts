@@ -67,6 +67,7 @@ import {
   type CanvasFile,
   type StoredCanvas,
   type StoredScreen,
+  type StoredShare,
   type StoredVersion
 } from './store'
 import {
@@ -256,11 +257,17 @@ export class CanvasService implements ScreenDocumentSource {
     return { canvases: this.canvases.map(publicCanvas) }
   }
 
-  /** Первый холст чата вне архива; нет — создаётся пустой с названием чата. */
+  /** Холст чата: его первая страница; холста нет — создаётся пустая страница с названием чата. */
   create(chatId: string): string {
     const existing = this.activeCanvasesOf(chatId)[0]
     if (existing) {
       return existing.id
+    }
+    // Холст чата в архиве: он возвращается вместе со страницами, а не заводится второй.
+    const archived = this.pagesOf(chatId)[0]
+    if (archived) {
+      this.archive(archived.id, false)
+      return archived.id
     }
     const location = this.services.store.findChat(chatId)
     if (!location) {
@@ -271,10 +278,57 @@ export class CanvasService implements ScreenDocumentSource {
     return canvas.id
   }
 
+  /** Новая пустая страница в холсте чата: в конце, с именем «Page N». Возвращает её id. */
+  addPage(chatId: string): string {
+    const location = this.services.store.findChat(chatId)
+    if (!location) {
+      throw new CanvasError('The chat was not found.')
+    }
+    const pages = this.pagesOf(chatId)
+    const taken = new Set(pages.map(({ name }) => name.toLowerCase()))
+    let number = pages.length + 1
+    while (taken.has(`page ${number}`)) {
+      number += 1
+    }
+    const canvas = this.addCanvas(location, `Page ${number}`)
+    this.changed()
+    return canvas.id
+  }
+
+  /** Имена страниц чата разные: по имени агент находит страницу. */
   rename(canvasId: string, name: unknown): void {
     const canvas = this.getCanvas(canvasId)
-    canvas.name = parseName(name, 'canvas')
+    const pageName = parseName(name, 'page')
+    const namesake = findCanvasByName(this.pagesOf(canvas.chatId), pageName)
+    if (namesake && namesake !== canvas) {
+      throw new CanvasError(`Another page of this canvas is already called “${namesake.name}”.`)
+    }
+    canvas.name = pageName
     canvas.updatedAt = Date.now()
+    this.changed()
+  }
+
+  /**
+   * Новый порядок страниц чата. `pageIds` — все страницы чата: чужая или пропавшая страница —
+   * ошибка, чтобы устаревший список не потерял страницу.
+   */
+  reorderPages(chatId: string, pageIds: readonly string[]): void {
+    const pages = this.pagesOf(chatId)
+    const byId = new Map(pages.map((page) => [page.id, page]))
+    const ordered = pageIds.map((id) => byId.get(id))
+    if (
+      ordered.length !== pages.length ||
+      new Set(pageIds).size !== pageIds.length ||
+      ordered.some((page) => page === undefined)
+    ) {
+      throw new CanvasError('The list of pages is out of date.')
+    }
+    // Страницы чата занимают в общем списке те же места, но в новом порядке.
+    const queue = ordered as StoredCanvas[]
+    let next = 0
+    this.canvases = this.canvases.map((canvas) =>
+      canvas.chatId === chatId ? (queue[next++] as StoredCanvas) : canvas
+    )
     this.changed()
   }
 
@@ -310,27 +364,36 @@ export class CanvasService implements ScreenDocumentSource {
     this.changed()
   }
 
-  /** В архиве за файлами холста не следят; вернувшийся холст сразу проверяет их. */
+  /**
+   * Убирает в архив весь холст чата, которому принадлежит страница, или возвращает его: страницы
+   * архивируются вместе. В архиве за файлами не следят; вернувшийся холст сразу проверяет их.
+   */
   archive(canvasId: string, archived: boolean): void {
-    const canvas = this.getCanvas(canvasId)
-    if (canvas.archived === archived) {
-      return
+    const { chatId } = this.getCanvas(canvasId)
+    const pages = this.pagesOf(chatId).filter((page) => page.archived !== archived)
+    for (const page of pages) {
+      page.archived = archived
+      if (archived) {
+        this.unwatchCanvas(page)
+      } else {
+        this.watchCanvas(page)
+      }
     }
-    canvas.archived = archived
-    if (archived) {
-      this.unwatchCanvas(canvas)
-    } else {
-      this.watchCanvas(canvas)
+    if (pages.length > 0) {
+      this.changed()
     }
-    this.changed()
   }
 
-  /** Удаляет холст и снимки его версий; HTML-файлы экранов остаются в проекте. */
+  /**
+   * Удаляет страницу и снимки её версий; файлы экранов остаются в проекте. Удалена последняя
+   * страница чата — вместе с ней закрывается ссылка холста.
+   */
   async remove(canvasId: string): Promise<void> {
     const canvas = this.getCanvas(canvasId)
-    // Ссылка закрывается вместе с холстом; без сети холст всё равно удаляется.
-    if (canvas.share) {
-      await unpublishShare(canvas.share).catch((error) =>
+    const share = this.chatShareOf(canvas.chatId)
+    // Без сети страница всё равно удаляется.
+    if (share && this.pagesOf(canvas.chatId).length === 1) {
+      await unpublishShare(share).catch((error) =>
         console.error('Failed to close the link of a deleted canvas', error)
       )
     }
@@ -342,10 +405,20 @@ export class CanvasService implements ScreenDocumentSource {
       .catch((error) => console.error('Failed to remove the canvas history', error))
   }
 
+  /** Удаляет холст чата целиком, со всеми страницами. */
+  async removeChatCanvas(chatId: string): Promise<void> {
+    for (const page of this.pagesOf(chatId)) {
+      await this.remove(page.id)
+    }
+  }
+
   /** Проект убрали из Atox — его холсты больше негде показать. */
   async removeProject(projectId: string): Promise<void> {
     const canvases = this.canvases.filter((canvas) => canvas.projectId === projectId)
-    await Promise.all(canvases.map((canvas) => this.remove(canvas.id)))
+    // По очереди: последняя страница чата закрывает ссылку холста.
+    for (const canvas of canvases) {
+      await this.remove(canvas.id)
+    }
   }
 
   /**
@@ -362,7 +435,7 @@ export class CanvasService implements ScreenDocumentSource {
     // Чат назван по просьбе человека, а не по служебному началу сообщения.
     const options = { titleFrom: message }
     if (screenId === undefined) {
-      await this.services.conversations.send(chatId, formatCanvasMessage(message), {}, options)
+      await this.services.conversations.send(chatId, formatCanvasMessage(message, canvas.name), {}, options)
       return
     }
     const { screen } = this.getScreen(canvasId, screenId)
@@ -376,7 +449,7 @@ export class CanvasService implements ScreenDocumentSource {
         chatId,
         formatFixMessage({
           screenName: screen.name,
-          canvasName: canvas.name,
+          pageName: canvas.name,
           text: message,
           file: screen.file,
           screenshot,
@@ -514,10 +587,15 @@ export class CanvasService implements ScreenDocumentSource {
     return canvases.map((canvas) => this.viewOf(canvas))
   }
 
+  private shareLinkOf(chatId: string): string | null {
+    const share = this.chatShareOf(chatId)
+    return share && shareUrl(share.id)
+  }
+
   private viewOf(canvas: StoredCanvas): AgentCanvasView {
     return {
       name: canvas.name,
-      share: canvas.share && shareUrl(canvas.share.id),
+      share: this.shareLinkOf(canvas.chatId),
       groups: canvas.groups.map(({ name, screens }) => ({
         name,
         screens: screens.flatMap(
@@ -1040,35 +1118,40 @@ export class CanvasService implements ScreenDocumentSource {
   }
 
   /**
-   * Публикует снимок холста по ссылке: страницы экранов в нынешнем виде, их места, группы и
-   * линии. Повторный вызов обновляет ту же ссылку.
+   * Публикует снимок холста чата по ссылке: страницы экранов в нынешнем виде, их места, группы и
+   * линии на всех его страницах. Повторный вызов обновляет ту же ссылку.
    */
   async share(canvasId: string): Promise<CanvasShare> {
-    return this.publish(this.getCanvas(canvasId))
+    return this.publish(this.getCanvas(canvasId).chatId)
   }
 
   async shareForAgent(target: CanvasTarget): Promise<CanvasShare> {
-    const canvas = this.agentCanvas(target)
-    return this.publish(canvas)
+    // Ссылка общая для всех страниц, но страница, которую назвали, должна существовать.
+    return this.publish(this.agentCanvas(target).chatId)
   }
 
-  private async publish(canvas: StoredCanvas): Promise<CanvasShare> {
-    if (canvas.screens.length === 0) {
+  private async publish(chatId: string): Promise<CanvasShare> {
+    const pages = this.activeCanvasesOf(chatId).filter((page) => page.screens.length > 0)
+    if (pages.length === 0) {
       throw new CanvasError('Put at least one screen on the canvas before sharing it.')
     }
-    if (this.sharing.has(canvas.id)) {
+    if (this.sharing.has(chatId)) {
       throw new CanvasError('This canvas is being shared right now.')
     }
-    this.sharing.add(canvas.id)
+    this.sharing.add(chatId)
     try {
-      const screens = await this.renderForSharing(canvas)
-      const credentials = canvas.share ?? newShareCredentials()
-      await publishShare(credentials, { canvas: sharedCanvas(canvas), screens })
-      canvas.share = { ...credentials, publishedAt: Date.now() }
+      const screens = await this.renderForSharing(pages)
+      const previous = this.chatShareOf(chatId)
+      const credentials = previous ?? newShareCredentials()
+      await publishShare(credentials, { canvas: sharedCanvas(chatId, pages, this.services), screens })
+      const share = { ...credentials, publishedAt: Date.now() }
+      for (const page of this.pagesOf(chatId)) {
+        page.share = share
+      }
       this.changed()
-      return { url: shareUrl(canvas.share.id), publishedAt: canvas.share.publishedAt }
+      return { url: shareUrl(share.id), publishedAt: share.publishedAt }
     } finally {
-      this.sharing.delete(canvas.id)
+      this.sharing.delete(chatId)
     }
   }
 
@@ -1077,11 +1160,14 @@ export class CanvasService implements ScreenDocumentSource {
    * страница по ссылке лёгкая и на телефоне. Снимков идёт несколько сразу, но не все: каждый —
    * скрытое окно с экраном.
    */
-  private async renderForSharing(canvas: StoredCanvas): Promise<Map<string, SharedScreenPage>> {
+  private async renderForSharing(
+    canvasPages: readonly StoredCanvas[]
+  ): Promise<Map<string, SharedScreenPage>> {
     const pages = new Map<string, SharedScreenPage>()
-    const queue = [...canvas.screens]
+    const queue = canvasPages.flatMap((canvas) => canvas.screens.map((screen) => ({ canvas, screen })))
     const worker = async () => {
-      for (let screen = queue.shift(); screen; screen = queue.shift()) {
+      for (let item = queue.shift(); item; item = queue.shift()) {
+        const { canvas, screen } = item
         await this.queueCheck(screenKey(canvas.id, screen.id))
         const page = await renderScreenForSharing(
           canvasScreenUrl(canvas.id, screen.id, screen.revision),
@@ -1102,18 +1188,20 @@ export class CanvasService implements ScreenDocumentSource {
 
   /** Закрывает ссылку: страница по ней перестаёт открываться. Не вышло закрыть — ссылка остаётся. */
   async unshare(canvasId: string): Promise<void> {
-    await this.closeShare(this.getCanvas(canvasId))
+    await this.closeShare(this.getCanvas(canvasId).chatId)
   }
 
   async unshareForAgent(target: CanvasTarget): Promise<void> {
-    const canvas = this.agentCanvas(target)
-    await this.closeShare(canvas)
+    await this.closeShare(this.agentCanvas(target).chatId)
   }
 
-  private async closeShare(canvas: StoredCanvas): Promise<void> {
-    if (canvas.share) {
-      await unpublishShare(canvas.share)
-      canvas.share = null
+  private async closeShare(chatId: string): Promise<void> {
+    const share = this.chatShareOf(chatId)
+    if (share) {
+      await unpublishShare(share)
+      for (const page of this.pagesOf(chatId)) {
+        page.share = null
+      }
       this.changed()
     }
   }
@@ -1186,11 +1274,18 @@ export class CanvasService implements ScreenDocumentSource {
       screens: [],
       links: [],
       groups: [],
-      share: null,
+      // Новая страница получает ссылку холста; в снимок она попадёт при следующем обновлении.
+      share: this.chatShareOf(chat.id),
       archived: false,
       view: null,
       createdAt: now,
       updatedAt: now
+    }
+    // Холст чата в архиве целиком или нет: страница, которую добавили к холсту в архиве,
+    // возвращает его.
+    const archivedPage = this.pagesOf(chat.id).find((page) => page.archived)
+    if (archivedPage) {
+      this.archive(archivedPage.id, false)
     }
     this.canvases.push(canvas)
     return canvas
@@ -1212,6 +1307,16 @@ export class CanvasService implements ScreenDocumentSource {
     return this.canvases.filter((canvas) => canvas.chatId === chatId && !canvas.archived)
   }
 
+  /** Все страницы холста чата, в их порядке. */
+  private pagesOf(chatId: string): StoredCanvas[] {
+    return this.canvases.filter((canvas) => canvas.chatId === chatId)
+  }
+
+  /** Ссылка холста чата: она одна на все страницы и записана у каждой. */
+  private chatShareOf(chatId: string): StoredShare | null {
+    return this.pagesOf(chatId).find((page) => page.share)?.share ?? null
+  }
+
   /**
    * Холст чата для команды агента. Задано имя — холст с этим именем, нет такого — ошибка со
    * списком. Имени нет — единственный холст чата; их несколько — просим назвать, чтобы экраны
@@ -1223,7 +1328,7 @@ export class CanvasService implements ScreenDocumentSource {
     if (name === undefined) {
       if (own.length > 1) {
         throw new CanvasError(
-          `This chat has several canvases: ${names}. Specify one with --canvas "<name>".`
+          `This chat has several canvas pages: ${names}. Specify one with --page "<name>".`
         )
       }
       return own[0]
@@ -1232,8 +1337,8 @@ export class CanvasService implements ScreenDocumentSource {
     if (!found) {
       throw new CanvasError(
         own.length > 0
-          ? `This chat has no canvas “${name.trim()}”. Its canvases: ${names}.`
-          : `This chat has no canvas “${name.trim()}”. Create it with: atox canvas new "<name>".`
+          ? `This chat has no canvas page “${name.trim()}”. Its pages: ${names}.`
+          : `This chat has no canvas page “${name.trim()}”. Create it with: atox canvas new "<name>".`
       )
     }
     return found
@@ -1244,7 +1349,7 @@ export class CanvasService implements ScreenDocumentSource {
     const canvas = this.canvasOf(target)
     if (!canvas) {
       throw new CanvasError(
-        'This chat has no canvas. Put a screen on it first, or create one: atox canvas new "<name>".'
+        'This chat has no canvas. Put a screen on it first, or add a page: atox canvas new "<name>".'
       )
     }
     return canvas
@@ -1467,23 +1572,31 @@ export class CanvasService implements ScreenDocumentSource {
 }
 
 /** Элемент линии: пробелы по краям убираются, пустое — «не задано». */
-/** Холст для страницы просмотра: что видно на нём, без путей к файлам. */
-function sharedCanvas(canvas: StoredCanvas): SharedCanvas {
+/** Холст чата для страницы просмотра: его страницы и что видно на них, без путей к файлам. */
+function sharedCanvas(
+  chatId: string,
+  pages: readonly StoredCanvas[],
+  { store }: Pick<CanvasServices, 'store'>
+): SharedCanvas {
   return {
-    name: canvas.name,
-    screens: canvas.screens.map((screen) => ({
-      id: screen.id,
-      name: screen.name,
-      device: screen.device,
-      frame: screenFrameOf(screen.device),
-      width: screen.width,
-      height: screen.height,
-      x: screen.x,
-      y: screen.y,
-      revision: screen.revision
-    })),
-    groups: canvas.groups,
-    links: canvas.links.map(({ id, from, to, anchor }) => ({ id, from, to, anchor }))
+    name: canvasNameFromTitle(store.findChat(chatId)?.chat.title ?? pages[0]?.name ?? ''),
+    pages: pages.map((page) => ({
+      id: page.id,
+      name: page.name,
+      screens: page.screens.map((screen) => ({
+        id: screen.id,
+        name: screen.name,
+        device: screen.device,
+        frame: screenFrameOf(screen.device),
+        width: screen.width,
+        height: screen.height,
+        x: screen.x,
+        y: screen.y,
+        revision: screen.revision
+      })),
+      groups: page.groups,
+      links: page.links.map(({ id, from, to, anchor }) => ({ id, from, to, anchor }))
+    }))
   }
 }
 

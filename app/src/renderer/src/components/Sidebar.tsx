@@ -73,7 +73,9 @@ export function Sidebar({
   const branches = useGitBranches()
   const canvases = useCanvases()
   // Холсты в архиве не считаются: их нет и в списке чатов.
-  const canvasCount = canvases?.filter(({ archived }) => !archived).length
+  const canvasCount = canvases
+    ? new Set(canvases.filter(({ archived }) => !archived).map(({ chatId }) => chatId)).size
+    : undefined
   // Пока тянут край, ширина живёт здесь; в настройки попадает только итоговая.
   const [draftWidth, setDraftWidth] = useState<number | null>(null)
   const [limitsShown, setLimitsShown] = useState(() => localStorage.getItem(LIMITS_SHOWN_KEY) === '1')

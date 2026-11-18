@@ -282,6 +282,9 @@ const api: AtoxApi = {
       return () => ipcRenderer.removeListener(IpcChannel.CanvasChanged, handler)
     },
     create: (chatId) => ipcRenderer.invoke(IpcChannel.CanvasCreate, chatId),
+    addPage: (chatId) => ipcRenderer.invoke(IpcChannel.CanvasAddPage, chatId),
+    reorderPages: (chatId, pageIds) =>
+      ipcRenderer.invoke(IpcChannel.CanvasReorderPages, chatId, pageIds),
     rename: (canvasId, name) => ipcRenderer.invoke(IpcChannel.CanvasRename, canvasId, name),
     renameScreen: (canvasId, screenId, name) =>
       ipcRenderer.invoke(IpcChannel.CanvasRenameScreen, canvasId, screenId, name),
@@ -297,6 +300,7 @@ const api: AtoxApi = {
     setView: (canvasId, view) => ipcRenderer.invoke(IpcChannel.CanvasSetView, canvasId, view),
     archive: (canvasId, archived) => ipcRenderer.invoke(IpcChannel.CanvasArchive, canvasId, archived),
     remove: (canvasId) => ipcRenderer.invoke(IpcChannel.CanvasRemove, canvasId),
+    removeCanvas: (chatId) => ipcRenderer.invoke(IpcChannel.CanvasRemoveCanvas, chatId),
     removeScreen: (canvasId, screenId) =>
       ipcRenderer.invoke(IpcChannel.CanvasRemoveScreen, canvasId, screenId),
     request: (canvasId, text, screenId) =>

@@ -14,7 +14,10 @@ const CanvasStoreContext = createContext<CanvasStore | null>(null)
 
 /** Переходы к страницам холстов; ссылки на функции не меняются. */
 export interface CanvasNavigation {
+  /** Открывает страницу холста. */
   openCanvas(canvasId: string): void
+  /** Открывает холст чата на последней странице; холста нет — создаёт его. */
+  openChatCanvas(chatId: string): void
   openCanvasList(): void
   openChat(chatId: string): void
 }
@@ -70,14 +73,28 @@ export function useCanvas(canvasId: string): Canvas | undefined {
   return useSyncExternalStore(store.subscribe, select)
 }
 
-/** Холсты чата вне архива: у чата их может быть несколько. */
+/** Страницы холста чата вне архива, в их порядке. */
 export function useChatCanvases(chatId: string): readonly Canvas[] {
   const store = useCanvasStore()
   const select = useCallback(() => store.activeOfChat(chatId), [store, chatId])
   return useSyncExternalStore(store.subscribe, select)
 }
 
-/** Открыт ли этот холст на странице сейчас. */
+/** Все страницы холста чата, и в архиве тоже. */
+export function useChatPages(chatId: string): readonly Canvas[] {
+  const store = useCanvasStore()
+  const select = useCallback(() => store.pagesOfChat(chatId), [store, chatId])
+  return useSyncExternalStore(store.subscribe, select)
+}
+
+/** Открыт ли на странице холст этого чата. */
+export function useChatCanvasOpened(chatId: string): boolean {
+  const store = useCanvasStore()
+  const select = useCallback(() => store.openedChat() === chatId, [store, chatId])
+  return useSyncExternalStore(store.subscribe, select)
+}
+
+/** Открыта ли эта страница сейчас. */
 export function useCanvasOpened(canvasId: string): boolean {
   const store = useCanvasStore()
   const select = useCallback(() => store.opened() === canvasId, [store, canvasId])

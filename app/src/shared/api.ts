@@ -291,27 +291,37 @@ export interface AtoxApi {
     defaultProject(repository: string): Promise<string | null>
   }
   /**
-   * Холсты: экраны, которые агент показывает на отдельной странице. Содержимое экранов окно не
+   * Холст чата: экраны, которые агент показывает на отдельной странице; в холсте несколько
+   * страниц (в API страница называется `canvasId`). Содержимое экранов окно не
    * получает вызовом: iframe открывает их по адресу `canvasScreenUrl` (протокол `atox-canvas`).
    */
   canvas: {
     get(): Promise<CanvasState>
     subscribe(listener: (state: CanvasState) => void): () => void
     /**
-     * Создаёт пустой холст чата. У чата не больше одного холста вне архива: если он уже есть,
-     * возвращается его id.
+     * Создаёт холст чата с пустой страницей. Холст у чата один: если он уже есть, возвращается
+     * id его первой страницы.
      */
     create(chatId: string): Promise<string>
+    /** Добавляет в холст чата пустую страницу и возвращает её id. */
+    addPage(chatId: string): Promise<string>
+    /** Задаёт порядок страниц холста чата: `pageIds` — все его страницы. */
+    reorderPages(chatId: string, pageIds: string[]): Promise<void>
+    /** Переименовывает страницу; имена страниц одного холста разные. */
     rename(canvasId: string, name: string): Promise<void>
     renameScreen(canvasId: string, screenId: string, name: string): Promise<void>
-    /** Вызывается, когда человек отпустил экран; позицию в процессе перетаскивания держит окно. */
+    /**
+     * Вызывается, когда человек отпустил экран; позицию в процессе перетаскивания держит окно.
+     * Позиция уже стоит по линиям сетки: об этом заботится окно.
+     */
     moveScreen(canvasId: string, screenId: string, x: number, y: number): Promise<void>
     renameGroup(canvasId: string, groupId: string, name: string): Promise<void>
     /** Человек отпустил заголовок группы: все её экраны сдвигаются на это расстояние. */
     moveGroup(canvasId: string, groupId: string, dx: number, dy: number): Promise<void>
     /**
-     * Публикует снимок холста на сайте и возвращает ссылку для просмотра. Уже опубликованный
-     * холст обновляется по той же ссылке. `null` — не вышло: причину человек уже увидел.
+     * Публикует снимок холста (всех его страниц) на сайте и возвращает ссылку для просмотра.
+     * Уже опубликованный холст обновляется по той же ссылке. `null` — не вышло: причину человек
+     * уже увидел.
      */
     share(canvasId: string): Promise<CanvasShare | null>
     /** Закрывает ссылку: страница по ней больше не открывается. */
@@ -320,12 +330,15 @@ export interface AtoxApi {
     ungroup(canvasId: string, groupId: string): Promise<void>
     /** Запоминает сдвиг и масштаб холста; окно зовёт редко (после паузы), не на каждый кадр. */
     setView(canvasId: string, view: CanvasView): Promise<void>
+    /** Убирает в архив весь холст чата (все страницы вместе) или возвращает его. */
     archive(canvasId: string, archived: boolean): Promise<void>
     /**
-     * Удаляет холст и сохранённые версии экранов. HTML-файлы экранов в проекте не трогает:
-     * они принадлежат проекту.
+     * Удаляет страницу после подтверждения и сохранённые версии её экранов. Файлы экранов
+     * в проекте не трогает: они принадлежат проекту.
      */
     remove(canvasId: string): Promise<void>
+    /** Удаляет холст чата целиком, со всеми страницами, после подтверждения. */
+    removeCanvas(chatId: string): Promise<void>
     /**
      * Отправляет просьбу человека в чат холста. С `screenId` это «Fix»: к тексту добавляются имя
      * экрана, путь к его файлу и скриншот. Без него — обычное сообщение. Если чата уже нет,
@@ -436,6 +449,9 @@ export const IpcChannel = {
   CanvasGet: 'canvas:get',
   CanvasChanged: 'canvas:changed',
   CanvasCreate: 'canvas:create',
+  CanvasAddPage: 'canvas:add-page',
+  CanvasReorderPages: 'canvas:reorder-pages',
+  CanvasRemoveCanvas: 'canvas:remove-canvas',
   CanvasRename: 'canvas:rename',
   CanvasRenameScreen: 'canvas:rename-screen',
   CanvasMoveScreen: 'canvas:move-screen',

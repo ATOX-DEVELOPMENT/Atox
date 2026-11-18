@@ -61,7 +61,7 @@ export function CanvasHeader({
         {renaming ? (
           <InlineRename
             value={canvas.name}
-            label="Canvas name"
+            label="Page name"
             onSubmit={(name) => {
               onRenamingChange(false)
               void window.atox.canvas.rename(canvas.id, name.slice(0, CANVAS_NAME_MAX_LENGTH))
@@ -72,7 +72,7 @@ export function CanvasHeader({
           <button
             type="button"
             className="canvas-header__name"
-            title="Rename canvas"
+            title="Rename page"
             onClick={() => onRenamingChange(true)}
           >
             {canvas.name}
@@ -100,7 +100,7 @@ export function CanvasHeader({
               className="workspace-toolbar__button"
               disabled={exporting}
               aria-label="Export"
-              title={exporting ? 'Exporting…' : 'Export as PDF, PowerPoint or images'}
+              title={exporting ? 'Exporting…' : 'Export this page as PDF, PowerPoint or images'}
               onClick={onExport}
             >
               {exporting ? (
@@ -122,7 +122,7 @@ export function CanvasHeader({
                     ? 'Link copied'
                     : canvas.share
                       ? 'Shared: copy the link, update or stop sharing'
-                      : 'Share a link to view this canvas in a browser'
+                      : 'Share a link to view this canvas, all pages, in a browser'
               }
               onClick={onShare}
             >

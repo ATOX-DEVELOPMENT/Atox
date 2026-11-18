@@ -10,6 +10,7 @@ import {
   type ReactNode,
   type Ref
 } from 'react'
+import { CANVAS_GRID, snapToGrid } from '../../../../shared/canvas'
 import type { Canvas, CanvasScreen, CanvasView } from '../../../../shared/canvas'
 import {
   fitView,
@@ -42,6 +43,8 @@ const WHEEL_LINE_HEIGHT = 16
 const VIEW_SAVE_DELAY = 600
 /** Сколько длится перелёт к экрану после клика, мс. */
 const FOCUS_DURATION = 380
+/** Ближе друг к другу точки сетки на экране не рисуются: на малом масштабе их берут через одну. */
+const MIN_DOT_STEP = 12
 /** Пауза после смены масштаба, после которой холст перерисовывается в новом масштабе, мс. */
 const VIEW_SETTLE_DELAY = 200
 
@@ -300,7 +303,15 @@ export function CanvasStage({
     }
     world.style.transform = `translate(${view.x}px, ${view.y}px) scale(${view.zoom})`
     world.style.setProperty('--z', String(view.zoom))
-    stage.style.backgroundPosition = `${view.x}px ${view.y}px`
+    // Точки стоят на линиях сетки, по которым встают экраны и группы; на малом масштабе
+    // каждая вторая, четвёртая…
+    let step = CANVAS_GRID * view.zoom
+    while (step < MIN_DOT_STEP) {
+      step *= 2
+    }
+    stage.style.backgroundSize = `${step}px ${step}px`
+    // Точка рисуется в середине плитки, поэтому плитка сдвинута на полшага.
+    stage.style.backgroundPosition = `${view.x - step / 2}px ${view.y - step / 2}px`
     rasterZoomRef.current ??= view.zoom
     if (settleTimerRef.current === undefined && view.zoom === rasterZoomRef.current) {
       return
@@ -430,6 +441,13 @@ export function CanvasStage({
           .filter(({ id }) => ids.has(id))
           .map((screen) => [screen.id, positionOfRef.current(screen)])
       )
+      // Угол, который встаёт по сетке: у экрана — его собственный, у группы — угол её рамки
+      // (поля рамки кратны клетке, поэтому рамка и экраны стоят по сетке вместе).
+      const corner = {
+        x: Math.min(...[...origins.values()].map(({ x }) => x)),
+        y: Math.min(...[...origins.values()].map(({ y }) => y))
+      }
+      const snapped = (offset: number, from: number) => snapToGrid(from + offset) - from
       let current: Point | null = null
       let frame: number | null = null
       const onMove = (move: PointerEvent) => {
@@ -438,7 +456,10 @@ export function CanvasStage({
         if (!current && Math.hypot(dx, dy) < DRAG_THRESHOLD) {
           return
         }
-        current = { x: dx / view.zoom, y: dy / view.zoom }
+        current = {
+          x: snapped(dx / view.zoom, corner.x),
+          y: snapped(dy / view.zoom, corner.y)
+        }
         frame ??= requestAnimationFrame(() => {
           frame = null
           if (current) {

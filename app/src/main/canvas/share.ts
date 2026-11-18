@@ -24,8 +24,9 @@ export interface ShareCredentials {
   token: string
 }
 
-/** Холст в том виде, в каком его показывает страница просмотра: без путей к файлам и истории. */
-export interface SharedCanvas {
+/** Страница холста в том виде, в каком её показывает страница просмотра: без путей к файлам и истории. */
+export interface SharedPage {
+  id: string
   name: string
   screens: {
     id: string
@@ -40,6 +41,12 @@ export interface SharedCanvas {
   }[]
   groups: CanvasGroup[]
   links: Pick<CanvasLink, 'id' | 'from' | 'to' | 'anchor'>[]
+}
+
+/** Холст чата для страницы просмотра: страницы по порядку; id экранов разные во всём холсте. */
+export interface SharedCanvas {
+  name: string
+  pages: SharedPage[]
 }
 
 export function shareUrl(id: string): string {
@@ -129,7 +136,7 @@ async function failure(response: Response): Promise<CanvasError> {
   )
 }
 
-/** Публикует холст по ссылке: снимки экранов, их места, группы и линии. */
+/** Публикует холст по ссылке: снимки экранов всех страниц, их места, группы и линии. */
 export async function publishShare(
   credentials: ShareCredentials,
   { canvas, screens }: PublishRequest

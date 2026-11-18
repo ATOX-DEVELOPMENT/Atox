@@ -3,6 +3,7 @@ import { Search } from 'lucide-react'
 import { useCanvases } from '../../hooks/CanvasesContext'
 import { useProjectsContext } from '../../hooks/ProjectsContext'
 import { canvasOwner } from '../../lib/canvasOwner'
+import { chatCanvases } from '../../lib/chatCanvas'
 import { CanvasCard } from './CanvasCard'
 
 /** Как часто обновлять «5m», «3h» у карточек: точнее минуты они не показывают. */
@@ -33,7 +34,8 @@ export function CanvasList({ onClose }: CanvasListProps) {
     return () => window.removeEventListener('keydown', closeOnEscape)
   }, [onClose])
 
-  const entries = (canvases ?? [])
+  // Один холст на чат: страницы чата собираются в одну карточку.
+  const entries = chatCanvases(canvases ?? [])
     .map((canvas) => ({ canvas, owner: canvasOwner(projects, canvas) }))
     .sort((a, b) => b.canvas.updatedAt - a.canvas.updatedAt)
   const counts = {
@@ -44,8 +46,8 @@ export function CanvasList({ onClose }: CanvasListProps) {
   const shown = entries.filter(
     ({ canvas, owner }) =>
       canvas.archived === (tab === 'archived') &&
-      [canvas.name, owner.project?.name, owner.chat?.title].some((text) =>
-        text?.toLocaleLowerCase().includes(needle)
+      [...canvas.pages.map(({ name }) => name), owner.project?.name, owner.chat?.title].some(
+        (text) => text?.toLocaleLowerCase().includes(needle)
       )
   )
 
@@ -101,7 +103,7 @@ export function CanvasList({ onClose }: CanvasListProps) {
           <ul className="canvas-list__grid">
             {shown.map(({ canvas, owner }) => (
               <CanvasCard
-                key={canvas.id}
+                key={canvas.chatId}
                 canvas={canvas}
                 projectName={owner.project?.name}
                 chatTitle={owner.chat?.title}
@@ -132,7 +134,7 @@ function emptyHint(tab: Tab, query: string, count: number): ReactNode {
       <code className="canvas-list__code">atox canvas</code>.
     </>
   ) : (
-    'Archived canvases keep their screens and history and show up here'
+    'Archived canvases keep their pages, screens and history and show up here'
   )
 }
 
