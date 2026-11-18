@@ -221,8 +221,8 @@ export class CanvasService implements ScreenDocumentSource {
   private readonly builds = new Map<string, ScreenBuild>()
   /** Хеш того, что показывает экран сейчас: у HTML — файл, у React — результат сборки. */
   private readonly outputs = new Map<string, string>()
-  /** Холсты, которые публикуются сейчас: повторное нажатие не должно слать второй запрос. */
-  private readonly sharing = new Set<string>()
+  /** Публикации холстов чатов, которые идут сейчас: повторная просьба ждёт ту же, а не шлёт вторую. */
+  private readonly sharing = new Map<string, Promise<CanvasShare>>()
 
   private constructor(
     private readonly services: CanvasServices,
@@ -254,7 +254,7 @@ export class CanvasService implements ScreenDocumentSource {
   }
 
   state(): CanvasState {
-    return { canvases: this.canvases.map(publicCanvas) }
+    return { canvases: this.canvases.map(publicCanvas), sharing: [...this.sharing.keys()] }
   }
 
   /** Холст чата: его первая страница; холста нет — создаётся пустая страница с названием чата. */
@@ -1130,29 +1130,38 @@ export class CanvasService implements ScreenDocumentSource {
     return this.publish(this.agentCanvas(target).chatId)
   }
 
-  private async publish(chatId: string): Promise<CanvasShare> {
+  /**
+   * Публикация холста чата. Пока она идёт, повторная просьба (вторая кнопка, агент) ждёт её же,
+   * а не начинает вторую; окно видит, что холст публикуется, и после перехода по страницам.
+   */
+  private publish(chatId: string): Promise<CanvasShare> {
+    const running = this.sharing.get(chatId)
+    if (running) {
+      return running
+    }
+    const job = this.runPublish(chatId).finally(() => {
+      this.sharing.delete(chatId)
+      this.services.onChange(this.state())
+    })
+    this.sharing.set(chatId, job)
+    this.services.onChange(this.state())
+    return job
+  }
+
+  private async runPublish(chatId: string): Promise<CanvasShare> {
     const pages = this.activeCanvasesOf(chatId).filter((page) => page.screens.length > 0)
     if (pages.length === 0) {
       throw new CanvasError('Put at least one screen on the canvas before sharing it.')
     }
-    if (this.sharing.has(chatId)) {
-      throw new CanvasError('This canvas is being shared right now.')
+    const screens = await this.renderForSharing(pages)
+    const credentials = this.chatShareOf(chatId) ?? newShareCredentials()
+    await publishShare(credentials, { canvas: sharedCanvas(chatId, pages, this.services), screens })
+    const share = { ...credentials, publishedAt: Date.now() }
+    for (const page of this.pagesOf(chatId)) {
+      page.share = share
     }
-    this.sharing.add(chatId)
-    try {
-      const screens = await this.renderForSharing(pages)
-      const previous = this.chatShareOf(chatId)
-      const credentials = previous ?? newShareCredentials()
-      await publishShare(credentials, { canvas: sharedCanvas(chatId, pages, this.services), screens })
-      const share = { ...credentials, publishedAt: Date.now() }
-      for (const page of this.pagesOf(chatId)) {
-        page.share = share
-      }
-      this.changed()
-      return { url: shareUrl(share.id), publishedAt: share.publishedAt }
-    } finally {
-      this.sharing.delete(chatId)
-    }
+    this.changed()
+    return { url: shareUrl(share.id), publishedAt: share.publishedAt }
   }
 
   /**

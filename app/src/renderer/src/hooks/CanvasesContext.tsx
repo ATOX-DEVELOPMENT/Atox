@@ -94,6 +94,13 @@ export function useChatCanvasOpened(chatId: string): boolean {
   return useSyncExternalStore(store.subscribe, select)
 }
 
+/** Публикуется ли холст чата по ссылке прямо сейчас: видно и после перехода по страницам. */
+export function useChatSharing(chatId: string): boolean {
+  const store = useCanvasStore()
+  const select = useCallback(() => store.sharing(chatId), [store, chatId])
+  return useSyncExternalStore(store.subscribe, select)
+}
+
 /** Открыта ли эта страница сейчас. */
 export function useCanvasOpened(canvasId: string): boolean {
   const store = useCanvasStore()

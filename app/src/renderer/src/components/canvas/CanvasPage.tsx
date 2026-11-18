@@ -3,7 +3,8 @@ import {
   useCanvas,
   useCanvasNavigation,
   useCanvasStore,
-  useChatPages
+  useChatPages,
+  useChatSharing
 } from '../../hooks/CanvasesContext'
 import { useProjectsContext } from '../../hooks/ProjectsContext'
 import { canvasOwner, chatLabel } from '../../lib/canvasOwner'
@@ -32,6 +33,8 @@ export function CanvasPage({ canvasId, onClose }: CanvasPageProps) {
   const canvas = useCanvas(canvasId)
   const store = useCanvasStore()
   const pages = useChatPages(canvas?.chatId ?? '')
+  // Публикация идёт в main: кнопка занята, пока она не кончится, даже если страницу открыли заново.
+  const publishing = useChatSharing(canvas?.chatId ?? '')
   const { projects } = useProjectsContext()
   const navigation = useCanvasNavigation()
   const [viewState] = useState(() => new ViewState())
@@ -42,7 +45,6 @@ export function CanvasPage({ canvasId, onClose }: CanvasPageProps) {
   const [historyScreenId, setHistoryScreenId] = useState<string | null>(null)
   const [preview, setPreview] = useState<{ screenId: string; versionId: string } | null>(null)
   const [exporting, setExporting] = useState(false)
-  const [publishing, setPublishing] = useState(false)
   const [linkCopied, setLinkCopied] = useState(false)
 
   useEffect(() => () => viewState.cancel(), [viewState])
@@ -164,12 +166,7 @@ export function CanvasPage({ canvasId, onClose }: CanvasPageProps) {
             }
             let url = canvas.share?.url
             if (action === 'update' || !url) {
-              setPublishing(true)
-              try {
-                url = (await window.atox.canvas.share(canvas.id))?.url
-              } finally {
-                setPublishing(false)
-              }
+              url = (await window.atox.canvas.share(canvas.id))?.url
             }
             if (url) {
               await navigator.clipboard.writeText(url)
