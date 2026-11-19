@@ -560,7 +560,9 @@ export function CanvasStage({
             canvasId={canvasId}
             group={group}
             rect={rect}
-            dragging={group.screens.some((id) => drag?.ids.has(id))}
+            // Рамка поднимается над экранами, только когда тянут всю группу: если тянут один её
+            // экран, поднятая рамка закрыла бы фоном остальные экраны группы.
+            dragging={drag !== null && group.screens.every((id) => drag.ids.has(id))}
             onPointerDown={handleGroupPointerDown}
             onFocus={focusGroup}
           />
