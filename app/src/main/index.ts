@@ -184,9 +184,15 @@ async function bootstrap(): Promise<void> {
   const branches = new GitBranchTracker(broadcastGitBranches)
   // Обновляется только собранное приложение; адрес релизов можно подменить для проверки обновлений.
   const updateInstaller = app.isPackaged ? createUpdateInstaller() : null
+  const updateFeedOverride = process.env['ATOX_UPDATE_FEED_URL']
   const updater = updateInstaller
     ? new AppUpdater({
-        feedUrl: process.env['ATOX_UPDATE_FEED_URL'] ?? __UPDATE_FEED_URL__,
+        feedUrl: updateFeedOverride ?? __UPDATE_FEED_URL__,
+        // В подменённом источнике файлы лежат рядом с описанием версии.
+        fileUrl: (version, name) =>
+          updateFeedOverride
+            ? `${updateFeedOverride}/${name}`
+            : `${__RELEASE_DOWNLOAD_URL__}/v${version}/${name}`,
         installer: updateInstaller,
         onStateChange: broadcastUpdateState
       })

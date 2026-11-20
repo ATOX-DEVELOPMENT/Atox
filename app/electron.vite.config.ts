@@ -5,6 +5,8 @@ import packageJson from './package.json'
 
 /** Релизы лежат в репозитории из package.json; `latest` всегда указывает на последний. */
 const updateFeedUrl = `${packageJson.repository.url}/releases/latest/download`
+/** Файлы конкретного релиза: `<адрес>/v<версия>/<файл>`. */
+const releaseDownloadUrl = `${packageJson.repository.url}/releases/download`
 
 /** Сервер анонимной статистики Atox (админка). */
 const usageStatsUrl = 'https://admin.atox.dev/v1/event'
@@ -13,6 +15,7 @@ export default defineConfig({
   main: {
     define: {
       __UPDATE_FEED_URL__: JSON.stringify(updateFeedUrl),
+      __RELEASE_DOWNLOAD_URL__: JSON.stringify(releaseDownloadUrl),
       __USAGE_STATS_URL__: JSON.stringify(usageStatsUrl)
     },
     build: {
