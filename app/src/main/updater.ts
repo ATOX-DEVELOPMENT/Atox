@@ -1,5 +1,5 @@
 import { createHash, createPublicKey, verify } from 'node:crypto'
-import { createWriteStream, promises as fs } from 'original-fs'
+import { createReadStream, createWriteStream, promises as fs } from 'original-fs'
 import { basename, join, relative, resolve, sep } from 'node:path'
 import { Readable, Transform } from 'node:stream'
 import { pipeline } from 'node:stream/promises'
@@ -54,6 +54,11 @@ const DOWNLOAD_BACKOFF_MAX_MS = 6 * 60 * 60 * 1000
  * подхватывается при следующем запуске, а не скачивается заново.
  */
 const PREPARED_UPDATE_FILE_NAME = 'prepared.json'
+/**
+ * Недокачанный файл релиза лежит рядом с готовым под этим окончанием. Оборванное скачивание
+ * продолжается с места обрыва: на медленной сети файл в сотни мегабайт иначе не докачать.
+ */
+const PARTIAL_FILE_SUFFIX = '.part'
 
 /**
  * Идущая проверка. Ручная проверка без повторов; если её попросили посреди фоновой,
@@ -90,8 +95,13 @@ interface PreparedUpdateRecord {
 }
 
 interface AppUpdaterOptions {
-  /** Адрес, по которому лежат файлы последнего релиза. */
+  /** Адрес, по которому лежат файлы последнего релиза: оттуда берётся описание версии. */
   feedUrl: string
+  /**
+   * Адрес файла конкретной версии. Не «последнего релиза»: выйди новый релиз посреди
+   * скачивания, докачка по такому адресу получила бы уже другой файл или ошибку.
+   */
+  fileUrl(version: string, name: string): string
   installer: UpdateInstaller
   onStateChange(state: UpdateState): void
 }
@@ -272,7 +282,12 @@ export class AppUpdater {
         return
       }
     }
-    await fs.rm(root, { recursive: true, force: true })
+    // Готового нет. Недокачанные версии новее запущенной остаются — их скачивание продолжится.
+    await Promise.all(
+      versions
+        .filter((version) => compareVersions(version, app.getVersion()) <= 0)
+        .map((version) => fs.rm(join(root, version), { recursive: true, force: true }))
+    )
   }
 
   /** Подготовленная версия из каталога, если она новее запущенной и не повреждена. */
@@ -338,18 +353,64 @@ export class AppUpdater {
     return path
   }
 
-  /** Скачивает файл релиза в чистый каталог версии и сверяет его с подписанным описанием. */
+  /**
+   * Скачивает файл релиза в каталог версии и сверяет его с подписанным описанием. Если файл
+   * уже начинали качать, скачивание продолжается с того места, где оборвалось.
+   */
   private async downloadFile(
     directory: string,
     manifest: UpdateManifest,
     file: UpdateFile
   ): Promise<string> {
-    await fs.rm(directory, { recursive: true, force: true })
-    await fs.mkdir(directory, { recursive: true })
+    const filePath = join(directory, file.name)
+    const partialPath = filePath + PARTIAL_FILE_SUFFIX
+    await clearDirectoryExcept(directory, basename(partialPath))
 
+    let size = await partialSize(partialPath, file.size)
+    while (size < file.size) {
+      const before = size
+      try {
+        size = await this.fetchRest(manifest, file, partialPath, size)
+      } catch (error) {
+        // Обрыв после того, как часть файла пришла, — не сбой: качаем дальше сразу, без пауз
+        // и без счёта попыток. Сбоем считается попытка, которая не принесла ни байта.
+        const now = await partialSize(partialPath, file.size)
+        if (now > before && !(error instanceof UpdateRequestError && !error.retryable)) {
+          console.warn(`Update download interrupted at ${now} of ${file.size} bytes, resuming`)
+          size = now
+          continue
+        }
+        throw error
+      }
+      if (size <= before) {
+        throw new UpdateRequestError('Update download ended before the whole file arrived', true)
+      }
+    }
+    // Хеш — по всему файлу на диске: часть его могла быть скачана в прошлые попытки.
+    if (size !== file.size || (await fileSha512(partialPath)) !== file.sha512) {
+      await fs.rm(partialPath, { force: true })
+      throw new UpdateRequestError('Downloaded update does not match the signed manifest', false)
+    }
+    await fs.rename(partialPath, filePath)
+    return filePath
+  }
+
+  /**
+   * Докачивает файл релиза с `offset` байт; возвращает, сколько байт файла теперь на диске.
+   * Сервер, не умеющий отдавать файл с середины, присылает его целиком — тогда он пишется заново.
+   */
+  private async fetchRest(
+    manifest: UpdateManifest,
+    file: UpdateFile,
+    partialPath: string,
+    offset: number
+  ): Promise<number> {
     const stall = new StallTimer(DOWNLOAD_STALL_TIMEOUT_MS)
     const response = await net
-      .fetch(`${this.options.feedUrl}/${file.name}`, { signal: stall.signal })
+      .fetch(this.options.fileUrl(manifest.version, file.name), {
+        signal: stall.signal,
+        headers: offset > 0 ? { Range: `bytes=${offset}-` } : {}
+      })
       .catch((error: unknown) => {
         stall.stop()
         throw error
@@ -361,33 +422,35 @@ export class AppUpdater {
         isRetryableStatus(response.status)
       )
     }
-    const filePath = join(directory, file.name)
-    const hash = createHash('sha512')
-    let size = 0
-    let reported = 0
-    this.setState({ phase: 'downloading', version: manifest.version, progress: 0 })
+    const resumed = offset > 0 && response.status === 206
+    let size = resumed ? offset : 0
+    let reported = -1
+    const report = () => {
+      const progress = Math.min(1, size / file.size)
+      if (progress - reported >= PROGRESS_STEP) {
+        reported = progress
+        this.reportDownload(manifest.version, progress)
+      }
+    }
+    report()
     const measure = new Transform({
       transform: (chunk: Buffer, _encoding, callback) => {
         stall.reset()
-        hash.update(chunk)
         size += chunk.length
-        const progress = Math.min(1, size / file.size)
-        if (progress - reported >= PROGRESS_STEP) {
-          reported = progress
-          this.setState({ phase: 'downloading', version: manifest.version, progress })
-        }
+        report()
         callback(null, chunk)
       }
     })
     try {
-      await pipeline(Readable.fromWeb(response.body), measure, createWriteStream(filePath))
+      await pipeline(
+        Readable.fromWeb(response.body),
+        measure,
+        createWriteStream(partialPath, { flags: resumed ? 'a' : 'w' })
+      )
     } finally {
       stall.stop()
     }
-    if (size !== file.size || hash.digest('base64') !== file.sha512) {
-      throw new UpdateRequestError('Downloaded update does not match the signed manifest', false)
-    }
-    return filePath
+    return size
   }
 
   /** Эту версию недавно не удалось скачать, и пауза перед новой попыткой ещё не прошла. */
@@ -404,6 +467,16 @@ export class AppUpdater {
     )
     this.failedDownload = { version, failures, retryAt: Date.now() + pause }
     console.warn(`Update ${version} download postponed for ${pause / 60_000} min`)
+  }
+
+  /**
+   * Ход скачивания. Если готова версия постарше, видна она: кнопка обновления не должна
+   * пропадать ради ещё не докачанной новой — та сменит её, когда будет готова.
+   */
+  private reportDownload(version: string, progress: number): void {
+    if (!this.readyUpdate) {
+      this.setState({ phase: 'downloading', version, progress })
+    }
   }
 
   private setState(state: UpdateState): void {
@@ -526,4 +599,36 @@ function parseManifest(data: unknown): UpdateManifest {
     }
   }
   return manifest as UpdateManifest
+}
+
+/** Сколько байт файла уже скачано; недокачанный файл больше ожидаемого — испорчен и не в счёт. */
+async function partialSize(path: string, expected: number): Promise<number> {
+  const stat = await fs.stat(path).catch(() => null)
+  if (!stat || stat.size > expected) {
+    await fs.rm(path, { force: true })
+    return 0
+  }
+  return stat.size
+}
+
+async function fileSha512(path: string): Promise<string> {
+  const hash = createHash('sha512')
+  for await (const chunk of createReadStream(path)) {
+    hash.update(chunk as Buffer)
+  }
+  return hash.digest('base64')
+}
+
+/**
+ * Готовит каталог версии к скачиванию: убирает всё, кроме недокачанного файла, — например,
+ * распакованную раньше сборку, подготовка которой сорвалась.
+ */
+async function clearDirectoryExcept(directory: string, keep: string): Promise<void> {
+  await fs.mkdir(directory, { recursive: true })
+  const entries = await fs.readdir(directory)
+  await Promise.all(
+    entries
+      .filter((entry) => entry !== keep)
+      .map((entry) => fs.rm(join(directory, entry), { recursive: true, force: true }))
+  )
 }
