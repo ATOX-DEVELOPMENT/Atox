@@ -36,6 +36,15 @@ export function toolVerb(tool: ToolKind, running: boolean): string {
   }
 }
 
+/** Время сообщения: сегодня — «1:11 PM», раньше — ещё и дата. */
+export function formatMessageTime(time: number, now = Date.now()): string {
+  const date = new Date(time)
+  const today = new Date(now).toDateString() === date.toDateString()
+  return today
+    ? date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
+    : date.toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
+}
+
 /** «12s», «1m 20s», «1h 5m». */
 export function formatDuration(ms: number): string {
   const seconds = Math.max(0, Math.round(ms / 1000))

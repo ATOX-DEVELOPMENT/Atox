@@ -198,7 +198,11 @@
   --image-viewer-actions-offset: 6px;
   --image-viewer-duration: 160ms;
   --activity-indent: 24px;
-  --details-max-height: 320px;
+  /* Подвал ответа: подсветка кнопки шире значка, значок — по краю ленты. */
+  --message-footer-inset: 6px;
+  --work-summary-chevron-size: 14px;
+  --message-footer-button-size: 26px;
+  --message-footer-icon-size: 14px;
   --command-menu-max-height: 320px;
   /* Всплывающие меню: контекстные, выбор модели, пространства. */
   --menu-min-width: 200px;
@@ -3492,7 +3496,7 @@ ul {
   margin: 16px 0;
 }
 
-/* Действия агента: список команд, правок и чтений под строкой его работы */
+/* Работа агента: крутящийся значок и строка того, что он делает */
 
 .activity__spinner {
   animation: spin 1s linear infinite;
@@ -3504,73 +3508,93 @@ ul {
   }
 }
 
-.activity__list {
-  color: var(--color-text-muted);
+/*
+ * Законченный ответ: работа агента свёрнута в «Worked for 1m 50s ›» с линией под ней, а ниже —
+ * только итоговый текст.
+ */
+.work-summary {
   display: flex;
   flex-direction: column;
-  gap: 2px;
-  margin: 6px 0 0 calc(var(--activity-indent) / 2);
+  gap: var(--chat-block-gap);
+  padding-bottom: var(--chat-block-gap);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.work-summary__toggle {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  align-self: flex-start;
+  color: var(--color-text-muted);
+}
+
+.work-summary__toggle:not(:disabled):hover {
+  color: var(--color-text);
+}
+
+.work-summary__chevron {
+  width: var(--work-summary-chevron-size);
+  height: var(--work-summary-chevron-size);
+  transition: rotate var(--collapse-duration) var(--collapse-easing);
+}
+
+.work-summary[data-open='true'] .work-summary__chevron {
+  rotate: 90deg;
+}
+
+/* Раскрытая работа — по порядку, с линией слева: видно, что это ход, а не ответ. */
+.work-summary__log {
+  display: flex;
+  flex-direction: column;
+  gap: var(--chat-block-gap);
   padding-left: calc(var(--activity-indent) / 2);
   border-left: 1px solid var(--color-border);
 }
 
-.activity-row__header {
+/* Итоговый текст ответа, под ним — копирование и время. */
+.final-message {
   display: flex;
-  align-items: center;
-  gap: 8px;
-  width: 100%;
-  min-width: 0;
-  padding: 3px 6px;
-  border-radius: 6px;
-  text-align: left;
+  flex-direction: column;
+  gap: 6px;
 }
 
-.activity-row__header:not(:disabled):hover {
+.message-footer {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: calc(-1 * var(--message-footer-inset));
+  color: var(--color-text-muted);
+  font-size: var(--font-size-small);
+  opacity: 0;
+  transition: opacity var(--collapse-duration) var(--collapse-easing);
+}
+
+/* Копирование и время не мешают читать: видны, только когда мышь над ответом или фокус в нём. */
+.final-message:hover .message-footer,
+.message-footer:focus-within {
+  opacity: 1;
+}
+
+.message-footer__button {
+  display: grid;
+  place-items: center;
+  width: var(--message-footer-button-size);
+  height: var(--message-footer-button-size);
+  border-radius: 6px;
+}
+
+.message-footer__button:hover {
   color: var(--color-text);
   background: var(--color-hover);
 }
 
-.activity-row__verb {
-  flex-shrink: 0;
+.message-footer__button .icon {
+  width: var(--message-footer-icon-size);
+  height: var(--message-footer-icon-size);
 }
 
-.activity-row__title {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  color: var(--color-text);
-}
-
-.activity-row__title[data-code] {
-  font-family: var(--font-mono);
-  font-size: var(--font-size-small);
-}
-
-.activity-row__failed {
-  color: var(--color-danger);
-}
-
-.activity-row__details {
-  max-height: var(--details-max-height);
-  overflow: auto;
-  margin: 4px 0 8px var(--activity-indent);
-  padding: 10px 12px;
-  border-radius: var(--radius);
-  background: var(--color-code);
-  color: var(--color-text);
-  font-family: var(--font-mono);
-  font-size: var(--font-size-small);
-  line-height: 1.5;
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-}
-
-.activity-row__details[data-prose] {
-  font-family: var(--font-sans);
-  font-size: var(--font-size);
-  font-style: italic;
-  color: var(--color-text-muted);
+.message-footer__time {
+  font-variant-numeric: tabular-nums;
 }
 
 .turn-status {
@@ -3586,12 +3610,6 @@ ul {
   max-width: 100%;
   font-size: var(--font-size);
   text-align: left;
-}
-
-/* Строку работы можно раскрыть в список действий, если агент уже что-то делал. */
-.turn-status[data-working]:not(:disabled):hover .turn-status__verb {
-  animation-play-state: paused;
-  color: var(--color-text);
 }
 
 .turn-status__glyph {
