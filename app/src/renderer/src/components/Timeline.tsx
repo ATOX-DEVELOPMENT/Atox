@@ -1,9 +1,7 @@
 import { memo, useEffect, useMemo, useState } from 'react'
 import {
-  Check,
   ChevronRight,
   CircleAlert,
-  Copy,
   FoldVertical,
   FileText,
   Image as ImageIcon,
@@ -14,7 +12,6 @@ import { findAgent } from '../../../shared/agents'
 import {
   compactionText,
   formatDuration,
-  formatMessageTime,
   formatTokens,
   toolVerb,
   workingLabel
@@ -51,9 +48,6 @@ const FOLDED_KINDS: ReadonlySet<TimelineItemKind> = new Set([
   'approval',
   'question'
 ])
-
-/** Сколько держится галочка после копирования ответа. */
-const COPIED_FEEDBACK_MS = 1500
 
 /**
  * Сообщение моложе этого только что отправлено и появляется с анимацией; старые сообщения
@@ -101,7 +95,9 @@ export const Timeline = memo(function Timeline({
                 chatId={chatId}
                 user={block.user}
                 items={block.items}
-                live={running && block === lastTurn && !block.user.finishedAt}
+                // Агент мог продолжить сам — после фоновой задачи, — когда ответ уже закончен:
+                // его работа всё равно относится к последнему сообщению и видна по ходу.
+                live={running && block === lastTurn}
                 tokens={turnTokens}
                 visible={visible}
               />
@@ -257,21 +253,16 @@ function Turn({ chatId, user, items, live, tokens, visible }: TurnProps) {
   const finishedAt = knownFinish(user)
   const finalIndex = items.findLastIndex((item) => item.kind === 'assistant' && item.text !== '')
   const work = items.filter((item, index) => index !== finalIndex && FOLDED_KINDS.has(item.kind))
-  const hasWork = work.some(
-    (item) => item.kind === 'tool' || (item.kind === 'assistant' && item.text !== '')
-  )
   return (
     <>
-      {hasWork && (
-        <WorkSummary
-          chatId={chatId}
-          duration={finishedAt === undefined ? undefined : finishedAt - user.createdAt}
-          items={work}
-        />
-      )}
+      <WorkSummary
+        chatId={chatId}
+        duration={finishedAt === undefined ? undefined : finishedAt - user.createdAt}
+        items={work}
+      />
       {items.map((item, index) =>
         index === finalIndex && item.kind === 'assistant' ? (
-          <FinalMessage key={item.id} item={item} finishedAt={finishedAt} />
+          <Markdown key={item.id} text={item.text} preserveLineBreaks={item.commandOutput} />
         ) : FOLDED_KINDS.has(item.kind) ? null : (
           <TimelineEntry key={item.id} chatId={chatId} item={item} />
         )
@@ -327,51 +318,6 @@ function WorkSummary({ chatId, duration, items }: WorkSummaryProps) {
           <WorkLog chatId={chatId} items={items} />
         </div>
       )}
-    </div>
-  )
-}
-
-interface FinalMessageProps {
-  item: Extract<TimelineItem, { kind: 'assistant' }>
-  /** Когда агент закончил ответ; нет — неизвестно (см. `knownFinish`). */
-  finishedAt: number | undefined
-}
-
-/** Итоговый текст ответа, под ним — копирование и время. */
-function FinalMessage({ item, finishedAt }: FinalMessageProps) {
-  const [copied, setCopied] = useState(false)
-  useEffect(() => {
-    if (!copied) {
-      return
-    }
-    const timer = setTimeout(() => setCopied(false), COPIED_FEEDBACK_MS)
-    return () => clearTimeout(timer)
-  }, [copied])
-  const copy = () => {
-    navigator.clipboard
-      .writeText(item.text)
-      .then(() => setCopied(true))
-      .catch((error) => console.error('Failed to copy the message', error))
-  }
-  return (
-    <div className="final-message">
-      <Markdown text={item.text} preserveLineBreaks={item.commandOutput} />
-      <div className="message-footer">
-        <button
-          type="button"
-          className="message-footer__button"
-          aria-label={copied ? 'Copied' : 'Copy'}
-          title={copied ? 'Copied' : 'Copy'}
-          onClick={copy}
-        >
-          {copied ? <Check className="icon" /> : <Copy className="icon" />}
-        </button>
-        {finishedAt !== undefined && (
-          <time className="message-footer__time" dateTime={new Date(finishedAt).toISOString()}>
-            {formatMessageTime(finishedAt)}
-          </time>
-        )}
-      </div>
     </div>
   )
 }

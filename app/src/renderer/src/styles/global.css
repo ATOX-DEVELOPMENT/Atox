@@ -198,11 +198,7 @@
   --image-viewer-actions-offset: 6px;
   --image-viewer-duration: 160ms;
   --activity-indent: 24px;
-  /* Подвал ответа: подсветка кнопки шире значка, значок — по краю ленты. */
-  --message-footer-inset: 6px;
   --work-summary-chevron-size: 14px;
-  --message-footer-button-size: 26px;
-  --message-footer-icon-size: 14px;
   --command-menu-max-height: 320px;
   /* Всплывающие меню: контекстные, выбор модели, пространства. */
   --menu-min-width: 200px;
@@ -3549,52 +3545,6 @@ ul {
   gap: var(--chat-block-gap);
   padding-left: calc(var(--activity-indent) / 2);
   border-left: 1px solid var(--color-border);
-}
-
-/* Итоговый текст ответа, под ним — копирование и время. */
-.final-message {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.message-footer {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin-left: calc(-1 * var(--message-footer-inset));
-  color: var(--color-text-muted);
-  font-size: var(--font-size-small);
-  opacity: 0;
-  transition: opacity var(--collapse-duration) var(--collapse-easing);
-}
-
-/* Копирование и время не мешают читать: видны, только когда мышь над ответом или фокус в нём. */
-.final-message:hover .message-footer,
-.message-footer:focus-within {
-  opacity: 1;
-}
-
-.message-footer__button {
-  display: grid;
-  place-items: center;
-  width: var(--message-footer-button-size);
-  height: var(--message-footer-button-size);
-  border-radius: 6px;
-}
-
-.message-footer__button:hover {
-  color: var(--color-text);
-  background: var(--color-hover);
-}
-
-.message-footer__button .icon {
-  width: var(--message-footer-icon-size);
-  height: var(--message-footer-icon-size);
-}
-
-.message-footer__time {
-  font-variant-numeric: tabular-nums;
 }
 
 .turn-status {

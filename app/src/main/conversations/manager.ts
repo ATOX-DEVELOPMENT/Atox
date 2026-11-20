@@ -111,6 +111,12 @@ interface Conversation {
   queuePaused: boolean
   /** Сообщение, над которым агент работает сейчас. */
   turn: QueuedMessage | null
+  /**
+   * Агент работает сам, без сообщения: продолжил после фоновой задачи или ответ на сообщение
+   * закончился раньше, чем агент перестал писать. Чат при этом занят, а работа относится к
+   * последнему сообщению в ленте.
+   */
+  unprompted: boolean
   /** Сообщение, которое остановили, пока агент ещё запускался: отправлять его не нужно. */
   interruptedTurn: QueuedMessage | null
   /** Текст ответа, который ещё не отправлен окну, по элементу и полю. */
@@ -230,6 +236,9 @@ export class ConversationManager {
     const conversation = await this.conversation(chatId)
     const { turn, session } = conversation
     if (!turn) {
+      if (conversation.unprompted && session) {
+        this.interruptUnprompted(chatId, conversation, session)
+      }
       return
     }
     // Пока агент запускается, сессии ещё нет: сообщение просто не уйдёт ему.
@@ -395,7 +404,7 @@ export class ConversationManager {
     const source = await this.conversation(sourceChatId)
     const location = this.findChat(sourceChatId)
     // Лента снимается до копирования разговора: агент не знает меньше, чем показано.
-    const items = source.snapshot.items.map(settleItem)
+    const items = source.snapshot.items.map((item) => settleItem(item, Date.now()))
     let sessionId: string | null = null
     if (source.sessionId && source.sessionAgent) {
       try {
@@ -440,6 +449,12 @@ export class ConversationManager {
     for (const [chatId, conversation] of this.loaded) {
       this.flushStream(chatId, conversation)
       this.dispose(conversation)
+      // Ответ прерван выходом: он кончается сейчас, а не когда лента сохранялась в последний раз
+      // — во время долгой команды агент ничего не присылает, и сохранять было нечего.
+      if (conversation.turn || conversation.unprompted) {
+        this.settleLastTurn(chatId, conversation)
+        this.persist(chatId, conversation, { immediately: true })
+      }
     }
   }
 
@@ -592,6 +607,7 @@ export class ConversationManager {
             queue,
             queuePaused: queue.length > 0,
             turn: null,
+            unprompted: false,
             interruptedTurn: null,
             pendingDeltas: new Map(),
             pendingTokens: null,
@@ -710,6 +726,72 @@ export class ConversationManager {
     this.persist(chatId, conversation, { immediately: true })
     this.restartIfIdle(conversation)
     this.pump(chatId, conversation)
+  }
+
+  /**
+   * Агент что-то прислал, когда ни над каким сообщением не работает: он продолжил сам. Чат
+   * становится занятым, пока агент не закончит.
+   */
+  private noteActivity(chatId: string, conversation: Conversation, session: AgentSession): void {
+    if (
+      !session.worksUnprompted ||
+      conversation.session !== session ||
+      conversation.turn ||
+      conversation.unprompted
+    ) {
+      return
+    }
+    conversation.unprompted = true
+    this.updateRunning(chatId, conversation)
+  }
+
+  /**
+   * «Стоп», пока агент работает сам. Агент может остановиться, не прислав конца хода, — работа
+   * кончается вместе с просьбой; не принял просьбу — сессия закрывается.
+   */
+  private interruptUnprompted(
+    chatId: string,
+    conversation: Conversation,
+    session: AgentSession
+  ): void {
+    session.interrupt().then(
+      () => this.finishUnprompted(chatId, conversation),
+      (error) => {
+        console.error('Failed to interrupt the agent', error)
+        if (conversation.session === session) {
+          conversation.session = null
+          session.close()
+          this.finishUnprompted(chatId, conversation)
+        }
+      }
+    )
+  }
+
+  /**
+   * Агент закончил работу, начатую без сообщения. Она относится к последнему сообщению в
+   * ленте: его ответ теперь кончается здесь, и время работы над ним считается до этого места.
+   */
+  private finishUnprompted(chatId: string, conversation: Conversation): void {
+    if (!conversation.unprompted) {
+      return
+    }
+    conversation.unprompted = false
+    this.settleLastTurn(chatId, conversation)
+    this.persist(chatId, conversation, { immediately: true })
+    this.updateRunning(chatId, conversation)
+    this.restartIfIdle(conversation)
+    this.pump(chatId, conversation)
+  }
+
+  /** Ответ на последнее сообщение ленты кончается сейчас: его время работы считается до этого места. */
+  private settleLastTurn(chatId: string, conversation: Conversation): void {
+    const { items } = conversation.snapshot
+    const index = items.findLastIndex(({ kind }) => kind === 'user')
+    const item = items[index]
+    if (item?.kind === 'user') {
+      this.settleTurn(chatId, conversation, items.slice(index + 1))
+      this.emit(chatId, conversation, { type: 'item', item: { ...item, finishedAt: Date.now() } })
+    }
   }
 
   /**
@@ -840,10 +922,14 @@ export class ConversationManager {
             heldErrors.push(item)
             return
           }
+          if (WORK_KINDS.has(item.kind)) {
+            this.noteActivity(chatId, conversation, session)
+          }
           this.emit(chatId, conversation, { type: 'item', item })
         },
         delta: (itemId, field, delta) => {
           if (!abandoned) {
+            this.noteActivity(chatId, conversation, session)
             this.emit(chatId, conversation, {
               type: 'delta',
               itemId,
@@ -855,7 +941,11 @@ export class ConversationManager {
         turnFinished: () => {
           if (conversation.session === session && !resumeFailed()) {
             releaseErrors()
-            this.finishTurn(chatId, conversation)
+            if (conversation.turn) {
+              this.finishTurn(chatId, conversation)
+            } else {
+              this.finishUnprompted(chatId, conversation)
+            }
             this.reportPlanLimits(agent, session)
           }
         },
@@ -889,6 +979,7 @@ export class ConversationManager {
             // Фоновые задачи живут в процессе агента и закончились вместе с ним.
             this.emit(chatId, conversation, { type: 'background', tasks: [] })
             this.finishTurn(chatId, conversation)
+            this.finishUnprompted(chatId, conversation)
           }
         }
       }
@@ -1093,9 +1184,17 @@ function chatDirectory({ project, chat }: { project: Project; chat: Chat }): str
 }
 
 /** Агент работает или ждёт очереди; восстановленная очередь, пока ждёт пользователя, — нет. */
+/**
+ * Элементы, по которым видно, что агент работает. Ошибка или сжатие приходят и без работы,
+ * и после них агент может не прислать конец хода: чат остался бы занятым навсегда.
+ */
+const WORK_KINDS: ReadonlySet<TimelineItem['kind']> = new Set(['assistant', 'reasoning', 'tool'])
+
 function isBusy(conversation: Conversation): boolean {
   return (
-    conversation.turn !== null || (conversation.queue.length > 0 && !conversation.queuePaused)
+    conversation.turn !== null ||
+    conversation.unprompted ||
+    (conversation.queue.length > 0 && !conversation.queuePaused)
   )
 }
 

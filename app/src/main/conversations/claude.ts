@@ -447,6 +447,7 @@ function isEffortLevel(value: string | undefined): value is EffortLevel {
 }
 
 class ClaudeSession implements AgentSession {
+  readonly worksUnprompted = true
   private readonly input = new AsyncQueue<SDKUserMessage>()
   private readonly session: Query
   /** Вызовы инструментов по `tool_use_id`: их результат приходит отдельным сообщением. */

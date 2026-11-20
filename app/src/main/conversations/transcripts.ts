@@ -1,4 +1,4 @@
-import { mkdir, rm } from 'node:fs/promises'
+import { mkdir, rm, stat } from 'node:fs/promises'
 import { join } from 'node:path'
 import { isAgentId, type AgentId } from '../../shared/agents'
 import type { TimelineItem, UserMessage } from '../../shared/conversation'
@@ -54,8 +54,10 @@ export class TranscriptStore {
     await this.writers.get(chatId)?.flush()
     const data = await readVersionedJson<TranscriptFile>(this.path(chatId), TRANSCRIPT_VERSION)
     const items = Array.isArray(data?.items) ? data.items : []
+    // Лента сохраняется по ходу работы агента: прерванный ответ кончился не раньше записи файла.
+    const savedAt = (await stat(this.path(chatId)).catch(() => null))?.mtimeMs
     return {
-      items: items.map(settleItem),
+      items: items.map((item) => settleItem(item, savedAt)),
       // Файлы прежних версий очереди не хранили.
       queue: Array.isArray(data?.queue) ? data.queue.filter(isQueuedMessage) : [],
       sessionId: typeof data?.sessionId === 'string' ? data.sessionId : null,
@@ -115,13 +117,15 @@ function isQueuedMessage(value: unknown): value is QueuedMessage {
 
 /**
  * Элемент ленты в том виде, в каком он остался, когда агент перестал работать: после выхода
- * из Atox или в конце хода, если агент так и не сообщил, чем закончился вызов.
+ * из Atox или в конце хода, если агент так и не сообщил, чем закончился вызов. `endedAt` —
+ * когда, по всему судя, прервался ответ; не известно — берётся время самого сообщения.
  */
-export function settleItem(item: TimelineItem): TimelineItem {
+export function settleItem(item: TimelineItem, endedAt?: number): TimelineItem {
   switch (item.kind) {
     case 'user':
-      // Когда закончился прерванный ответ, неизвестно: берётся время самого сообщения.
-      return item.finishedAt === undefined ? { ...item, finishedAt: item.createdAt } : item
+      return item.finishedAt === undefined
+        ? { ...item, finishedAt: Math.max(item.createdAt, Math.round(endedAt ?? item.createdAt)) }
+        : item
     case 'tool':
     case 'image':
     case 'compaction':
