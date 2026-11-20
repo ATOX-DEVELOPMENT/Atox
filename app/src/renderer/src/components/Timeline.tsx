@@ -1,24 +1,20 @@
-import { memo, useEffect, useMemo, useState, type ComponentType } from 'react'
+import { memo, useEffect, useMemo, useState } from 'react'
 import {
-  Bot,
-  Brain,
+  Check,
+  ChevronRight,
   CircleAlert,
+  Copy,
   FoldVertical,
-  FilePen,
   FileText,
-  Globe,
   Image as ImageIcon,
-  LoaderCircle,
-  Search,
-  SquareTerminal,
-  Wrench,
-  type LucideProps
+  LoaderCircle
 } from 'lucide-react'
-import type { TimelineItem, ToolKind, UserMessage } from '../../../shared/conversation'
+import type { TimelineItem, TimelineItemKind, UserMessage } from '../../../shared/conversation'
 import { findAgent } from '../../../shared/agents'
 import {
   compactionText,
   formatDuration,
+  formatMessageTime,
   formatTokens,
   toolVerb,
   workingLabel
@@ -34,35 +30,30 @@ import { Markdown } from './Markdown'
 import { ContextCard, LimitsCard } from './UsageCards'
 
 type UserItem = UserMessage
-type ActivityItem = Extract<TimelineItem, { kind: 'tool' | 'reasoning' }>
 type CompactionItem = Extract<TimelineItem, { kind: 'compaction' }>
 
 type Block =
   | { type: 'user'; item: UserItem }
-  | { type: 'assistant'; item: Extract<TimelineItem, { kind: 'assistant' }> }
-  | { type: 'error'; item: Extract<TimelineItem, { kind: 'error' }> }
-  | { type: 'approval'; item: Extract<TimelineItem, { kind: 'approval' }> }
-  | { type: 'question'; item: Extract<TimelineItem, { kind: 'question' }> }
-  | { type: 'limits'; item: Extract<TimelineItem, { kind: 'limits' }> }
-  | { type: 'context'; item: Extract<TimelineItem, { kind: 'context' }> }
-  | { type: 'compaction'; item: CompactionItem }
-  | { type: 'image'; item: Extract<TimelineItem, { kind: 'image' }> }
-  | {
-      type: 'agent-switch'
-      item: Extract<TimelineItem, { kind: 'agent-switch' }>
-    }
-  /** Конец ответа на сообщение: пока агент работает — что он делает сейчас. */
+  /** Ответ на сообщение: всё, что агент делал и писал, пока отвечал. */
   | { type: 'turn'; key: string; user: UserItem; items: TimelineItem[] }
+  /** Запись до первого сообщения в чате. */
+  | { type: 'entry'; item: TimelineItem }
 
-const TOOL_ICONS: Record<ToolKind, ComponentType<LucideProps>> = {
-  command: SquareTerminal,
-  edit: FilePen,
-  read: FileText,
-  search: Search,
-  web: Globe,
-  agent: Bot,
-  other: Wrench
-}
+/**
+ * Что в законченном ответе сворачивается в «Worked for»: промежуточный текст агента, его
+ * действия и разрешения, которые он спрашивал по ходу. Ошибки, картинки, карточки `/usage` и
+ * `/context` и сжатие разговора остаются на виду.
+ */
+const FOLDED_KINDS: ReadonlySet<TimelineItemKind> = new Set([
+  'assistant',
+  'tool',
+  'reasoning',
+  'approval',
+  'question'
+])
+
+/** Сколько держится галочка после копирования ответа. */
+const COPIED_FEEDBACK_MS = 1500
 
 /**
  * Сообщение моложе этого только что отправлено и появляется с анимацией; старые сообщения
@@ -101,51 +92,20 @@ export const Timeline = memo(function Timeline({
         switch (block.type) {
           case 'user':
             return <UserMessageView key={block.item.id} item={block.item} />
-          case 'assistant':
-            return (
-              <Markdown
-                key={block.item.id}
-                text={block.item.text}
-                preserveLineBreaks={block.item.commandOutput}
-              />
-            )
-          case 'error':
-            return (
-              <div key={block.item.id} className="message message--error" role="alert">
-                <CircleAlert className="icon" />
-                <span>{block.item.message}</span>
-              </div>
-            )
-          case 'approval':
-            return <ApprovalCard key={block.item.id} chatId={chatId} item={block.item} />
-          case 'question':
-            return <QuestionCard key={block.item.id} chatId={chatId} item={block.item} />
-          case 'limits':
-            return <LimitsCard key={block.item.id} limits={block.item.limits} />
-          case 'context':
-            return <ContextCard key={block.item.id} context={block.item.context} />
-          case 'compaction':
-            return <CompactionNotice key={block.item.id} item={block.item} />
-          case 'image':
-            return <GeneratedImage key={block.item.id} item={block.item} />
-          case 'agent-switch':
-            return (
-              <div key={block.item.id} className="agent-switch">
-                <AgentIcon agent={block.item.agent} className="agent-switch__icon" />
-                Switched to {findAgent(block.item.agent)?.name ?? block.item.agent}
-              </div>
-            )
+          case 'entry':
+            return <TimelineEntry key={block.item.id} chatId={chatId} item={block.item} />
           case 'turn':
-            // Законченный ответ — это только его текст: что агент делал, видно лишь пока он работает.
-            return running && block === lastTurn && !block.user.finishedAt ? (
-              <WorkingStatus
+            return (
+              <Turn
                 key={block.key}
+                chatId={chatId}
                 user={block.user}
                 items={block.items}
+                live={running && block === lastTurn && !block.user.finishedAt}
                 tokens={turnTokens}
                 visible={visible}
               />
-            ) : null
+            )
         }
       })}
       {queued.map((item) => (
@@ -239,123 +199,219 @@ function MessageImage({ path, onOpen }: { path: string; onOpen(image: ShownImage
   )
 }
 
-/** Разбивает ленту на блоки; действия агента в неё не попадают — их показывает строка работы. */
+/** Разбивает ленту на сообщения пользователя и ответы на них. */
 function buildBlocks(items: readonly TimelineItem[]): Block[] {
   const blocks: Block[] = []
-  let turn: UserItem | null = null
-  let turnItems: TimelineItem[] = []
-
-  const finishTurn = () => {
-    if (turn) {
-      blocks.push({
-        type: 'turn',
-        key: `${turn.id}:turn`,
-        user: turn,
-        items: turnItems
-      })
-    }
-  }
-
+  let turn: Extract<Block, { type: 'turn' }> | null = null
   for (const item of items) {
-    switch (item.kind) {
-      case 'user':
-        finishTurn()
-        turn = item
-        turnItems = []
-        blocks.push({ type: 'user', item })
-        continue
-      case 'reasoning':
-      case 'tool':
-        break
-      case 'assistant':
-        if (item.text) {
-          blocks.push({ type: 'assistant', item })
-        }
-        break
-      case 'error':
-        blocks.push({ type: 'error', item })
-        break
-      case 'approval':
-        blocks.push({ type: 'approval', item })
-        break
-      case 'question':
-        blocks.push({ type: 'question', item })
-        break
-      case 'limits':
-        blocks.push({ type: 'limits', item })
-        break
-      case 'context':
-        blocks.push({ type: 'context', item })
-        break
-      case 'compaction':
-        blocks.push({ type: 'compaction', item })
-        break
-      case 'agent-switch':
-        blocks.push({ type: 'agent-switch', item })
-        break
-      case 'image':
-        blocks.push({ type: 'image', item })
-        break
+    if (item.kind === 'user') {
+      blocks.push({ type: 'user', item })
+      turn = { type: 'turn', key: `${item.id}:turn`, user: item, items: [] }
+      blocks.push(turn)
+    } else if (turn) {
+      turn.items.push(item)
+    } else {
+      blocks.push({ type: 'entry', item })
     }
-    turnItems.push(item)
   }
-  finishTurn()
   return blocks
 }
 
-function ActivityList({ items }: { items: readonly ActivityItem[] }) {
-  return (
-    <ul className="activity__list">
-      {items.map((item) => (
-        <ActivityRow key={item.id} item={item} />
-      ))}
-    </ul>
+/**
+ * Что из работы агента видно в ленте: его текст и карточки. Сами вызовы инструментов не
+ * показываются — что агент делает сейчас, видно в строке работы.
+ */
+function visibleWork(items: readonly TimelineItem[]): TimelineItem[] {
+  return items.filter(
+    (item) =>
+      item.kind !== 'tool' &&
+      item.kind !== 'reasoning' &&
+      !(item.kind === 'assistant' && item.text === '')
   )
 }
 
-function ActivityRow({ item }: { item: ActivityItem }) {
-  const [open, setOpen] = useState(false)
-  const details = item.kind === 'reasoning' ? item.text : item.output
-  const Icon = item.kind === 'reasoning' ? Brain : TOOL_ICONS[item.tool]
-  const status = item.kind === 'tool' ? item.status : 'done'
+interface TurnProps {
+  chatId: string
+  user: UserItem
+  items: readonly TimelineItem[]
+  /** Агент ещё отвечает на это сообщение. */
+  live: boolean
+  tokens: number
+  visible: boolean
+}
 
+/**
+ * Ответ на сообщение. Пока агент работает, видно всё по порядку: что он пишет и что делает.
+ * Законченный ответ — это последний текст агента с временем и копированием, а работа до него
+ * свёрнута в «Worked for».
+ */
+function Turn({ chatId, user, items, live, tokens, visible }: TurnProps) {
+  if (live) {
+    return (
+      <>
+        <WorkLog chatId={chatId} items={items} />
+        <WorkingStatus user={user} items={items} tokens={tokens} visible={visible} />
+      </>
+    )
+  }
+  const finishedAt = knownFinish(user)
+  const finalIndex = items.findLastIndex((item) => item.kind === 'assistant' && item.text !== '')
+  const work = items.filter((item, index) => index !== finalIndex && FOLDED_KINDS.has(item.kind))
+  const hasWork = work.some(
+    (item) => item.kind === 'tool' || (item.kind === 'assistant' && item.text !== '')
+  )
   return (
-    <li className="activity-row" data-status={status}>
+    <>
+      {hasWork && (
+        <WorkSummary
+          chatId={chatId}
+          duration={finishedAt === undefined ? undefined : finishedAt - user.createdAt}
+          items={work}
+        />
+      )}
+      {items.map((item, index) =>
+        index === finalIndex && item.kind === 'assistant' ? (
+          <FinalMessage key={item.id} item={item} finishedAt={finishedAt} />
+        ) : FOLDED_KINDS.has(item.kind) ? null : (
+          <TimelineEntry key={item.id} chatId={chatId} item={item} />
+        )
+      )}
+    </>
+  )
+}
+
+/**
+ * Когда агент закончил ответ. У прерванного ответа (агента остановили или закрыли Atox) это
+ * неизвестно: main ставит время самого сообщения — такой ответ считается без времени.
+ */
+function knownFinish(user: UserItem): number | undefined {
+  return user.finishedAt !== undefined && user.finishedAt > user.createdAt
+    ? user.finishedAt
+    : undefined
+}
+
+/** Работа агента по порядку: его текст и карточки. */
+function WorkLog({ chatId, items }: { chatId: string; items: readonly TimelineItem[] }) {
+  return visibleWork(items).map((item) => (
+    <TimelineEntry key={item.id} chatId={chatId} item={item} />
+  ))
+}
+
+interface WorkSummaryProps {
+  chatId: string
+  /** Сколько агент работал над ответом; нет — неизвестно. */
+  duration: number | undefined
+  items: readonly TimelineItem[]
+}
+
+/** «Worked for 1m 50s ›» над ответом: клик раскрывает, что агент делал до него. */
+function WorkSummary({ chatId, duration, items }: WorkSummaryProps) {
+  const [open, setOpen] = useState(false)
+  const label = duration === undefined ? 'Worked' : `Worked for ${formatDuration(duration)}`
+  // Агент мог только выполнять команды, ничего не написав: тогда раскрывать нечего.
+  const expandable = visibleWork(items).length > 0
+  return (
+    <div className="work-summary" data-open={open}>
       <button
         type="button"
-        className="activity-row__header"
-        disabled={!details}
-        aria-expanded={open}
+        className="work-summary__toggle"
+        aria-expanded={expandable ? open : undefined}
+        disabled={!expandable}
         onClick={() => setOpen((value) => !value)}
       >
-        {status === 'running' ? (
-          <LoaderCircle className="icon activity__spinner" />
-        ) : (
-          <Icon className="icon" />
-        )}
-        {item.kind === 'reasoning' ? (
-          <span className="activity-row__verb">Thought</span>
-        ) : (
-          <>
-            <span className="activity-row__verb">{toolVerb(item.tool, status === 'running')}</span>
-            <span
-              className="activity-row__title"
-              data-code={item.tool === 'command' || undefined}
-              title={item.title}
-            >
-              {item.title}
-            </span>
-          </>
-        )}
-        {status === 'failed' && <CircleAlert className="icon activity-row__failed" />}
+        {label}
+        {expandable && <ChevronRight className="icon work-summary__chevron" aria-hidden />}
       </button>
-      {open && details && (
-        <pre className="activity-row__details" data-prose={item.kind === 'reasoning' || undefined}>
-          {details}
-        </pre>
+      {open && (
+        <div className="work-summary__log">
+          <WorkLog chatId={chatId} items={items} />
+        </div>
       )}
-    </li>
+    </div>
   )
+}
+
+interface FinalMessageProps {
+  item: Extract<TimelineItem, { kind: 'assistant' }>
+  /** Когда агент закончил ответ; нет — неизвестно (см. `knownFinish`). */
+  finishedAt: number | undefined
+}
+
+/** Итоговый текст ответа, под ним — копирование и время. */
+function FinalMessage({ item, finishedAt }: FinalMessageProps) {
+  const [copied, setCopied] = useState(false)
+  useEffect(() => {
+    if (!copied) {
+      return
+    }
+    const timer = setTimeout(() => setCopied(false), COPIED_FEEDBACK_MS)
+    return () => clearTimeout(timer)
+  }, [copied])
+  const copy = () => {
+    navigator.clipboard
+      .writeText(item.text)
+      .then(() => setCopied(true))
+      .catch((error) => console.error('Failed to copy the message', error))
+  }
+  return (
+    <div className="final-message">
+      <Markdown text={item.text} preserveLineBreaks={item.commandOutput} />
+      <div className="message-footer">
+        <button
+          type="button"
+          className="message-footer__button"
+          aria-label={copied ? 'Copied' : 'Copy'}
+          title={copied ? 'Copied' : 'Copy'}
+          onClick={copy}
+        >
+          {copied ? <Check className="icon" /> : <Copy className="icon" />}
+        </button>
+        {finishedAt !== undefined && (
+          <time className="message-footer__time" dateTime={new Date(finishedAt).toISOString()}>
+            {formatMessageTime(finishedAt)}
+          </time>
+        )}
+      </div>
+    </div>
+  )
+}
+
+/** Запись ленты, которую видно как есть: текст агента, ошибка или карточка. */
+function TimelineEntry({ chatId, item }: { chatId: string; item: TimelineItem }) {
+  switch (item.kind) {
+    case 'assistant':
+      return <Markdown text={item.text} preserveLineBreaks={item.commandOutput} />
+    case 'error':
+      return (
+        <div className="message message--error" role="alert">
+          <CircleAlert className="icon" />
+          <span>{item.message}</span>
+        </div>
+      )
+    case 'approval':
+      return <ApprovalCard chatId={chatId} item={item} />
+    case 'question':
+      return <QuestionCard chatId={chatId} item={item} />
+    case 'limits':
+      return <LimitsCard limits={item.limits} />
+    case 'context':
+      return <ContextCard context={item.context} />
+    case 'compaction':
+      return <CompactionNotice item={item} />
+    case 'image':
+      return <GeneratedImage item={item} />
+    case 'agent-switch':
+      return (
+        <div className="agent-switch">
+          <AgentIcon agent={item.agent} className="agent-switch__icon" />
+          Switched to {findAgent(item.agent)?.name ?? item.agent}
+        </div>
+      )
+    case 'user':
+    case 'tool':
+    case 'reasoning':
+      return null
+  }
 }
 
 /** Разделитель в ленте: агент сжимает разговор, всё выше осталось только в сводке. */
@@ -386,40 +442,22 @@ interface WorkingStatusProps {
   visible: boolean
 }
 
-/**
- * Строка работающего агента: что он делает сейчас, сколько работает и сколько написал.
- * Клик раскрывает все действия этого ответа.
- */
+/** Строка работающего агента: что он делает сейчас, сколько работает и сколько написал. */
 function WorkingStatus({ user, items, tokens, visible }: WorkingStatusProps) {
   const now = useClock(visible)
-  const [expanded, setExpanded] = useState(false)
-  const activity = items.filter(
-    (item): item is ActivityItem =>
-      item.kind === 'tool' || (item.kind === 'reasoning' && item.text.trim() !== '')
-  )
-  const current = activity.findLast((item) => item.kind === 'tool' && item.status === 'running')
+  const current = items.findLast((item) => item.kind === 'tool' && item.status === 'running')
   const label =
     current?.kind === 'tool'
       ? `${toolVerb(current.tool, true)} ${current.title}`
       : `${workingLabel(items, user.id)}…`
   return (
-    <div className="turn-status-group">
-      <button
-        type="button"
-        className="turn-status"
-        data-working
-        aria-expanded={activity.length > 0 ? expanded : undefined}
-        disabled={activity.length === 0}
-        onClick={() => setExpanded((value) => !value)}
-      >
-        <AgentIcon agent={user.agent} className="turn-status__glyph" />
-        <span className="turn-status__verb">{label}</span>
-        <span className="turn-status__meta">
-          ({formatDuration(now - user.createdAt)}
-          {tokens > 0 && ` · ↓ ${formatTokens(tokens)} tokens`})
-        </span>
-      </button>
-      {expanded && <ActivityList items={activity} />}
+    <div className="turn-status" data-working role="status">
+      <AgentIcon agent={user.agent} className="turn-status__glyph" />
+      <span className="turn-status__verb">{label}</span>
+      <span className="turn-status__meta">
+        ({formatDuration(now - user.createdAt)}
+        {tokens > 0 && ` · ↓ ${formatTokens(tokens)} tokens`})
+      </span>
     </div>
   )
 }
