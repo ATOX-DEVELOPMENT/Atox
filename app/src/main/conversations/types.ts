@@ -59,6 +59,11 @@ export interface SessionEvents {
 
 /** Разговор с запущенным агентом. Сообщения отправляются по одному: следующее — после `turnFinished`. */
 export interface AgentSession {
+  /**
+   * Агент может продолжить работу сам, без сообщения: например, когда закончилась его фоновая
+   * задача. Такая работа тоже кончается `turnFinished`.
+   */
+  readonly worksUnprompted: boolean
   /** `images` — пути к картинкам, приложенным к сообщению. */
   send(text: string, images: readonly string[]): void
   /**

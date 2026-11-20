@@ -343,6 +343,7 @@ const INTERRUPT_ATTEMPTS = 20
 const INTERRUPT_RETRY_MS = 100
 
 class CodexSession implements AgentSession {
+  readonly worksUnprompted = false
   private readonly rpc: JsonRpcProcess
   /** Тред Codex, когда он открыт: сообщения ждут его. */
   private readonly thread: Promise<string>
