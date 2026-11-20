@@ -214,15 +214,16 @@ function buildBlocks(items: readonly TimelineItem[]): Block[] {
 }
 
 /**
- * Что из работы агента видно в ленте: его текст и карточки. Сами вызовы инструментов не
- * показываются — что агент делает сейчас, видно в строке работы.
+ * Что из работы агента видно в ленте: его текст, мысли и карточки. Мысли — это пересказ того,
+ * что агент сделал и что делает дальше: по ним видно, что он работает, даже когда сам он
+ * ничего не пишет. Сами вызовы инструментов не показываются — что агент делает сейчас, видно
+ * в строке работы.
  */
 function visibleWork(items: readonly TimelineItem[]): TimelineItem[] {
   return items.filter(
     (item) =>
       item.kind !== 'tool' &&
-      item.kind !== 'reasoning' &&
-      !(item.kind === 'assistant' && item.text === '')
+      !((item.kind === 'assistant' || item.kind === 'reasoning') && item.text.trim() === '')
   )
 }
 
@@ -327,6 +328,8 @@ function TimelineEntry({ chatId, item }: { chatId: string; item: TimelineItem })
   switch (item.kind) {
     case 'assistant':
       return <Markdown text={item.text} preserveLineBreaks={item.commandOutput} />
+    case 'reasoning':
+      return <Markdown text={item.text} />
     case 'error':
       return (
         <div className="message message--error" role="alert">
@@ -355,7 +358,6 @@ function TimelineEntry({ chatId, item }: { chatId: string; item: TimelineItem })
       )
     case 'user':
     case 'tool':
-    case 'reasoning':
       return null
   }
 }
