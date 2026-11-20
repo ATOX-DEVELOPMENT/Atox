@@ -92,11 +92,18 @@ const PINNED_MODEL_PREFIX = 'claude-'
  */
 const HIDDEN_AGENT_TOOLS = ['Agent', 'Workflow']
 
-const ATOX_DELEGATION_PROMPT =
+/**
+ * Что Claude дописывается к системному промпту в Atox. Помощники — через `atox`. И отчёт по ходу
+ * работы: вызовы инструментов в ленте не видны, а без текста между ними кажется, что агент молчит.
+ */
+const ATOX_SYSTEM_PROMPT =
   'You run inside Atox, where every agent is a chat the user can see in the sidebar. ' +
   'To hand work to other agents or run them in parallel, use the atox skill ' +
   '(`atox start`, then `atox send` to talk to them); ' +
-  'built-in subagents are not available here.'
+  'built-in subagents are not available here.\n\n' +
+  'Atox does not show your tool calls in the chat, only your text. While you work, keep the ' +
+  'user posted: before each step, write one or two short plain sentences about what you are ' +
+  'doing or what you just found. Never run a long chain of tool calls in silence.'
 
 /**
  * Команды Claude Code, которые работают только в терминале: Agent SDK их не отдаёт, а сообщение
@@ -168,7 +175,7 @@ function launchOptions(launch: AgentLaunch): Options {
     pathToClaudeCodeExecutable: claudeExecutablePath(launch),
     // Те же настройки, CLAUDE.md, навыки и хуки, что у Claude Code в терминале.
     settingSources: ['user', 'project', 'local'],
-    systemPrompt: { type: 'preset', preset: 'claude_code', append: ATOX_DELEGATION_PROMPT },
+    systemPrompt: { type: 'preset', preset: 'claude_code', append: ATOX_SYSTEM_PROMPT },
     disallowedTools: HIDDEN_AGENT_TOOLS
   }
 }
