@@ -3,6 +3,7 @@ import { useUpdateState } from '../hooks/useUpdateState'
 import type { UpdateState } from '../../../shared/update'
 import { useSettings } from '../hooks/SettingsContext'
 import { useUserProfile } from '../hooks/useUserProfile'
+import { ProfileAvatar } from './ProfileAvatar'
 
 interface ProfileBarProps {
   onOpenSettings(): void
@@ -13,17 +14,14 @@ interface ProfileBarProps {
 /** Таблетка внизу сайдбара: кто работает, обновление приложения и вход в настройки. */
 export function ProfileBar({ onOpenSettings, limitsShown, onToggleLimits }: ProfileBarProps) {
   const profile = useUserProfile()
-  const { profileName } = useSettings()
+  const { profileName, profileAvatar } = useSettings()
   const name = profileName.trim() || profile?.name
-  const initial = name?.charAt(0).toUpperCase()
   const update = useUpdateState()
 
   return (
     <footer className="profile-card">
       <div className="profile-card__user">
-        <span className="profile-card__avatar" aria-hidden>
-          {initial}
-        </span>
+        <ProfileAvatar image={profileAvatar} name={name} />
         <span className="profile-card__name">{name}</span>
       </div>
       <div className="profile-card__actions">

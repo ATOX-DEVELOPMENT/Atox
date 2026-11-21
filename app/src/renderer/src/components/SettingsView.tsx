@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import {
   Archive,
   ChartNoAxesColumn,
@@ -26,6 +26,8 @@ import {
 } from '../../../shared/settings'
 import { useIntegrationLists } from '../hooks/useIntegrationLists'
 import { playChime } from '../lib/chime'
+import { AvatarCropDialog } from './AvatarCropDialog'
+import { ProfileAvatar } from './ProfileAvatar'
 import { AgentIntegrations } from './AgentIntegrations'
 import { ArchivedChats } from './ArchivedChats'
 import { GitHubMark } from './GitHubMark'
@@ -53,7 +55,11 @@ const SECTIONS: ReadonlyArray<{
   { id: 'mcp', label: 'MCP', icon: Plug }
 ]
 
-const THEME_OPTIONS: ReadonlyArray<{ id: ThemeMode; label: string; icon: LucideIcon }> = [
+const THEME_OPTIONS: ReadonlyArray<{
+  id: ThemeMode
+  label: string
+  icon: LucideIcon
+}> = [
   { id: 'system', label: 'System', icon: Monitor },
   { id: 'light', label: 'Light', icon: Sun },
   { id: 'dark', label: 'Dark', icon: Moon }
@@ -73,12 +79,15 @@ interface SettingsViewProps {
 }
 
 export function SettingsView({ onClose }: SettingsViewProps) {
-  const { shareUsageStats, playSounds, profileName, theme, accent, sidebarButtons } = useSettings()
+  const { shareUsageStats, playSounds, profileName, profileAvatar, theme, accent, sidebarButtons } =
+    useSettings()
   const profile = useUserProfile()
   const { projects, currentProjectId } = useProjectsContext()
   const project = projects.find(({ id }) => id === currentProjectId) ?? null
   const integrations = useIntegrationLists(project?.id ?? null)
   const [section, setSection] = useState<SettingsSection>('general')
+  const [avatarFile, setAvatarFile] = useState<File | null>(null)
+  const avatarInput = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     // Esc, который уже обработало поле (переименование, поиск), страницу не закрывает.
@@ -126,6 +135,48 @@ export function SettingsView({ onClose }: SettingsViewProps) {
         <>
           <div className="settings__group">
             <div className="settings__card">
+              <div className="settings__row">
+                <span className="settings__label">
+                  <span>Photo</span>
+                  <span className="settings__description">
+                    Shown next to your name in the sidebar.
+                  </span>
+                </span>
+                <span className="settings__avatar">
+                  <ProfileAvatar
+                    image={profileAvatar}
+                    name={profileName.trim() || profile?.name}
+                    large
+                  />
+                  <input
+                    ref={avatarInput}
+                    type="file"
+                    accept="image/*"
+                    hidden
+                    onChange={(event) => {
+                      setAvatarFile(event.target.files?.[0] ?? null)
+                      // Тот же файл можно выбрать снова, например после отмены.
+                      event.target.value = ''
+                    }}
+                  />
+                  <button
+                    type="button"
+                    className="settings__button"
+                    onClick={() => avatarInput.current?.click()}
+                  >
+                    {profileAvatar ? 'Change' : 'Choose'}
+                  </button>
+                  {profileAvatar && (
+                    <button
+                      type="button"
+                      className="settings__button"
+                      onClick={() => void atox.settings.update({ profileAvatar: '' })}
+                    >
+                      Remove
+                    </button>
+                  )}
+                </span>
+              </div>
               <label className="settings__row">
                 <span className="settings__label">
                   <span>Name</span>
@@ -140,7 +191,11 @@ export function SettingsView({ onClose }: SettingsViewProps) {
                   maxLength={PROFILE_NAME_MAX_LENGTH}
                   placeholder={profile?.name}
                   spellCheck={false}
-                  onChange={(event) => void atox.settings.update({ profileName: event.target.value })}
+                  onChange={(event) =>
+                    void atox.settings.update({
+                      profileName: event.target.value
+                    })
+                  }
                 />
               </label>
               <UpdateSettings />
@@ -179,7 +234,9 @@ export function SettingsView({ onClose }: SettingsViewProps) {
                   className="switch"
                   checked={shareUsageStats}
                   onChange={(event) =>
-                    void atox.settings.update({ shareUsageStats: event.target.checked })
+                    void atox.settings.update({
+                      shareUsageStats: event.target.checked
+                    })
                   }
                 />
               </label>
@@ -280,6 +337,16 @@ export function SettingsView({ onClose }: SettingsViewProps) {
           kind={section}
           lists={integrations}
           projectName={project?.name ?? null}
+        />
+      )}
+      {avatarFile && (
+        <AvatarCropDialog
+          file={avatarFile}
+          onSave={(avatar) => {
+            void atox.settings.update({ profileAvatar: avatar })
+            setAvatarFile(null)
+          }}
+          onClose={() => setAvatarFile(null)}
         />
       )}
     </section>
