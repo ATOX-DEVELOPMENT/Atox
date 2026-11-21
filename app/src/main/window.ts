@@ -14,13 +14,23 @@ const WINDOW_SIZE = {
 const WINDOW_BACKGROUND = { light: '#f3f2f7', dark: '#1c1c1e' } as const
 
 /**
+ * Левый верхний угол кнопок окна macOS: центр первой кнопки совпадает с центром скругления
+ * сайдбара (зазор и радиус — `--sidebar-gap` и `--sidebar-radius` в стилях), поэтому кнопки
+ * не жмутся к углу. `--traffic-lights-width` в стилях считается от этого отступа.
+ */
+const TRAFFIC_LIGHTS_POSITION = { x: 17, y: 17 } as const
+
+/**
  * На macOS кнопки окна встроены в сайдбар. На Linux окно обычное: рамку рисует оконный менеджер
  * (в Hyprland её нет вовсе), строка меню скрыта.
  */
 function platformWindowOptions(): BrowserWindowConstructorOptions {
   return {
     backgroundColor: WINDOW_BACKGROUND[nativeTheme.shouldUseDarkColors ? 'dark' : 'light'],
-    ...(IS_MAC && { titleBarStyle: 'hiddenInset' as const })
+    ...(IS_MAC && {
+      titleBarStyle: 'hiddenInset' as const,
+      trafficLightPosition: TRAFFIC_LIGHTS_POSITION
+    })
   }
 }
 
