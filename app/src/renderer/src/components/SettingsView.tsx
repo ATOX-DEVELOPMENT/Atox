@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import {
   Archive,
+  Camera,
   ChartNoAxesColumn,
   LayoutGrid,
   List,
@@ -11,6 +12,7 @@ import {
   SlidersHorizontal,
   Sparkles,
   Sun,
+  Trash2,
   X,
   type LucideIcon
 } from 'lucide-react'
@@ -161,18 +163,22 @@ export function SettingsView({ onClose }: SettingsViewProps) {
                   />
                   <button
                     type="button"
-                    className="settings__button"
+                    className="icon-button"
+                    aria-label={profileAvatar ? 'Change photo' : 'Choose photo'}
+                    title={profileAvatar ? 'Change photo' : 'Choose photo'}
                     onClick={() => avatarInput.current?.click()}
                   >
-                    {profileAvatar ? 'Change' : 'Choose'}
+                    <Camera className="icon" />
                   </button>
                   {profileAvatar && (
                     <button
                       type="button"
-                      className="settings__button"
+                      className="icon-button"
+                      aria-label="Remove photo"
+                      title="Remove photo"
                       onClick={() => void atox.settings.update({ profileAvatar: '' })}
                     >
-                      Remove
+                      <Trash2 className="icon" />
                     </button>
                   )}
                 </span>

@@ -1790,7 +1790,8 @@ ul {
 }
 
 .settings__button:hover:not(:disabled) {
-  filter: brightness(1.15);
+  /* Поверх своего фона кладётся ещё один слой подсветки: на тёмном фоне яркость почти не видна. */
+  background-image: linear-gradient(var(--color-active), var(--color-active));
 }
 
 .settings__button:disabled {
