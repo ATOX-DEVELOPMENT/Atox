@@ -233,8 +233,6 @@
 
   /* Светлая тема приглушённая: чисто белый фон на большом экране режет глаза. */
   --color-surface: #f3f2f7;
-  /* Фон окна там, где нет системного vibrancy (Linux); его же ставит main до отрисовки. */
-  --color-window: #e7e6ee;
   --color-text: #2a2935;
   --color-text-muted: #777586;
   --color-border: rgba(50, 40, 100, 0.1);
@@ -292,7 +290,6 @@
 @media (prefers-color-scheme: dark) {
   :root {
     --color-surface: #1c1c1e;
-    --color-window: #28282a;
     --color-text: #f5f5f7;
     --color-text-muted: #8e8e93;
     --color-border: rgba(255, 255, 255, 0.08);
@@ -391,26 +388,19 @@ body,
   margin: 0;
 }
 
-/* Фон окна прозрачный: под сайдбаром виден системный vibrancy. */
+/* Фон окна — цвет чата: сайдбар лежит над ним «таблеткой». Его же ставит main до отрисовки. */
 body {
-  background: transparent;
+  background: var(--color-surface);
   overflow: hidden;
   user-select: none;
 }
 
-/*
- * На Linux vibrancy нет — окно залито цветом сайдбара. Кнопок светофора тоже нет, поэтому
- * над сайдбаром остаётся только небольшой отступ.
- */
+/* На Linux кнопок светофора нет, поэтому над сайдбаром остаётся только небольшой отступ. */
 :root[data-platform='linux'] {
   --titlebar-height: 12px;
   /* Кнопок окна нет, но кнопкам панелей шапка всё равно нужна. */
   --workspace-header-height: 40px;
   --traffic-lights-width: 0px;
-}
-
-:root[data-platform='linux'] body {
-  background: var(--color-window);
 }
 
 button {

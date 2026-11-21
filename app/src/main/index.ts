@@ -95,7 +95,7 @@ async function bootstrap(): Promise<void> {
   const userData = app.getPath('userData')
   const store = await ProjectStore.load(join(userData, STORE_FILE_NAME))
   const settings = await SettingsStore.load(join(userData, SETTINGS_FILE_NAME))
-  // Тема окна: `prefers-color-scheme` в окне и системный vibrancy следуют за ней.
+  // Тема окна: `prefers-color-scheme` в окне и цвет фона окна следуют за ней.
   nativeTheme.themeSource = settings.get().theme
   settings.onChange(({ theme }) => {
     nativeTheme.themeSource = theme
