@@ -10,24 +10,17 @@ const WINDOW_SIZE = {
   minHeight: 480
 } as const
 
-/** Фон окна на Linux до первой отрисовки — цвет сайдбара (`--color-window` в стилях). */
-const LINUX_BACKGROUND = { light: '#e7e6ee', dark: '#28282a' } as const
+/** Фон окна до первой отрисовки — цвет чата (`--color-surface` в стилях), на нём лежит сайдбар. */
+const WINDOW_BACKGROUND = { light: '#f3f2f7', dark: '#1c1c1e' } as const
 
 /**
- * На macOS кнопки окна встроены в сайдбар, а под ним виден системный vibrancy. На Linux окно
- * обычное: рамку рисует оконный менеджер (в Hyprland её нет вовсе), строка меню скрыта.
+ * На macOS кнопки окна встроены в сайдбар. На Linux окно обычное: рамку рисует оконный менеджер
+ * (в Hyprland её нет вовсе), строка меню скрыта.
  */
 function platformWindowOptions(): BrowserWindowConstructorOptions {
-  if (IS_MAC) {
-    return {
-      titleBarStyle: 'hiddenInset',
-      vibrancy: 'sidebar',
-      visualEffectState: 'followWindow',
-      backgroundColor: '#00000000'
-    }
-  }
   return {
-    backgroundColor: LINUX_BACKGROUND[nativeTheme.shouldUseDarkColors ? 'dark' : 'light']
+    backgroundColor: WINDOW_BACKGROUND[nativeTheme.shouldUseDarkColors ? 'dark' : 'light'],
+    ...(IS_MAC && { titleBarStyle: 'hiddenInset' as const })
   }
 }
 
