@@ -6,6 +6,7 @@ import {
   DEFAULT_SETTINGS,
   DEFAULT_SIDEBAR_BUTTON_STYLE,
   isAccentId,
+  isProfileAvatar,
   isSidebarButtonStyle,
   isThemeMode,
   SIDEBAR_WIDTH,
@@ -83,6 +84,7 @@ function normalize(settings: Settings): Settings {
       typeof settings.profileName === 'string'
         ? settings.profileName.slice(0, PROFILE_NAME_MAX_LENGTH)
         : '',
+    profileAvatar: isProfileAvatar(settings.profileAvatar) ? settings.profileAvatar : '',
     theme: isThemeMode(settings.theme) ? settings.theme : 'system',
     accent: isAccentId(settings.accent) ? settings.accent : DEFAULT_ACCENT,
     sidebarButtons: isSidebarButtonStyle(settings.sidebarButtons)
@@ -120,7 +122,8 @@ function normalizeShortcuts(shortcuts: unknown): ShortcutOverrides {
 
 /** Оставляет выбор моделей только известных агентов и только строковые значения. */
 function normalizeAgentModels(value: unknown): Settings['agentModels'] {
-  const source = typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : {}
+  const source =
+    typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : {}
   const normalized: Settings['agentModels'] = {}
   for (const { id } of AGENTS) {
     const selection = source[id]
