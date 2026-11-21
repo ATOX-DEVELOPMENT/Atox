@@ -1105,7 +1105,7 @@ ul {
   min-width: 0;
 }
 
-.profile-card__avatar {
+.profile-avatar {
   display: grid;
   place-items: center;
   width: var(--avatar-size);
@@ -1116,6 +1116,18 @@ ul {
   color: var(--color-on-accent);
   font-size: var(--font-size-small);
   font-weight: 600;
+  overflow: hidden;
+}
+
+.profile-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.profile-avatar--large {
+  --avatar-size: 48px;
+  font-size: 18px;
 }
 
 .profile-card__name {
@@ -1733,6 +1745,12 @@ ul {
 .settings__text-input:focus {
   outline: none;
   border-color: var(--color-accent-text);
+}
+
+.settings__avatar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .settings__row--compact {
@@ -5010,6 +5028,68 @@ ul {
 .modal__footer .settings__button {
   height: var(--board-control-height, 32px);
   padding: 0 16px;
+}
+
+/* Выбор кадра для аватарки */
+
+.avatar-crop {
+  width: min(340px, 100%);
+}
+
+.avatar-crop .modal__footer {
+  justify-content: flex-end;
+}
+
+.avatar-crop__body {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  padding: 8px 24px 20px;
+}
+
+.avatar-crop__view {
+  position: relative;
+  overflow: hidden;
+  border-radius: 12px;
+  background: var(--color-hover);
+  cursor: grab;
+  touch-action: none;
+}
+
+.avatar-crop__view:active {
+  cursor: grabbing;
+}
+
+.avatar-crop__image {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  max-width: none;
+  pointer-events: none;
+}
+
+/* Всё вне круга затемнено: видно, что останется в аватарке. */
+.avatar-crop__mask {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  box-shadow: 0 0 0 100vmax rgba(10, 8, 30, 0.55);
+  pointer-events: none;
+}
+
+.avatar-crop__error {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  margin: 0;
+  color: var(--color-text-muted);
+}
+
+.avatar-crop__zoom {
+  width: 100%;
+  accent-color: var(--color-accent);
 }
 
 @keyframes modal-fade {
