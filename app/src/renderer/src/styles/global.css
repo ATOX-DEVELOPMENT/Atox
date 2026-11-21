@@ -1691,7 +1691,7 @@ ul {
 /* Тот же вес, что у `.modal__dialog`, который стоит ниже в файле: иначе он перебивает размеры. */
 .modal__dialog.settings-dialog {
   flex-direction: row;
-  width: min(1120px, 100%);
+  width: min(1280px, 100%);
   height: 100%;
   overflow: hidden;
 }
