@@ -1672,45 +1672,118 @@ ul {
 
 /* Настройки */
 
-.settings {
-  position: absolute;
-  inset: 0;
-  overflow-y: auto;
-  padding: calc(var(--workspace-header-height) + 8px) 48px 48px;
-  background: var(--color-surface);
-  user-select: none;
-}
-
-.settings__header,
 .settings__group {
-  max-width: 640px;
+  max-width: 720px;
   margin: 0 auto;
-}
-
-.settings__header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 16px;
-}
-
-.settings__title {
-  margin: 0;
-  font-size: 22px;
-  font-weight: 600;
 }
 
 .settings__group + .settings__group {
   margin-top: 28px;
 }
 
-/* Вкладки разделов стоят вплотную к своему содержимому. */
-.settings__tabs + .settings__group {
-  margin-top: 20px;
+/* Окно настроек: почти на весь экран, слева разделы, справа выбранный. */
+
+.settings-modal {
+  background: rgba(10, 8, 30, 0.4);
+  backdrop-filter: blur(6px);
 }
 
-.settings__tabs .segmented {
-  width: fit-content;
+.settings-dialog {
+  flex-direction: row;
+  width: min(1120px, 100%);
+  height: 100%;
+  overflow: hidden;
+}
+
+.settings-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  width: 232px;
+  flex-shrink: 0;
+  padding: 16px 12px;
+  overflow-y: auto;
+  border-right: 1px solid var(--color-border);
+}
+
+.settings-nav__group {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.settings-nav__title {
+  margin: 0 0 4px;
+  padding: 0 10px;
+  font-size: var(--font-size-small);
+  font-weight: 500;
+  color: var(--color-text-muted);
+}
+
+.settings-nav__item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 34px;
+  padding: 0 10px;
+  border-radius: var(--radius);
+  color: var(--color-text-muted);
+  text-align: left;
+}
+
+.settings-nav__item:hover {
+  color: var(--color-text);
+  background: var(--color-hover);
+}
+
+.settings-nav__item[aria-current='page'] {
+  color: var(--color-text);
+  background: var(--color-active);
+}
+
+.settings-nav__icon {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+}
+
+.settings-main {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  background: var(--color-surface);
+}
+
+.settings-main__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  height: 56px;
+  flex-shrink: 0;
+  padding: 0 16px 0 28px;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.settings-main__title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.settings-main__crumb {
+  font-weight: 400;
+  color: var(--color-text-muted);
+}
+
+.settings-main__body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 28px;
 }
 
 /* Строки группы собраны в одну карточку и разделены тонкой линией, как в Системных настройках. */

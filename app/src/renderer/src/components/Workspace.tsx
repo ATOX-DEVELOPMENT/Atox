@@ -11,7 +11,6 @@ import { CanvasPage } from './canvas/CanvasPage'
 import { ChangesPanel } from './ChangesPanel'
 import { ChatView } from './ChatView'
 import { RepositoryView, type RepositorySection } from './RepositoryView'
-import { SettingsView } from './SettingsView'
 import { SplitResizer } from './SplitResizer'
 import { TerminalPanel } from './TerminalPanel'
 import { Welcome } from './Welcome'
@@ -20,7 +19,6 @@ import { WorkspaceToolbar } from './WorkspaceToolbar'
 
 /** Страница, открытая поверх чатов. */
 export type WorkspacePage =
-  | { kind: 'settings' }
   | { kind: 'agents' }
   | { kind: 'board' }
   | { kind: 'repository'; projectId: string }
@@ -75,7 +73,6 @@ export function Workspace({
   const repositoryProject =
     page?.kind === 'repository' ? projects.find(({ id }) => id === page.projectId) : undefined
   const pageOpen =
-    page?.kind === 'settings' ||
     page?.kind === 'agents' ||
     page?.kind === 'board' ||
     page?.kind === 'canvasList' ||
@@ -196,7 +193,6 @@ export function Workspace({
         focusRequest={terminals.focusRequest}
         onClose={terminals.close}
       />
-      {page?.kind === 'settings' && <SettingsView onClose={onClosePage} />}
       {page?.kind === 'agents' && <AgentsView onOpenChat={onOpenChat} onClose={onClosePage} />}
       {page?.kind === 'board' && <BoardView onOpenChat={onOpenChat} onClose={onClosePage} />}
       {page?.kind === 'canvasList' && <CanvasList onClose={onClosePage} />}
