@@ -28,15 +28,6 @@ export function formatReset(resetsAt: number, now = Date.now()): string {
   return `Resets in ${formatDuration(remaining)}`
 }
 
-/** Сколько осталось до сброса, коротко: «2h 14m», «35m», «6d». */
-export function formatResetShort(resetsAt: number, now = Date.now()): string {
-  const remaining = resetsAt - now
-  if (remaining <= 0) {
-    return 'now'
-  }
-  return remaining >= DAY_MS ? `${Math.round(remaining / DAY_MS)}d` : formatDuration(remaining)
-}
-
 function formatDuration(ms: number): string {
   const minutes = Math.max(1, Math.round(ms / MINUTE_MS))
   const hours = Math.floor(minutes / 60)

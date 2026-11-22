@@ -12,18 +12,15 @@ import { useProjectsContext } from '../hooks/ProjectsContext'
 import { useGitBranches } from '../hooks/useGitBranches'
 import { useSettings } from '../hooks/SettingsContext'
 import { NO_CHAT_IDS } from '../lib/chatLayout'
-import { PlanLimits } from './PlanLimits'
 import { ProfileBar } from './ProfileBar'
 import { ProjectItem } from './ProjectItem'
 import type { Project } from '../../../shared/models'
 import { SIDEBAR_WIDTH } from '../../../shared/settings'
 import { PanelResizer } from './PanelResizer'
+import type { SettingsSection } from './SettingsView'
 import { SidebarButton } from './SidebarButton'
 import { SortableList } from './SortableList'
 import { SpacePicker } from './SpacePicker'
-
-/** Показаны ли лимиты подписки над профилем: по умолчанию скрыты, выбор помнится. */
-const LIMITS_SHOWN_KEY = 'atox.limitsShown'
 
 function containsChat(project: Project, chatId: string | null): boolean {
   return chatId !== null && project.chats.some(({ id }) => id === chatId)
@@ -38,7 +35,7 @@ interface SidebarProps {
   boardOpen: boolean
   /** Открыт список холстов. */
   canvasListOpen: boolean
-  onOpenSettings(): void
+  onOpenSettings(section?: SettingsSection): void
   onToggleRepository(): void
   onToggleAgents(): void
   onToggleBoard(): void
@@ -78,12 +75,6 @@ export function Sidebar({
     : undefined
   // Пока тянут край, ширина живёт здесь; в настройки попадает только итоговая.
   const [draftWidth, setDraftWidth] = useState<number | null>(null)
-  const [limitsShown, setLimitsShown] = useState(() => localStorage.getItem(LIMITS_SHOWN_KEY) === '1')
-  const toggleLimits = () => {
-    const next = !limitsShown
-    localStorage.setItem(LIMITS_SHOWN_KEY, next ? '1' : '0')
-    setLimitsShown(next)
-  }
   const width = draftWidth ?? sidebarWidth
 
   return (
@@ -106,7 +97,12 @@ export function Sidebar({
           onClick={onToggleRepository}
         />
         <SidebarButton icon={Bot} label="Agents" active={agentsOpen} onClick={onToggleAgents} />
-        <SidebarButton icon={SquareKanban} label="Board" active={boardOpen} onClick={onToggleBoard} />
+        <SidebarButton
+          icon={SquareKanban}
+          label="Board"
+          active={boardOpen}
+          onClick={onToggleBoard}
+        />
         <SidebarButton
           icon={LayoutDashboard}
           label="Canvases"
@@ -149,12 +145,7 @@ export function Sidebar({
         )}
       </section>
 
-      <div className="plan-limits-collapse" data-shown={limitsShown} inert={!limitsShown}>
-        <div className="plan-limits-collapse__inner">
-          <PlanLimits />
-        </div>
-      </div>
-      <ProfileBar onOpenSettings={onOpenSettings} limitsShown={limitsShown} onToggleLimits={toggleLimits} />
+      <ProfileBar onOpenSettings={onOpenSettings} />
 
       <PanelResizer
         width={width}
