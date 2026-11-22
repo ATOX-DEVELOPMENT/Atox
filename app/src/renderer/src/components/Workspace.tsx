@@ -34,8 +34,6 @@ interface WorkspaceProps {
   terminals: TerminalPanelState
   /** Панель изменений открыта вместо терминала. */
   changesOpen: boolean
-  sidebarVisible: boolean
-  onToggleSidebar(): void
   onToggleTerminal(): void
   onToggleChanges(): void
 }
@@ -48,8 +46,6 @@ export function Workspace({
   onOpenChat,
   terminals,
   changesOpen,
-  sidebarVisible,
-  onToggleSidebar,
   onToggleTerminal,
   onToggleChanges
 }: WorkspaceProps) {
@@ -119,10 +115,8 @@ export function Workspace({
               terminalOpen={terminalOpen}
               changesOpen={changesShown}
               projectAvailable={Boolean(currentProjectId)}
-              sidebarVisible={sidebarVisible}
               onToggleTerminal={onToggleTerminal}
               onToggleChanges={onToggleChanges}
-              onToggleSidebar={onToggleSidebar}
             />
           )}
         </header>

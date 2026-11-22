@@ -21,6 +21,7 @@ import type { SettingsSection } from './SettingsView'
 import { SidebarButton } from './SidebarButton'
 import { SortableList } from './SortableList'
 import { SpacePicker } from './SpacePicker'
+import { WindowPill } from './WindowPill'
 
 function containsChat(project: Project, chatId: string | null): boolean {
   return chatId !== null && project.chats.some(({ id }) => id === chatId)
@@ -36,6 +37,7 @@ interface SidebarProps {
   /** Открыт список холстов. */
   canvasListOpen: boolean
   onOpenSettings(section?: SettingsSection): void
+  onToggleSidebar(): void
   onToggleRepository(): void
   onToggleAgents(): void
   onToggleBoard(): void
@@ -49,6 +51,7 @@ export function Sidebar({
   boardOpen,
   canvasListOpen,
   onOpenSettings,
+  onToggleSidebar,
   onToggleRepository,
   onToggleAgents,
   onToggleBoard,
@@ -79,71 +82,73 @@ export function Sidebar({
 
   return (
     <aside className="sidebar" style={{ width }}>
-      <div className="sidebar__titlebar" />
+      <WindowPill sidebarVisible onToggleSidebar={onToggleSidebar} />
 
-      <nav className="sidebar__nav" data-style={sidebarButtons}>
-        <SidebarButton
-          icon={SquarePen}
-          label="New chat"
-          disabled={!currentProjectId}
-          onClick={() => currentProjectId && void createChat(currentProjectId)}
-        />
-        <SidebarButton icon={FolderPlus} label="New project" onClick={() => void addProject()} />
-        <SidebarButton
-          icon={GitPullRequest}
-          label="Repository"
-          active={repositoryOpen}
-          disabled={!currentProjectId}
-          onClick={onToggleRepository}
-        />
-        <SidebarButton icon={Bot} label="Agents" active={agentsOpen} onClick={onToggleAgents} />
-        <SidebarButton
-          icon={SquareKanban}
-          label="Board"
-          active={boardOpen}
-          onClick={onToggleBoard}
-        />
-        <SidebarButton
-          icon={LayoutDashboard}
-          label="Canvases"
-          count={canvasCount}
-          active={canvasListOpen}
-          onClick={onToggleCanvasList}
-        />
-      </nav>
+      <div className="sidebar__body">
+        <nav className="sidebar__nav" data-style={sidebarButtons}>
+          <SidebarButton
+            icon={SquarePen}
+            label="New chat"
+            disabled={!currentProjectId}
+            onClick={() => currentProjectId && void createChat(currentProjectId)}
+          />
+          <SidebarButton icon={FolderPlus} label="New project" onClick={() => void addProject()} />
+          <SidebarButton
+            icon={GitPullRequest}
+            label="Repository"
+            active={repositoryOpen}
+            disabled={!currentProjectId}
+            onClick={onToggleRepository}
+          />
+          <SidebarButton icon={Bot} label="Agents" active={agentsOpen} onClick={onToggleAgents} />
+          <SidebarButton
+            icon={SquareKanban}
+            label="Board"
+            active={boardOpen}
+            onClick={onToggleBoard}
+          />
+          <SidebarButton
+            icon={LayoutDashboard}
+            label="Canvases"
+            count={canvasCount}
+            active={canvasListOpen}
+            onClick={onToggleCanvasList}
+          />
+        </nav>
 
-      <div className="sidebar__spaces">
-        <SpacePicker />
+        <div className="sidebar__spaces">
+          <SpacePicker />
+        </div>
+
+        <section className="sidebar__section">
+          {/* Пока проекты загружаются, пустое состояние не показываем — оно бы мигнуло. */}
+          {!loading && spaceProjects.length === 0 ? (
+            <p className="sidebar__empty">No projects yet</p>
+          ) : (
+            <SortableList
+              items={spaceProjects}
+              onMove={(id, toIndex) => void moveProject(id, toIndex)}
+            >
+              {(project) => (
+                <ProjectItem
+                  key={project.id}
+                  project={project}
+                  branch={branches[project.path] ?? null}
+                  onOpenRepository={onOpenRepository}
+                  spaces={spaces}
+                  // Выбор чата передаётся только его проекту: остальные карточки не перерисовываются.
+                  activeChatId={containsChat(project, activeChatId) ? activeChatId : null}
+                  visibleChatIds={
+                    visibleChatIds.some((id) => containsChat(project, id))
+                      ? visibleChatIds
+                      : NO_CHAT_IDS
+                  }
+                />
+              )}
+            </SortableList>
+          )}
+        </section>
       </div>
-
-      <section className="sidebar__section">
-        {/* Пока проекты загружаются, пустое состояние не показываем — оно бы мигнуло. */}
-        {!loading && spaceProjects.length === 0 ? (
-          <p className="sidebar__empty">No projects yet</p>
-        ) : (
-          <SortableList
-            items={spaceProjects}
-            onMove={(id, toIndex) => void moveProject(id, toIndex)}
-          >
-            {(project) => (
-              <ProjectItem
-                key={project.id}
-                project={project}
-                branch={branches[project.path] ?? null}
-                onOpenRepository={onOpenRepository}
-                spaces={spaces}
-                // Выбор чата передаётся только его проекту: остальные карточки не перерисовываются.
-                activeChatId={containsChat(project, activeChatId) ? activeChatId : null}
-                visibleChatIds={
-                  visibleChatIds.some((id) => containsChat(project, id))
-                    ? visibleChatIds
-                    : NO_CHAT_IDS
-                }
-              />
-            )}
-          </SortableList>
-        )}
-      </section>
 
       <ProfileBar onOpenSettings={onOpenSettings} />
 

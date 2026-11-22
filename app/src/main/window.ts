@@ -14,11 +14,11 @@ const WINDOW_SIZE = {
 const WINDOW_BACKGROUND = { light: '#f3f2f7', dark: '#1c1c1e' } as const
 
 /**
- * Левый верхний угол кнопок окна macOS: центр первой кнопки совпадает с центром скругления
- * сайдбара (зазор и радиус — `--sidebar-gap` и `--sidebar-radius` в стилях), поэтому кнопки
- * не жмутся к углу. `--traffic-lights-width` в стилях считается от этого отступа.
+ * Левый верхний угол кнопок окна macOS: они стоят в верхней таблетке сайдбара, по её вертикальному
+ * центру и с отступом 14px от скруглённого края. Числа считаются от `--sidebar-gap` (8px),
+ * `--window-pill-height` (40px) и рамки таблетки (1px) в стилях.
  */
-const TRAFFIC_LIGHTS_POSITION = { x: 17, y: 17 } as const
+const TRAFFIC_LIGHTS_POSITION = { x: 23, y: 22 } as const
 
 /**
  * На macOS кнопки окна встроены в сайдбар. На Linux окно обычное: рамку рисует оконный менеджер

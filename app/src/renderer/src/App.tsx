@@ -3,6 +3,7 @@ import type { RepositorySection } from './components/RepositoryView'
 import { MenuLayer } from './components/MenuLayer'
 import { SettingsView, type SettingsSection } from './components/SettingsView'
 import { Sidebar } from './components/Sidebar'
+import { WindowPill } from './components/WindowPill'
 import { Workspace, type WorkspacePage } from './components/Workspace'
 import {
   CanvasesProvider,
@@ -164,19 +165,22 @@ function Layout() {
   return (
     <CanvasNavigationProvider navigation={canvasNavigation}>
       <div className="app" data-sidebar={sidebarVisible ? 'visible' : 'hidden'}>
-        {sidebarVisible && (
+        {sidebarVisible ? (
           <Sidebar
             repositoryOpen={page?.kind === 'repository'}
             agentsOpen={page?.kind === 'agents'}
             boardOpen={page?.kind === 'board'}
             canvasListOpen={page?.kind === 'canvasList'}
             onOpenSettings={openSettings}
+            onToggleSidebar={toggleSidebar}
             onToggleRepository={toggleRepository}
             onToggleAgents={toggleAgents}
             onToggleBoard={toggleBoard}
             onToggleCanvasList={toggleCanvasList}
             onOpenRepository={openRepository}
           />
+        ) : (
+          <WindowPill sidebarVisible={false} onToggleSidebar={toggleSidebar} />
         )}
         <Workspace
           page={page}
@@ -186,8 +190,6 @@ function Layout() {
           onOpenChat={openChat}
           terminals={terminals}
           changesOpen={changesOpen}
-          sidebarVisible={sidebarVisible}
-          onToggleSidebar={toggleSidebar}
           onToggleTerminal={toggleTerminal}
           onToggleChanges={toggleChanges}
         />

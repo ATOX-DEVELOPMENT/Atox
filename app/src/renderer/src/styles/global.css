@@ -11,18 +11,25 @@
   /* Знак Atox на пустой рабочей области. */
   --bloom-mark-size: 112px;
   --sidebar-resizer-width: 8px;
-  /* Сайдбар — плавающая «таблетка»: зазор до краёв окна и скругление. */
+  /* Сайдбар — три плавающие «таблетки»: зазор между ними и до краёв окна, скругление. */
   --sidebar-gap: 8px;
   --sidebar-radius: 14px;
-  /* Высота зоны заголовка окна: под неё уходят кнопки светофора macOS (hiddenInset). */
-  --titlebar-height: 44px;
+  /* Верхняя таблетка: в ней кнопки окна macOS и кнопка сайдбара. */
+  --window-pill-height: 40px;
+  /*
+   * Место слева в верхней таблетке под кнопки окна macOS: отступ, три кнопки и зазор до кнопки
+   * сайдбара. Положение самих кнопок задаёт окно (`TRAFFIC_LIGHTS_POSITION` в main/window.ts).
+   */
+  --window-lights-area: 75px;
+  /* Закрытый сайдбар оставляет от верхней таблетки только кнопки: ширина границ, отступов и кнопки. */
+  --window-pill-collapsed-width: calc(var(--toolbar-button-size) + 8px + var(--window-lights-area));
+  /* Полоса сверху: таблетка с кнопками окна и зазоры вокруг неё; шапка рабочей области той же высоты. */
+  --titlebar-height: calc(var(--sidebar-gap) * 2 + var(--window-pill-height));
   /* Шапка рабочей области: за неё перетаскивают окно, справа в ней кнопки панелей. */
   --workspace-header-height: var(--titlebar-height);
   --workspace-header-padding: 8px;
   --workspace-title-inset: 16px;
   --workspace-title-gap: 10px;
-  /* Сколько места слева от шапки занимают кнопки светофора, когда сайдбар скрыт. */
-  --traffic-lights-width: 81px;
   /* Высота, на которой лента чата растворяется под шапкой вместо разделительной линии. */
   --header-fade-height: 20px;
   --toolbar-button-size: 32px;
@@ -252,9 +259,6 @@
   --color-menu-highlight: rgba(0, 0, 0, 0.06);
   --color-sidebar: rgba(255, 255, 255, 0.42);
   --color-sidebar-border: rgba(50, 40, 100, 0.1);
-  --color-profile-card: rgba(250, 249, 253, 0.7);
-  --color-profile-card-border: rgba(0, 0, 0, 0.06);
-  --shadow-profile-card: 0 2px 10px rgba(0, 0, 0, 0.06);
   /* Подсветка поиска в терминале: xterm принимает только цвета в формате #RRGGBB. */
   --color-search-match: #f5d76e;
   --color-search-active: #ff9f0a;
@@ -306,9 +310,6 @@
     --color-menu-highlight: rgba(255, 255, 255, 0.08);
     --color-sidebar: rgba(255, 255, 255, 0.05);
     --color-sidebar-border: rgba(255, 255, 255, 0.08);
-    --color-profile-card: rgba(255, 255, 255, 0.07);
-    --color-profile-card-border: rgba(255, 255, 255, 0.06);
-    --shadow-profile-card: 0 2px 12px rgba(0, 0, 0, 0.25);
     --color-search-match: #5c4a12;
     --color-search-active: #a8620a;
     --color-status-idle: rgba(255, 255, 255, 0.22);
@@ -393,12 +394,9 @@ body {
   user-select: none;
 }
 
-/* На Linux кнопок светофора нет, поэтому над сайдбаром остаётся только небольшой отступ. */
+/* На Linux кнопок светофора нет: верхняя таблетка — только кнопка сайдбара. */
 :root[data-platform='linux'] {
-  --titlebar-height: 12px;
-  /* Кнопок окна нет, но кнопкам панелей шапка всё равно нужна. */
-  --workspace-header-height: 40px;
-  --traffic-lights-width: 0px;
+  --window-lights-area: 0px;
 }
 
 button {
@@ -438,6 +436,7 @@ ul {
 }
 
 .app {
+  position: relative;
   display: flex;
   height: 100%;
 }
@@ -452,10 +451,51 @@ ul {
   display: flex;
   flex-direction: column;
   flex-shrink: 0;
+  gap: var(--sidebar-gap);
   margin: var(--sidebar-gap);
+}
+
+/* Три таблетки сайдбара — окно, проекты и профиль — выглядят одинаково. */
+.window-pill,
+.sidebar__body,
+.profile-card {
   border: 1px solid var(--color-sidebar-border);
-  border-radius: var(--sidebar-radius);
   background: var(--color-sidebar);
+}
+
+.window-pill {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-shrink: 0;
+  height: var(--window-pill-height);
+  padding: 0 3px;
+  border-radius: calc(var(--window-pill-height) / 2);
+  -webkit-app-region: drag;
+}
+
+.window-pill__lights {
+  width: var(--window-lights-area);
+  align-self: stretch;
+}
+
+/* Без сайдбара таблетка остаётся в углу окна поверх рабочей области. */
+.window-pill[data-collapsed='true'] {
+  position: absolute;
+  top: var(--sidebar-gap);
+  left: var(--sidebar-gap);
+  z-index: 4;
+  width: var(--window-pill-collapsed-width);
+}
+
+.sidebar__body {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+  padding-top: var(--sidebar-padding);
+  border-radius: var(--sidebar-radius);
+  overflow: hidden;
 }
 
 /* Край панели, за который меняют её ширину: узкая невидимая полоса поверх границы. */
@@ -475,12 +515,6 @@ ul {
 
 .panel-resizer[data-edge='left'] {
   left: calc(var(--sidebar-resizer-width) / -2);
-}
-
-.sidebar__titlebar {
-  height: var(--titlebar-height);
-  flex-shrink: 0;
-  -webkit-app-region: drag;
 }
 
 .sidebar__nav {
@@ -1017,7 +1051,7 @@ ul {
   font-variant-numeric: tabular-nums;
 }
 
-/* Профиль внизу сайдбара: таблетка, которая парит над краем окна */
+/* Профиль внизу сайдбара: отдельная таблетка под проектами */
 
 .profile-card {
   display: flex;
@@ -1025,12 +1059,8 @@ ul {
   justify-content: space-between;
   gap: var(--row-gap);
   flex-shrink: 0;
-  margin: 0 var(--sidebar-padding) var(--sidebar-padding);
   padding: var(--profile-card-padding);
-  border: 1px solid var(--color-profile-card-border);
   border-radius: calc(var(--avatar-size) / 2 + var(--profile-card-padding));
-  background: var(--color-profile-card);
-  box-shadow: var(--shadow-profile-card);
 }
 
 .profile-card__user {
@@ -2588,7 +2618,9 @@ ul {
 
 /* Без сайдбара название уступает место кнопкам окна. */
 .app[data-sidebar='hidden'] .workspace__header {
-  padding-left: calc(var(--traffic-lights-width) + var(--workspace-title-inset));
+  padding-left: calc(
+    var(--sidebar-gap) + var(--window-pill-collapsed-width) + var(--workspace-title-inset)
+  );
 }
 
 .workspace-title {
@@ -5581,7 +5613,9 @@ ul {
 }
 
 .app[data-sidebar='hidden'] .canvas-header {
-  padding-left: calc(var(--traffic-lights-width) + var(--workspace-title-inset));
+  padding-left: calc(
+    var(--sidebar-gap) + var(--window-pill-collapsed-width) + var(--workspace-title-inset)
+  );
 }
 
 .canvas-header button,
