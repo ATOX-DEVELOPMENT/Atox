@@ -3842,15 +3842,6 @@ ul {
   align-items: center;
   gap: 2px;
   min-width: 0;
-  transition:
-    opacity var(--collapse-duration) var(--collapse-easing),
-    visibility var(--collapse-duration);
-}
-
-/* Место остаётся, чтобы строка не прыгала, когда они появляются. */
-.composer__meta[data-hidden='true'] {
-  visibility: hidden;
-  opacity: 0;
 }
 
 .composer__meta .model-picker {
@@ -3883,6 +3874,16 @@ ul {
   border-radius: 50%;
   color: var(--color-on-accent);
   background: var(--color-text);
+  transition: opacity 0.12s ease;
+}
+
+/* Кнопка залита цветом текста, поэтому подсветка — лёгкое притухание, а не полупрозрачная плитка. */
+.composer__button:not(:disabled):hover {
+  opacity: 0.8;
+}
+
+.composer__button:not(:disabled):active {
+  opacity: 0.65;
 }
 
 .composer__button:disabled {
