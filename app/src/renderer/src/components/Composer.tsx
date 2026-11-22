@@ -48,7 +48,6 @@ interface ComposerProps {
   chat: Chat
   /** Агент работает: кнопка отправки становится кнопкой остановки. */
   running: boolean
-  /** В чате уже есть сообщения. */
   /** Чат выбран: поле ввода получает фокус. */
   focused: boolean
   usage: ConversationUsage | undefined
