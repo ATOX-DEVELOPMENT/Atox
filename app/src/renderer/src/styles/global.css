@@ -479,11 +479,6 @@ ul {
   align-self: stretch;
 }
 
-/* Кнопка — круг, концентричный закруглённому краю таблетки: подсветка не вылезает за него. */
-.window-pill .workspace-toolbar__button {
-  border-radius: 50%;
-}
-
 /* Без сайдбара таблетка остаётся в углу окна поверх рабочей области. */
 .window-pill[data-collapsed='true'] {
   position: absolute;
@@ -2670,12 +2665,13 @@ ul {
   -webkit-app-region: no-drag;
 }
 
+/* Круглая: в таблетке окна подсветка кнопки не вылезает за её закруглённый край. */
 .workspace-toolbar__button {
   display: grid;
   place-items: center;
   width: var(--toolbar-button-size);
   height: var(--toolbar-button-size);
-  border-radius: var(--radius);
+  border-radius: 50%;
   color: var(--color-text-muted);
   -webkit-app-region: no-drag;
 }
