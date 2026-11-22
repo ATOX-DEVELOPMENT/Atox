@@ -410,7 +410,7 @@ export const Composer = memo(function Composer({
           </button>
         </div>
       )}
-      {/* Само поле: вложения, «+», текст и отправка. Остальное — под ним и не мешает писать. */}
+      {/* Одна таблетка: вложения и текст сверху, под ними «+» слева, модель, контекст и отправка справа. */}
       <div className="composer__box">
         {(attachments.length > 0 || pending.length > 0) && (
           <ul className="composer__attachments">
@@ -470,7 +470,17 @@ export const Composer = memo(function Composer({
             ))}
           </ul>
         )}
-        <div className="composer__row">
+        <textarea
+          ref={inputRef}
+          className="composer__input"
+          rows={1}
+          value={text}
+          placeholder={running ? 'Send a follow-up' : 'Ask me anything'}
+          spellCheck={false}
+          onChange={(event) => setText(event.target.value)}
+          onKeyDown={handleKeyDown}
+        />
+        <div className="composer__bar">
           <button
             type="button"
             className="composer__attach"
@@ -480,43 +490,38 @@ export const Composer = memo(function Composer({
           >
             <Plus className="icon" />
           </button>
-          <textarea
-            ref={inputRef}
-            className="composer__input"
-            rows={1}
-            value={text}
-            placeholder={running ? 'Send a follow-up' : 'Ask me anything'}
-            spellCheck={false}
-            onChange={(event) => setText(event.target.value)}
-            onKeyDown={handleKeyDown}
-          />
-          {running && !hasContent ? (
-            <button
-              type="button"
-              className="composer__button"
-              aria-label="Stop"
-              title="Stop (Esc)"
-              onClick={stop}
-            >
-              <Square className="icon composer__stop-icon" />
-            </button>
-          ) : (
-            <button
-              type="submit"
-              className="composer__button"
-              aria-label="Send"
-              title="Send"
-              disabled={!canSend}
-            >
-              <ArrowUp className="icon" />
-            </button>
-          )}
+          <div className="composer__bar-end">
+            {/*
+              В пустом чате модели не видно: новый чат начинает агент по умолчанию, сменить его можно
+              потом. Выбор остаётся в разметке, его открывает и команда `/model`.
+            */}
+            <div className="composer__meta" data-hidden={!started}>
+              <ModelPicker chat={chat} openRequest={pickerRequest} />
+              {usage && <UsageIndicator usage={usage} />}
+            </div>
+            {running && !hasContent ? (
+              <button
+                type="button"
+                className="composer__button"
+                aria-label="Stop"
+                title="Stop (Esc)"
+                onClick={stop}
+              >
+                <Square className="icon composer__stop-icon" />
+              </button>
+            ) : (
+              <button
+                type="submit"
+                className="composer__button"
+                aria-label="Send"
+                title="Send"
+                disabled={!canSend}
+              >
+                <ArrowUp className="icon" />
+              </button>
+            )}
+          </div>
         </div>
-      </div>
-      {/* В пустом чате только поле: новый чат начинает агент по умолчанию, сменить его можно потом. */}
-      <div className="composer__footer" data-hidden={!started}>
-        <ModelPicker chat={chat} openRequest={pickerRequest} />
-        {usage && <UsageIndicator usage={usage} />}
       </div>
       {viewedImage && <ImageViewer image={viewedImage} onClose={() => setViewedImage(null)} />}
     </form>

@@ -189,8 +189,7 @@
   /* Карточки в ленте: разрешения, лимиты, контекст. */
   --card-radius: 16px;
   --composer-padding: 6px;
-  --composer-footer-height: 24px;
-  /* Под строкой модели — небольшой отступ до края окна, как в Claude. */
+  /* Небольшой отступ от поля ввода до нижнего края окна. */
   --composer-bottom-gap: 8px;
   --composer-max-height: 40vh;
   --composer-button-size: 30px;
@@ -3689,7 +3688,7 @@ ul {
 .composer__box {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 4px;
   padding: var(--composer-padding);
   border: 1px solid var(--color-border);
   border-radius: var(--composer-radius);
@@ -3741,10 +3740,18 @@ ul {
 }
 
 /* «+», текст и отправка в одну строку; когда текст растёт, кнопки остаются внизу. */
-.composer__row {
+.composer__bar {
   display: flex;
-  align-items: flex-end;
+  align-items: center;
+  justify-content: space-between;
   gap: 6px;
+}
+
+.composer__bar-end {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
 }
 
 /* Приложенные картинки — миниатюры над полем ввода, каждую можно убрать. */
@@ -3815,8 +3822,7 @@ ul {
    */
   field-sizing: content;
   max-height: var(--composer-max-height);
-  /* Одна строка текста по высоте ровно с кнопками по бокам. */
-  padding: calc((var(--composer-button-size) - 1.5em) / 2) 4px;
+  padding: 6px 10px 0;
   border: none;
   outline: none;
   resize: none;
@@ -3830,27 +3836,30 @@ ul {
   color: var(--color-text-muted);
 }
 
-/* Модель и контекст — под полем, тихо: они нужны редко и не должны теснить текст. */
-.composer__footer {
+/* Модель и контекст — в нижней строке рядом с отправкой, тихо: нужны редко и не теснят текст. */
+.composer__meta {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  min-height: var(--composer-footer-height);
-  padding: 0;
-  font-size: 13px;
+  gap: 2px;
+  min-width: 0;
   transition:
     opacity var(--collapse-duration) var(--collapse-easing),
     visibility var(--collapse-duration);
 }
 
-/* Место под строкой остаётся, чтобы поле не прыгало, когда она появляется. */
-.composer__footer[data-hidden='true'] {
+/* Место остаётся, чтобы строка не прыгала, когда они появляются. */
+.composer__meta[data-hidden='true'] {
   visibility: hidden;
   opacity: 0;
 }
 
-/* «+» — приложить файлы, тихая кнопка слева от текста. */
+.composer__meta .model-picker {
+  height: var(--composer-button-size);
+  padding: 0 10px;
+  border-radius: 999px;
+}
+
+/* «+» — приложить файлы, тихая кнопка слева в нижней строке. */
 .composer__attach {
   display: grid;
   flex-shrink: 0;
