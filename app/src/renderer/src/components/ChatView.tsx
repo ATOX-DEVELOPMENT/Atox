@@ -171,7 +171,6 @@ export const ChatView = memo(function ChatView({
         <Composer
           chat={chat}
           running={conversation.running}
-          started={started}
           focused={focused}
           usage={conversation.usage}
           onSend={followAgent}

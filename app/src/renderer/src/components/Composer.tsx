@@ -49,7 +49,6 @@ interface ComposerProps {
   /** Агент работает: кнопка отправки становится кнопкой остановки. */
   running: boolean
   /** В чате уже есть сообщения. */
-  started: boolean
   /** Чат выбран: поле ввода получает фокус. */
   focused: boolean
   usage: ConversationUsage | undefined
@@ -64,7 +63,6 @@ interface ComposerProps {
 export const Composer = memo(function Composer({
   chat,
   running,
-  started,
   focused,
   usage,
   onSend
@@ -491,11 +489,7 @@ export const Composer = memo(function Composer({
             <Plus className="icon" />
           </button>
           <div className="composer__bar-end">
-            {/*
-              В пустом чате модели не видно: новый чат начинает агент по умолчанию, сменить его можно
-              потом. Выбор остаётся в разметке, его открывает и команда `/model`.
-            */}
-            <div className="composer__meta" data-hidden={!started}>
+            <div className="composer__meta">
               <ModelPicker chat={chat} openRequest={pickerRequest} />
               {usage && <UsageIndicator usage={usage} />}
             </div>
