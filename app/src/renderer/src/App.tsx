@@ -165,7 +165,7 @@ function Layout() {
   return (
     <CanvasNavigationProvider navigation={canvasNavigation}>
       <div className="app" data-sidebar={sidebarVisible ? 'visible' : 'hidden'}>
-        {sidebarVisible ? (
+        {sidebarVisible && (
           <Sidebar
             repositoryOpen={page?.kind === 'repository'}
             agentsOpen={page?.kind === 'agents'}
@@ -179,8 +179,6 @@ function Layout() {
             onToggleCanvasList={toggleCanvasList}
             onOpenRepository={openRepository}
           />
-        ) : (
-          <WindowPill sidebarVisible={false} onToggleSidebar={toggleSidebar} />
         )}
         <Workspace
           page={page}
@@ -193,6 +191,12 @@ function Layout() {
           onToggleTerminal={toggleTerminal}
           onToggleChanges={toggleChanges}
         />
+        {/*
+          Закрытому сайдбару остаётся одна таблетка. Она стоит после рабочей области намеренно: шапка
+          рабочей области — зона перетаскивания окна на всю ширину, и зона кнопки «не перетаскивать»
+          работает над ней, только если идёт позже в разметке.
+        */}
+        {!sidebarVisible && <WindowPill sidebarVisible={false} onToggleSidebar={toggleSidebar} />}
       </div>
       {settingsSection && <SettingsView initialSection={settingsSection} onClose={closeSettings} />}
     </CanvasNavigationProvider>
