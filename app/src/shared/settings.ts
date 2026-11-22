@@ -65,6 +65,8 @@ export interface Settings {
   playSounds: boolean
   /** Имя в профиле сайдбара, которое человек ввёл сам; пусто — имя берётся из git или macOS. */
   profileName: string
+  /** Фото профиля: уже обрезанная квадратная картинка в виде data URL; пусто — буква имени. */
+  profileAvatar: string
   /** Тема окна. */
   theme: ThemeMode
   /** Акцентный цвет: выделения, переключатели, кнопки. */
@@ -79,6 +81,25 @@ export interface Settings {
 
 /** Длиннее имя в таблетке профиля не помещается. */
 export const PROFILE_NAME_MAX_LENGTH = 40
+
+/** Фото профиля хранится в настройках, поэтому его размер ограничен. */
+export const PROFILE_AVATAR = {
+  /** Сторона квадрата в пикселях: с запасом для экрана с высокой плотностью. */
+  size: 256,
+  /** Формат, в который фото сохраняется после обрезки. */
+  mimeType: 'image/jpeg',
+  quality: 0.9,
+  maxLength: 200_000
+} as const
+
+/** Фото профиля — это data URL картинки не длиннее допустимого: файл настроек могли править руками. */
+export function isProfileAvatar(value: unknown): value is string {
+  return (
+    typeof value === 'string' &&
+    value.length <= PROFILE_AVATAR.maxLength &&
+    /^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/]+={0,2}$/.test(value)
+  )
+}
 
 /** Сайдбар по умолчанию самый узкий: его можно только расширить. */
 export const SIDEBAR_WIDTH = {
@@ -110,6 +131,7 @@ export const DEFAULT_SETTINGS: Settings = {
   shareUsageStats: true,
   playSounds: false,
   profileName: '',
+  profileAvatar: '',
   theme: 'system',
   accent: DEFAULT_ACCENT,
   sidebarButtons: DEFAULT_SIDEBAR_BUTTON_STYLE,

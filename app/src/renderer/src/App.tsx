@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { RepositorySection } from './components/RepositoryView'
 import { MenuLayer } from './components/MenuLayer'
+import { SettingsView, type SettingsSection } from './components/SettingsView'
 import { Sidebar } from './components/Sidebar'
 import { Workspace, type WorkspacePage } from './components/Workspace'
 import {
@@ -34,6 +35,8 @@ function Layout() {
   const projects = useProjectsContext()
   const [sidebarVisible, setSidebarVisible] = useState(true)
   const [page, setPage] = useState<WorkspacePage | null>(null)
+  // Настройки — окно поверх приложения, а не страница: под ним остаётся то, что было открыто.
+  const [settingsSection, setSettingsSection] = useState<SettingsSection | null>(null)
   // Раздел страницы репозитория не сбрасывается, когда её закрывают и открывают снова.
   const [repositorySection, setRepositorySection] = useState<RepositorySection>('pulls')
   const terminals = useTerminalPanel()
@@ -42,7 +45,11 @@ function Layout() {
   const { currentProjectId } = projects
 
   const toggleSidebar = useCallback(() => setSidebarVisible((visible) => !visible), [])
-  const openSettings = useCallback(() => setPage({ kind: 'settings' }), [])
+  const openSettings = useCallback(
+    (section: SettingsSection = 'general') => setSettingsSection(section),
+    []
+  )
+  const closeSettings = useCallback(() => setSettingsSection(null), [])
   const toggleAgents = useCallback(
     () => setPage((current) => (current?.kind === 'agents' ? null : { kind: 'agents' })),
     []
@@ -127,7 +134,8 @@ function Layout() {
     const previous = previousChatIdRef.current
     previousChatIdRef.current = projects.activeChatId
     const previousRemoved =
-      previous !== null && !projects.projects.some(({ chats }) => chats.some(({ id }) => id === previous))
+      previous !== null &&
+      !projects.projects.some(({ chats }) => chats.some(({ id }) => id === previous))
     if (projects.activeChatId !== previous && !previousRemoved) {
       closePage()
     }
@@ -151,7 +159,7 @@ function Layout() {
     toggleRepository,
     toggleAgents
   })
-  useChatsCovered(page !== null)
+  useChatsCovered(page !== null || settingsSection !== null)
 
   return (
     <CanvasNavigationProvider navigation={canvasNavigation}>
@@ -184,6 +192,7 @@ function Layout() {
           onToggleChanges={toggleChanges}
         />
       </div>
+      {settingsSection && <SettingsView initialSection={settingsSection} onClose={closeSettings} />}
     </CanvasNavigationProvider>
   )
 }

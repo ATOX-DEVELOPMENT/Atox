@@ -3,27 +3,24 @@ import { useUpdateState } from '../hooks/useUpdateState'
 import type { UpdateState } from '../../../shared/update'
 import { useSettings } from '../hooks/SettingsContext'
 import { useUserProfile } from '../hooks/useUserProfile'
+import { ProfileAvatar } from './ProfileAvatar'
+import type { SettingsSection } from './SettingsView'
 
 interface ProfileBarProps {
-  onOpenSettings(): void
-  limitsShown: boolean
-  onToggleLimits(): void
+  onOpenSettings(section?: SettingsSection): void
 }
 
-/** Таблетка внизу сайдбара: кто работает, обновление приложения и вход в настройки. */
-export function ProfileBar({ onOpenSettings, limitsShown, onToggleLimits }: ProfileBarProps) {
+/** Таблетка внизу сайдбара: кто работает, обновление приложения, расход и вход в настройки. */
+export function ProfileBar({ onOpenSettings }: ProfileBarProps) {
   const profile = useUserProfile()
-  const { profileName } = useSettings()
+  const { profileName, profileAvatar } = useSettings()
   const name = profileName.trim() || profile?.name
-  const initial = name?.charAt(0).toUpperCase()
   const update = useUpdateState()
 
   return (
     <footer className="profile-card">
       <div className="profile-card__user">
-        <span className="profile-card__avatar" aria-hidden>
-          {initial}
-        </span>
+        <ProfileAvatar image={profileAvatar} name={name} />
         <span className="profile-card__name">{name}</span>
       </div>
       <div className="profile-card__actions">
@@ -32,9 +29,8 @@ export function ProfileBar({ onOpenSettings, limitsShown, onToggleLimits }: Prof
           type="button"
           className="profile-card__action"
           aria-label="Usage"
-          aria-pressed={limitsShown}
-          title={limitsShown ? 'Hide usage' : 'Show usage'}
-          onClick={onToggleLimits}
+          title="Usage"
+          onClick={() => onOpenSettings('usage')}
         >
           <ChartNoAxesColumn className="icon" />
         </button>
@@ -42,7 +38,7 @@ export function ProfileBar({ onOpenSettings, limitsShown, onToggleLimits }: Prof
           type="button"
           className="profile-card__action"
           aria-label="Settings"
-          onClick={onOpenSettings}
+          onClick={() => onOpenSettings()}
         >
           <Settings className="icon" />
         </button>

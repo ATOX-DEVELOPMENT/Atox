@@ -1,5 +1,5 @@
-import { Fragment, useEffect, useState, type ReactNode } from 'react'
-import { RefreshCw, Search } from 'lucide-react'
+import { Fragment, useEffect, type ReactNode } from 'react'
+import { RefreshCw } from 'lucide-react'
 import { AGENTS } from '../../../shared/agents'
 import type {
   IntegrationItems,
@@ -23,8 +23,6 @@ interface KindView<Kind extends IntegrationKind> {
   loading: string
   empty: string
   row(item: IntegrationItems[Kind][number]): ReactNode
-  /** По чему ищет фильтр: всё, что видно в строке. */
-  terms(item: IntegrationItems[Kind][number]): (string | null | undefined)[]
 }
 
 const MCP_STATE_LABELS: Record<McpServerState, string> = {
@@ -44,7 +42,6 @@ interface AgentIntegrationsProps {
 
 /** Раздел настроек: плагины, скиллы или серверы MCP — блоками по агентам. */
 export function AgentIntegrations({ kind, lists, projectName }: AgentIntegrationsProps) {
-  const [query, setQuery] = useState('')
   const { load } = lists
 
   useEffect(() => load(kind), [load, kind])
@@ -60,23 +57,6 @@ export function AgentIntegrations({ kind, lists, projectName }: AgentIntegration
               ? `Includes ${KINDS[kind].noun} from the “${projectName}” project.`
               : `Open a project to also see its ${KINDS[kind].noun}.`)}
         </p>
-        <label className="repository__search">
-          <Search className="repository__search-icon" />
-          <input
-            type="search"
-            placeholder="Filter"
-            aria-label="Filter"
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            onKeyDown={(event) => {
-              // Escape сначала очищает фильтр и только потом закрывает настройки.
-              if (event.key === 'Escape' && query) {
-                event.stopPropagation()
-                setQuery('')
-              }
-            }}
-          />
-        </label>
         <button
           type="button"
           className="icon-button"
@@ -96,7 +76,6 @@ export function AgentIntegrations({ kind, lists, projectName }: AgentIntegration
           agent={agent}
           kind={kind}
           result={lists.result(kind, agent.id)}
-          query={query}
         />
       ))}
     </div>
@@ -107,18 +86,15 @@ interface AgentSectionProps<Kind extends IntegrationKind> {
   agent: (typeof AGENTS)[number]
   kind: Kind
   result: IntegrationList<Kind> | undefined
-  query: string
 }
 
 function AgentSection<Kind extends IntegrationKind>({
   agent,
   kind,
-  result,
-  query
+  result
 }: AgentSectionProps<Kind>) {
   const view: KindView<Kind> = KINDS[kind]
   const items: IntegrationItems[Kind] | null = result?.status === 'ok' ? result.items : null
-  const visible = items?.filter((item) => matches(view.terms(item), query)) ?? null
   return (
     <section className="settings__subgroup" aria-label={agent.name}>
       <h3 className="integrations__agent">
@@ -137,16 +113,14 @@ function AgentSection<Kind extends IntegrationKind>({
           <Message detail={result.message}>
             {agent.name} didn’t report its {view.noun}
           </Message>
-        ) : visible && visible.length > 0 ? (
+        ) : items && items.length > 0 ? (
           <ul className="integrations__list">
-            {visible.map((item) => (
+            {items.map((item) => (
               <Fragment key={item.id}>{view.row(item)}</Fragment>
             ))}
           </ul>
         ) : (
-          <Message>
-            {items && items.length > 0 ? `Nothing matches “${query.trim()}”` : view.empty}
-          </Message>
+          <Message>{view.empty}</Message>
         )}
       </div>
     </section>
@@ -281,16 +255,14 @@ const KINDS: { [Kind in IntegrationKind]: KindView<Kind> } = {
     projectScoped: false,
     loading: 'Loading plugins…',
     empty: 'No plugins installed',
-    row: (plugin) => <PluginRow plugin={plugin} />,
-    terms: (plugin) => [plugin.name, plugin.description, plugin.marketplace]
+    row: (plugin) => <PluginRow plugin={plugin} />
   },
   skills: {
     noun: 'skills',
     projectScoped: true,
     loading: 'Loading skills…',
     empty: 'No skills yet',
-    row: (skill) => <SkillRow skill={skill} />,
-    terms: (skill) => [skill.name, skill.description, originLabel(skill.origin)]
+    row: (skill) => <SkillRow skill={skill} />
   },
   mcp: {
     noun: 'MCP servers',
@@ -298,17 +270,6 @@ const KINDS: { [Kind in IntegrationKind]: KindView<Kind> } = {
     // Агент отвечает, когда серверы подключатся, — это заметно дольше остальных списков.
     loading: 'Connecting to servers… This can take a few seconds.',
     empty: 'No MCP servers',
-    row: (server) => <McpServerRow server={server} />,
-    terms: (server) => [
-      server.name,
-      server.error,
-      originLabel(server.origin),
-      MCP_STATE_LABELS[server.state]
-    ]
+    row: (server) => <McpServerRow server={server} />
   }
-}
-
-function matches(terms: (string | null | undefined)[], query: string): boolean {
-  const needle = query.trim().toLocaleLowerCase()
-  return !needle || terms.some((term) => term?.toLocaleLowerCase().includes(needle))
 }
