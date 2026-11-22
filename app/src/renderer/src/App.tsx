@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { RepositorySection } from './components/RepositoryView'
 import { MenuLayer } from './components/MenuLayer'
-import { SettingsView } from './components/SettingsView'
+import { SettingsView, type SettingsSection } from './components/SettingsView'
 import { Sidebar } from './components/Sidebar'
 import { Workspace, type WorkspacePage } from './components/Workspace'
 import {
@@ -36,7 +36,7 @@ function Layout() {
   const [sidebarVisible, setSidebarVisible] = useState(true)
   const [page, setPage] = useState<WorkspacePage | null>(null)
   // Настройки — окно поверх приложения, а не страница: под ним остаётся то, что было открыто.
-  const [settingsOpen, setSettingsOpen] = useState(false)
+  const [settingsSection, setSettingsSection] = useState<SettingsSection | null>(null)
   // Раздел страницы репозитория не сбрасывается, когда её закрывают и открывают снова.
   const [repositorySection, setRepositorySection] = useState<RepositorySection>('pulls')
   const terminals = useTerminalPanel()
@@ -45,8 +45,11 @@ function Layout() {
   const { currentProjectId } = projects
 
   const toggleSidebar = useCallback(() => setSidebarVisible((visible) => !visible), [])
-  const openSettings = useCallback(() => setSettingsOpen(true), [])
-  const closeSettings = useCallback(() => setSettingsOpen(false), [])
+  const openSettings = useCallback(
+    (section: SettingsSection = 'general') => setSettingsSection(section),
+    []
+  )
+  const closeSettings = useCallback(() => setSettingsSection(null), [])
   const toggleAgents = useCallback(
     () => setPage((current) => (current?.kind === 'agents' ? null : { kind: 'agents' })),
     []
@@ -156,7 +159,7 @@ function Layout() {
     toggleRepository,
     toggleAgents
   })
-  useChatsCovered(page !== null || settingsOpen)
+  useChatsCovered(page !== null || settingsSection !== null)
 
   return (
     <CanvasNavigationProvider navigation={canvasNavigation}>
@@ -189,7 +192,7 @@ function Layout() {
           onToggleChanges={toggleChanges}
         />
       </div>
-      {settingsOpen && <SettingsView onClose={closeSettings} />}
+      {settingsSection && <SettingsView initialSection={settingsSection} onClose={closeSettings} />}
     </CanvasNavigationProvider>
   )
 }

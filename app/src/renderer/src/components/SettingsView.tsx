@@ -23,7 +23,7 @@ import { SettingsGeneral } from './SettingsGeneral'
 import { ShortcutList } from './ShortcutList'
 import { UsageSettings } from './UsageSettings'
 
-type SettingsSection =
+export type SettingsSection =
   'general' | 'appearance' | 'shortcuts' | 'usage' | 'github' | 'archived' | IntegrationKind
 
 interface SectionItem {
@@ -62,6 +62,8 @@ const SECTION_GROUPS: ReadonlyArray<{ title?: string; items: ReadonlyArray<Secti
 const SECTIONS = SECTION_GROUPS.flatMap(({ items }) => items)
 
 interface SettingsViewProps {
+  /** Раздел, с которого окно открывается. */
+  initialSection: SettingsSection
   onClose(): void
 }
 
@@ -69,11 +71,11 @@ interface SettingsViewProps {
  * Окно настроек поверх приложения: слева список разделов, справа выбранный раздел. Клик за
  * окном и Esc закрывают его.
  */
-export function SettingsView({ onClose }: SettingsViewProps) {
+export function SettingsView({ initialSection, onClose }: SettingsViewProps) {
   const { projects, currentProjectId } = useProjectsContext()
   const project = projects.find(({ id }) => id === currentProjectId) ?? null
   const integrations = useIntegrationLists(project?.id ?? null)
-  const [section, setSection] = useState<SettingsSection>('general')
+  const [section, setSection] = useState<SettingsSection>(initialSection)
   const current = SECTIONS.find(({ id }) => id === section) ?? SECTIONS[0]
 
   useEffect(() => {
