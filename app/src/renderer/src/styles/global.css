@@ -479,6 +479,11 @@ ul {
   align-self: stretch;
 }
 
+/* Кнопка — круг, концентричный закруглённому краю таблетки: подсветка не вылезает за него. */
+.window-pill .workspace-toolbar__button {
+  border-radius: 50%;
+}
+
 /* Без сайдбара таблетка остаётся в углу окна поверх рабочей области. */
 .window-pill[data-collapsed='true'] {
   position: absolute;
@@ -2616,11 +2621,13 @@ ul {
   -webkit-app-region: drag;
 }
 
-/* Без сайдбара название уступает место кнопкам окна. */
-.app[data-sidebar='hidden'] .workspace__header {
-  padding-left: calc(
-    var(--sidebar-gap) + var(--window-pill-collapsed-width) + var(--workspace-title-inset)
-  );
+/*
+ * Без сайдбара шапка начинается правее верхней таблетки: зоны перетаскивания окна у них не
+ * пересекаются, и кнопка таблетки получает клики.
+ */
+.app[data-sidebar='hidden'] .workspace__header,
+.app[data-sidebar='hidden'] .canvas-header {
+  margin-left: calc(var(--sidebar-gap) + var(--window-pill-collapsed-width));
 }
 
 .workspace-title {
@@ -5610,12 +5617,6 @@ ul {
   height: var(--workspace-header-height);
   padding: 0 var(--workspace-header-padding) 0 var(--workspace-title-inset);
   -webkit-app-region: drag;
-}
-
-.app[data-sidebar='hidden'] .canvas-header {
-  padding-left: calc(
-    var(--sidebar-gap) + var(--window-pill-collapsed-width) + var(--workspace-title-inset)
-  );
 }
 
 .canvas-header button,
