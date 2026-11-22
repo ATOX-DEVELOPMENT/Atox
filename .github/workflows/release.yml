@@ -165,13 +165,22 @@ jobs:
           path: release
           merge-multiple: true
 
+      # Куда выкладывать релизы. По умолчанию — в этот же репозиторий. Когда исходники закрыты,
+      # установщики и манифесты обновлений лежат в отдельном открытом репозитории: его задают
+      # переменной RELEASES_REPOSITORY, а доступ к нему даёт токен RELEASES_TOKEN.
       - name: Publish release
         working-directory: release
         run: |
+          target=()
+          # Метка версии привязана к коммиту, только если релиз остаётся в репозитории с исходниками.
+          if [ "$RELEASES_REPOSITORY" = "$GITHUB_REPOSITORY" ]; then
+            target=(--target "$GITHUB_SHA")
+          fi
           gh release create "v$VERSION" * \
-            --repo "$GITHUB_REPOSITORY" \
+            --repo "$RELEASES_REPOSITORY" \
             --title "Atox $VERSION" \
             --notes "$(git -C .. log -1 --format=%s)" \
-            --target "$GITHUB_SHA"
+            "${target[@]}"
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ secrets.RELEASES_TOKEN || github.token }}
+          RELEASES_REPOSITORY: ${{ vars.RELEASES_REPOSITORY || github.repository }}
