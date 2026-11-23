@@ -9,6 +9,8 @@ interface ToolbarButtonProps {
   /** Кнопка открытой сейчас панели. */
   active?: boolean
   disabled?: boolean
+  /** Число на кнопке — например, сколько задач идёт. */
+  badge?: number
   onClick(): void
 }
 
@@ -19,6 +21,7 @@ export function ToolbarButton({
   label,
   active = false,
   disabled,
+  badge,
   onClick
 }: ToolbarButtonProps) {
   const { shortcuts } = useSettings()
@@ -35,6 +38,7 @@ export function ToolbarButton({
       onClick={onClick}
     >
       <Icon className="icon" />
+      {badge !== undefined && <span className="workspace-toolbar__badge">{badge}</span>}
     </button>
   )
 }

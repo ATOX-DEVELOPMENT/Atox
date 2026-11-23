@@ -10,6 +10,8 @@ import { CanvasList } from './canvas/CanvasList'
 import { CanvasPage } from './canvas/CanvasPage'
 import { ChangesPanel } from './ChangesPanel'
 import { FilesPanel } from './FilesPanel'
+import { TasksPanel } from './TasksPanel'
+import { useBackgroundTasks } from '../hooks/BackgroundTasksContext'
 import { ChatView } from './ChatView'
 import { RepositoryView, type RepositorySection } from './RepositoryView'
 import { SplitResizer } from './SplitResizer'
@@ -19,7 +21,7 @@ import { WorkspaceTitle } from './WorkspaceTitle'
 import { WorkspaceToolbar } from './WorkspaceToolbar'
 
 /** Панель справа от чатов, на месте терминала. */
-export type SidePanel = 'changes' | 'files'
+export type SidePanel = 'changes' | 'files' | 'tasks'
 
 /** Страница, открытая поверх чатов. */
 export type WorkspacePage =
@@ -43,6 +45,9 @@ interface WorkspaceProps {
   onToggleTerminal(): void
   onToggleChanges(): void
   onToggleFiles(): void
+  onToggleTasks(): void
+  /** Открывает фоновые задачи текущего чата — по таблетке у поля ввода. */
+  onShowTasks(): void
 }
 
 export function Workspace({
@@ -56,7 +61,9 @@ export function Workspace({
   quickOpenRequest,
   onToggleTerminal,
   onToggleChanges,
-  onToggleFiles
+  onToggleFiles,
+  onToggleTasks,
+  onShowTasks
 }: WorkspaceProps) {
   const {
     projects,
@@ -103,6 +110,7 @@ export function Workspace({
   const mountedChatIds = [...chatEntries.keys()].filter(
     (chatId) => openedChatIds.includes(chatId) || visibleChatIds.includes(chatId)
   )
+  const activeTasks = useBackgroundTasks(activeChatId)
   const activeChatProject = activeChatId
     ? projects.find((project) => project.chats.some((chat) => chat.id === activeChatId))
     : undefined
@@ -124,10 +132,13 @@ export function Workspace({
               terminalOpen={terminalOpen}
               changesOpen={shownPanel === 'changes'}
               filesOpen={shownPanel === 'files'}
+              tasksOpen={shownPanel === 'tasks'}
+              taskCount={activeTasks.length}
               projectAvailable={Boolean(currentProjectId)}
               onToggleTerminal={onToggleTerminal}
               onToggleChanges={onToggleChanges}
               onToggleFiles={onToggleFiles}
+              onToggleTasks={onToggleTasks}
             />
           )}
         </header>
@@ -170,6 +181,7 @@ export function Workspace({
                   projectPath={chatEntries.get(chatId)!.projectPath}
                   visible={visible}
                   focused={focused}
+                  onShowTasks={onShowTasks}
                 />
               </section>
             )
@@ -191,6 +203,9 @@ export function Workspace({
       </div>
       {!pageOpen && shownPanel === 'changes' && currentProjectId && (
         <ChangesPanel projectId={currentProjectId} />
+      )}
+      {!pageOpen && shownPanel === 'tasks' && currentProjectId && (
+        <TasksPanel tasks={activeTasks} />
       )}
       {!pageOpen && shownPanel === 'files' && currentProjectId && (
         <FilesPanel

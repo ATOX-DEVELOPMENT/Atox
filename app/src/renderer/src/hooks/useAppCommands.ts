@@ -31,6 +31,7 @@ interface AppCommandHandlers {
   toggleTerminal(): void
   toggleChanges(): void
   toggleFiles(): void
+  toggleTasks(): void
   quickOpen(): void
   openSettings(): void
   toggleRepository(): void
@@ -94,6 +95,9 @@ export function useAppCommands(handlers: AppCommandHandlers): void {
           break
         case 'toggle-files':
           handlersRef.current.toggleFiles()
+          break
+        case 'toggle-tasks':
+          handlersRef.current.toggleTasks()
           break
         case 'quick-open':
           handlersRef.current.quickOpen()

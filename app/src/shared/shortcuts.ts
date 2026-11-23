@@ -45,6 +45,10 @@ export const SHORTCUTS = {
     label: 'Show or hide files',
     accelerator: byPlatform('CmdOrCtrl+Shift+E', 'Ctrl+Shift+E')
   },
+  toggleTasks: {
+    label: 'Show or hide background tasks',
+    accelerator: byPlatform('CmdOrCtrl+Shift+T', 'Ctrl+Shift+T')
+  },
   quickOpen: { label: 'Go to file', accelerator: byPlatform('CmdOrCtrl+P', 'Ctrl+Shift+P') },
   toggleRepository: {
     label: 'Pull requests and issues',
@@ -89,6 +93,7 @@ export const SHORTCUT_GROUPS: ReadonlyArray<{ title: string; shortcuts: readonly
       'toggleTerminal',
       'toggleChanges',
       'toggleFiles',
+      'toggleTasks',
       'quickOpen',
       'toggleRepository',
       'toggleAgents',

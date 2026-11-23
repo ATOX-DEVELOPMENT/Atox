@@ -4,6 +4,7 @@ import { MenuLayer } from './components/MenuLayer'
 import { SettingsView, type SettingsSection } from './components/SettingsView'
 import { Sidebar } from './components/Sidebar'
 import { WindowPill } from './components/WindowPill'
+import { BackgroundTasksProvider } from './hooks/BackgroundTasksContext'
 import { Workspace, type SidePanel, type WorkspacePage } from './components/Workspace'
 import {
   CanvasesProvider,
@@ -23,7 +24,9 @@ export function App() {
       <ProjectsProvider>
         <ChatActivityProvider>
           <CanvasesProvider>
-            <Layout />
+            <BackgroundTasksProvider>
+              <Layout />
+            </BackgroundTasksProvider>
             <MenuLayer />
           </CanvasesProvider>
         </ChatActivityProvider>
@@ -136,6 +139,19 @@ function Layout() {
     }
   }, [currentProjectId])
 
+  const toggleTasks = useCallback(() => {
+    if (currentProjectId) {
+      setPage(null)
+      setSidePanel((open) => (open === 'tasks' ? null : 'tasks'))
+    }
+  }, [currentProjectId])
+
+  // Таблетка у поля ввода только открывает список: повторный клик не должен его прятать.
+  const showTasks = useCallback(() => {
+    setPage(null)
+    setSidePanel('tasks')
+  }, [])
+
   const quickOpen = useCallback(() => {
     if (currentProjectId) {
       setPage(null)
@@ -174,6 +190,7 @@ function Layout() {
     toggleTerminal,
     toggleChanges,
     toggleFiles,
+    toggleTasks,
     quickOpen,
     openSettings,
     toggleRepository,
@@ -211,6 +228,8 @@ function Layout() {
           onToggleTerminal={toggleTerminal}
           onToggleChanges={toggleChanges}
           onToggleFiles={toggleFiles}
+          onToggleTasks={toggleTasks}
+          onShowTasks={showTasks}
         />
         {/*
           Закрытому сайдбару остаётся одна таблетка. Она стоит после рабочей области намеренно: шапка

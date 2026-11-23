@@ -1,8 +1,7 @@
-import { useState } from 'react'
-import { Bot, ChevronDown, Eye, LoaderCircle, Terminal, Workflow, type LucideIcon } from 'lucide-react'
+import { Bot, Eye, LoaderCircle, Terminal, Workflow, type LucideIcon } from 'lucide-react'
 import type { BackgroundTask, BackgroundTaskKind } from '../../../shared/conversation'
 
-const KIND_ICONS: Record<BackgroundTaskKind, LucideIcon> = {
+export const BACKGROUND_TASK_ICONS: Record<BackgroundTaskKind, LucideIcon> = {
   shell: Terminal,
   agent: Bot,
   monitor: Eye,
@@ -10,7 +9,7 @@ const KIND_ICONS: Record<BackgroundTaskKind, LucideIcon> = {
   other: LoaderCircle
 }
 
-const KIND_LABELS: Record<BackgroundTaskKind, string> = {
+export const BACKGROUND_TASK_LABELS: Record<BackgroundTaskKind, string> = {
   shell: 'Command',
   agent: 'Agent',
   monitor: 'Watching',
@@ -18,40 +17,28 @@ const KIND_LABELS: Record<BackgroundTaskKind, string> = {
   other: 'Task'
 }
 
+interface BackgroundTasksPillProps {
+  tasks: readonly BackgroundTask[]
+  onClick(): void
+}
+
 /**
- * Над полем ввода — что агент оставил работать в фоне: команды, помощников, слежение за CI.
- * Его ход может уже закончиться, а работа идёт, и он вернётся, когда она завершится.
+ * Таблетка в строке поля ввода: агент оставил работу в фоне. Список — в панели справа, по
+ * клику; здесь только знак, что работа идёт.
  */
-export function BackgroundTasks({ tasks }: { tasks: readonly BackgroundTask[] }) {
-  const [expanded, setExpanded] = useState(true)
+export function BackgroundTasksPill({ tasks, onClick }: BackgroundTasksPillProps) {
+  const label = tasks.length === 1 ? '1 task' : `${tasks.length} tasks`
+  const hint = tasks.map(({ description }) => description).join('\n')
   return (
-    <section className="background-tasks" data-expanded={expanded} aria-label="Background tasks">
-      <button
-        type="button"
-        className="background-tasks__header"
-        aria-expanded={expanded}
-        onClick={() => setExpanded((current) => !current)}
-      >
-        <LoaderCircle className="background-tasks__spinner" />
-        <span className="background-tasks__title">
-          {tasks.length === 1 ? '1 task' : `${tasks.length} tasks`} running in the background
-        </span>
-        <ChevronDown className="background-tasks__chevron" />
-      </button>
-      {expanded && (
-        <ul className="background-tasks__list">
-          {tasks.map(({ id, kind, description }) => {
-            const Icon = KIND_ICONS[kind]
-            return (
-              <li key={id} className="background-tasks__item" title={description}>
-                <Icon className="background-tasks__icon" />
-                <span className="background-tasks__kind">{KIND_LABELS[kind]}</span>
-                <span className="background-tasks__description">{description}</span>
-              </li>
-            )
-          })}
-        </ul>
-      )}
-    </section>
+    <button
+      type="button"
+      className="background-pill"
+      aria-label={`${label} running in the background`}
+      title={hint}
+      onClick={onClick}
+    >
+      <LoaderCircle className="background-pill__spinner" aria-hidden />
+      {label}
+    </button>
   )
 }

@@ -98,6 +98,7 @@ export class AppMenu {
         commandItem('Toggle Terminal', 'toggleTerminal', { type: 'toggle-terminal' }),
         commandItem('Toggle Changes', 'toggleChanges', { type: 'toggle-changes' }),
         commandItem('Toggle Files', 'toggleFiles', { type: 'toggle-files' }),
+        commandItem('Toggle Background Tasks', 'toggleTasks', { type: 'toggle-tasks' }),
         commandItem('Go to File…', 'quickOpen', { type: 'quick-open' }),
         commandItem('Repository', 'toggleRepository', { type: 'toggle-repository' }),
         commandItem('Agents', 'toggleAgents', { type: 'toggle-agents' }),
