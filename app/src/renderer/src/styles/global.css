@@ -276,6 +276,15 @@
   --color-git-merged: #8250df;
   --color-git-closed: #cf222e;
   --color-git-pending: #9a6700;
+  /* Подсветка кода в просмотре файлов. */
+  --code-keyword: #a626a4;
+  --code-string: #50a14f;
+  --code-number: #986801;
+  --code-comment: #a0a1a7;
+  --code-function: #4078f2;
+  --code-type: #c18401;
+  --code-property: #e45649;
+  --code-operator: #0184bc;
   /* Фон добавленных и удалённых строк diff. */
   --color-diff-added: rgba(26, 127, 55, 0.1);
   --color-diff-removed: rgba(207, 34, 46, 0.1);
@@ -324,6 +333,14 @@
     --color-git-merged: #a371f7;
     --color-git-closed: #f85149;
     --color-git-pending: #d29922;
+    --code-keyword: #c678dd;
+    --code-string: #98c379;
+    --code-number: #d19a66;
+    --code-comment: #7f848e;
+    --code-function: #61afef;
+    --code-type: #e5c07b;
+    --code-property: #e06c75;
+    --code-operator: #56b6c2;
     --color-diff-added: rgba(46, 160, 67, 0.16);
     --color-diff-removed: rgba(248, 81, 73, 0.16);
     --color-segment-selected: rgba(255, 255, 255, 0.12);
@@ -3152,28 +3169,159 @@ ul {
   animation: message-in var(--message-in-duration) cubic-bezier(0.2, 0.9, 0.3, 1.2);
 }
 
-/* Сообщение в очереди: агент возьмётся за него, когда закончит текущий ответ. */
-.user-message[data-queued] {
-  opacity: 0.6;
+/* Очередь: сообщения, за которые агент возьмётся, когда закончит текущий ответ. */
+.queued-messages {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  align-self: stretch;
 }
 
-.user-message__queued {
-  font-size: var(--font-size-small);
-  color: var(--color-text-muted);
-}
-
-.user-message__cancel {
+.queued-messages > ul {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 12px;
+  width: 100%;
+  margin: 0;
   padding: 0;
-  font: inherit;
-  color: inherit;
+  list-style: none;
+}
+
+.queued-message {
+  position: relative;
+  gap: 4px;
+}
+
+.queued-message__row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.queued-message__body {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+  min-width: 0;
+  opacity: 0.6;
+  transition: opacity 120ms ease;
+}
+
+.queued-message:hover .queued-message__body,
+.queued-message[data-dragging='true'] .queued-message__body {
+  opacity: 0.85;
+}
+
+.queued-message[data-dragging='true'] {
+  z-index: 1;
+}
+
+.queued-message__handle,
+.queued-message__action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  color: var(--color-text-muted);
   background: none;
   border: none;
+  border-radius: 6px;
   cursor: pointer;
 }
 
-.user-message__cancel:hover {
+.queued-message__handle {
+  cursor: grab;
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+
+.queued-message[data-dragging='true'] .queued-message__handle {
+  cursor: grabbing;
+}
+
+.queued-message__handle svg,
+.queued-message__action svg,
+.queued-message__status svg {
+  width: 14px;
+  height: 14px;
+}
+
+.queued-message__action:hover {
   color: var(--color-text);
-  text-decoration: underline;
+  background: var(--color-hover);
+}
+
+.queued-message__actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+/* Часы видны всегда — это знак ожидания; кнопки появляются при наведении. */
+.queued-message__status {
+  display: inline-flex;
+  padding: 0 4px;
+  color: var(--color-text-muted);
+}
+
+.queued-message__action {
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+
+.queued-message:hover .queued-message__handle,
+.queued-message:hover .queued-message__action,
+.queued-message:focus-within .queued-message__handle,
+.queued-message:focus-within .queued-message__action {
+  opacity: 1;
+}
+
+.queued-message[data-editing] {
+  align-self: stretch;
+  max-width: none;
+  width: 100%;
+}
+
+.queued-message__editor {
+  width: 100%;
+  padding: 10px 16px;
+  font: inherit;
+  color: var(--color-text);
+  background: var(--color-bubble);
+  border: 1px solid var(--color-border);
+  border-radius: var(--message-radius);
+  outline: none;
+  resize: vertical;
+  user-select: text;
+}
+
+.queued-message__editor:focus {
+  border-color: var(--color-text-muted);
+}
+
+.queued-message__edit-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.queued-message__text-button {
+  padding: 4px 10px;
+  font: inherit;
+  font-size: var(--font-size-small);
+  color: var(--color-text);
+  background: var(--color-hover);
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.queued-message__text-button--primary {
+  color: var(--color-surface);
+  background: var(--color-text);
 }
 
 @keyframes message-in {
@@ -6967,4 +7115,326 @@ ul {
 .canvas-card__menu .icon {
   width: 16px;
   height: 16px;
+}
+
+/* Настройки: свои слеш-команды. */
+.command-row__name {
+  font-family: var(--font-mono);
+}
+
+.command-row__summary {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-line-clamp: 1;
+  -webkit-box-orient: vertical;
+}
+
+.command-row .settings__label {
+  min-width: 0;
+}
+
+.command-row__actions {
+  display: flex;
+  flex-shrink: 0;
+  gap: 2px;
+}
+
+.command-settings__add {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.command-settings__add .icon {
+  width: 14px;
+  height: 14px;
+}
+
+.command-editor__fields {
+  display: flex;
+  gap: 12px;
+}
+
+.command-editor__field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: var(--font-size-small);
+  color: var(--color-text-muted);
+}
+
+.command-editor__field--wide {
+  flex: 1;
+}
+
+.command-editor__field .settings__text-input {
+  width: 100%;
+  font-size: var(--font-size);
+}
+
+.command-editor__name {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  width: 180px;
+  color: var(--color-text);
+}
+
+.command-editor__prompt {
+  height: auto;
+  padding: 8px 10px;
+  font: inherit;
+  font-size: var(--font-size);
+  line-height: 1.5;
+  resize: vertical;
+}
+
+.command-editor__footer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.command-editor__error {
+  flex: 1;
+  margin: 0;
+}
+
+/* Файлы проекта: дерево и просмотр файла справа от чатов. */
+.files-panel__actions {
+  display: flex;
+  gap: 2px;
+  margin-left: auto;
+  -webkit-app-region: no-drag;
+}
+
+.files-panel__actions .icon-button,
+.files-panel__back {
+  width: var(--toolbar-button-size);
+  height: var(--toolbar-button-size);
+  -webkit-app-region: no-drag;
+}
+
+.files-panel__back {
+  margin-left: -8px;
+}
+
+.files-panel__path {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.files-panel__file-name {
+  font-weight: 600;
+}
+
+.files-panel__directory {
+  overflow: hidden;
+  font-size: var(--font-size-small);
+  text-overflow: ellipsis;
+  color: var(--color-text-muted);
+  direction: rtl;
+  text-align: left;
+}
+
+/* Код прокручивается сам: отступы панели ему не нужны. */
+.files-panel__body:has(.code-view) {
+  padding: 0;
+  overflow: hidden;
+}
+
+.code-view {
+  height: 100%;
+  user-select: text;
+}
+
+.file-tree,
+.file-tree ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.file-tree__row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  height: 26px;
+  padding: 0 8px 0 calc(8px + var(--depth, 0) * 14px);
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+  color: var(--color-text);
+  background: none;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.file-tree__row:hover {
+  background: var(--color-hover);
+}
+
+.file-tree__row[data-kind='modified'] .file-tree__name {
+  color: var(--color-git-pending);
+}
+
+.file-tree__row[data-kind='added'] .file-tree__name,
+.file-tree__row[data-kind='untracked'] .file-tree__name {
+  color: var(--color-git-open);
+}
+
+.file-tree__chevron {
+  flex-shrink: 0;
+  width: 12px;
+  height: 12px;
+  color: var(--color-text-muted);
+  transition: transform 120ms ease;
+}
+
+.file-tree__chevron[data-open='true'] {
+  transform: rotate(90deg);
+}
+
+.file-tree__icon {
+  flex-shrink: 0;
+  width: 14px;
+  height: 14px;
+  color: var(--color-text-muted);
+}
+
+.file-tree__name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.file-tree__dot {
+  flex-shrink: 0;
+  width: 6px;
+  height: 6px;
+  margin-right: 5px;
+  border-radius: 50%;
+  background: var(--color-git-pending);
+}
+
+/* Поиск файла по ⌘P — поверх окна, как в редакторах. */
+.quick-open {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  justify-content: center;
+  padding-top: 12vh;
+}
+
+.quick-open__dialog {
+  display: flex;
+  flex-direction: column;
+  width: min(600px, calc(100% - 48px));
+  max-height: 60vh;
+  overflow: hidden;
+  background: var(--color-menu);
+  border: 1px solid var(--color-menu-border);
+  border-radius: 12px;
+  box-shadow: var(--shadow-menu);
+  align-self: flex-start;
+}
+
+.quick-open__search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 14px;
+  border-bottom: 1px solid var(--color-border);
+  color: var(--color-text-muted);
+}
+
+.quick-open__search .icon {
+  width: 16px;
+  height: 16px;
+}
+
+.quick-open__input {
+  flex: 1;
+  height: 44px;
+  font: inherit;
+  color: var(--color-text);
+  background: none;
+  border: none;
+  outline: none;
+  user-select: text;
+}
+
+.quick-open__results {
+  margin: 0;
+  padding: 6px;
+  overflow-y: auto;
+  list-style: none;
+}
+
+.quick-open__result {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 30px;
+  padding: 0 10px;
+  font-size: 13px;
+  border-radius: 6px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.quick-open__result[aria-selected='true'] {
+  background: var(--color-menu-highlight);
+}
+
+.quick-open__result .icon {
+  flex-shrink: 0;
+  width: 14px;
+  height: 14px;
+  color: var(--color-text-muted);
+}
+
+.quick-open__name {
+  flex-shrink: 0;
+}
+
+.quick-open__directory {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: var(--font-size-small);
+  color: var(--color-text-muted);
+}
+
+.quick-open__result mark {
+  color: var(--color-accent-text);
+  font-weight: 600;
+  background: none;
+}
+
+.quick-open__changed {
+  flex-shrink: 0;
+  width: 6px;
+  height: 6px;
+  margin-left: auto;
+  border-radius: 50%;
+  background: var(--color-git-pending);
+}
+
+.quick-open__empty {
+  margin: 0;
+  padding: 20px;
+  font-size: 13px;
+  text-align: center;
+  color: var(--color-text-muted);
 }

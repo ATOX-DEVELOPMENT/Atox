@@ -292,6 +292,47 @@ export class ConversationManager {
   }
 
   /**
+   * Меняет текст сообщения, пока оно ждёт в очереди. Агент мог уже взять сообщение — тогда
+   * правка не применяется: он получил прежний текст. Пустой текст без вложений не сохраняется:
+   * чтобы убрать сообщение, есть `cancelQueued`.
+   */
+  async editQueued(chatId: string, itemId: string, text: string): Promise<void> {
+    const conversation = await this.conversation(chatId)
+    const message = conversation.queue.find(({ item }) => item.id === itemId)
+    if (!message) {
+      return
+    }
+    const edited = text.trim()
+    const files = message.item.files ?? []
+    if (edited === message.item.text || (!edited && message.images.length === 0 && files.length === 0)) {
+      return
+    }
+    message.item = { ...message.item, text: edited }
+    message.text = withAttachedFiles(edited, files)
+    this.emitQueue(chatId, conversation)
+  }
+
+  /**
+   * Ставит сообщения очереди в порядке `itemIds`. Сообщения, которых в списке нет (пришли,
+   * пока пользователь перетаскивал), остаются после них в прежнем порядке; ушедшие агенту
+   * пропускаются.
+   */
+  async reorderQueued(chatId: string, itemIds: readonly string[]): Promise<void> {
+    const conversation = await this.conversation(chatId)
+    const byId = new Map(conversation.queue.map((message) => [message.item.id, message]))
+    const listed = new Set(itemIds)
+    const queue = [
+      ...[...listed].flatMap((id) => byId.get(id) ?? []),
+      ...conversation.queue.filter(({ item }) => !listed.has(item.id))
+    ]
+    if (queue.every((message, index) => message === conversation.queue[index])) {
+      return
+    }
+    conversation.queue = queue
+    this.emitQueue(chatId, conversation)
+  }
+
+  /**
    * Агент не остановил ход сам: его сессия закрывается, ход заканчивается. Разговор не
    * теряется — следующее сообщение продолжит его в новой сессии.
    */

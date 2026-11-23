@@ -1,11 +1,16 @@
-import { memo, useEffect, useMemo, useState } from 'react'
+import { memo, useEffect, useMemo, useState, type ReactNode } from 'react'
 import {
+  ArrowUp,
   ChevronRight,
+  Clock,
   CircleAlert,
   FoldVertical,
   FileText,
   Image as ImageIcon,
-  LoaderCircle
+  GripVertical,
+  LoaderCircle,
+  Pencil,
+  Trash2
 } from 'lucide-react'
 import type { TimelineItem, TimelineItemKind, UserMessage } from '../../../shared/conversation'
 import { findAgent } from '../../../shared/agents'
@@ -24,6 +29,7 @@ import { AgentIcon } from './AgentIcon'
 import { ApprovalCard } from './ApprovalCard'
 import { QuestionCard } from './QuestionCard'
 import { Markdown } from './Markdown'
+import { SortableList, useSortableItem } from './SortableList'
 import { ContextCard, LimitsCard } from './UsageCards'
 
 type UserItem = UserMessage
@@ -104,56 +110,190 @@ export const Timeline = memo(function Timeline({
             )
         }
       })}
-      {queued.map((item) => (
-        <UserMessageView
-          key={item.id}
-          item={item}
-          onCancel={() => void window.atox.conversations.cancelQueued(chatId, item.id)}
-          onSendNow={() => void window.atox.conversations.sendQueuedNow(chatId, item.id)}
-        />
-      ))}
+      <QueuedMessages chatId={chatId} items={queued} />
     </div>
   )
 })
 
-interface UserMessageViewProps {
-  item: UserItem
-  /** Есть у сообщения, которое ждёт в очереди: убирает его оттуда, пока агент его не взял. */
-  onCancel?: () => void
-  /** Прерывает текущий ответ агента и отдаёт ему это сообщение сразу. */
-  onSendNow?: () => void
-}
-
-/** Сообщение пользователя; с `onCancel` — ждёт, пока агент закончит текущий ответ. */
-function UserMessageView({ item, onCancel, onSendNow }: UserMessageViewProps) {
-  const queued = onCancel !== undefined
+/** Сообщение пользователя в ленте. */
+function UserMessageView({ item }: { item: UserItem }) {
   return (
     <div
       className="user-message"
       data-fresh={Date.now() - item.createdAt < FRESH_MESSAGE_MS || undefined}
-      data-queued={queued || undefined}
     >
+      <UserMessageBody item={item} />
+    </div>
+  )
+}
+
+function UserMessageBody({ item }: { item: UserItem }) {
+  return (
+    <>
       {(item.images || item.files) && (
         <MessageAttachments images={item.images ?? []} files={item.files ?? []} />
       )}
       {item.text && <div className="message message--user">{item.text}</div>}
-      {queued && (
-        <span className="user-message__queued">
-          Queued ·{' '}
-          {onSendNow && (
-            <>
-              <button type="button" className="user-message__cancel" onClick={onSendNow}>
-                Send now
-              </button>{' '}
-              ·{' '}
-            </>
-          )}
-          <button type="button" className="user-message__cancel" onClick={onCancel}>
-            Cancel
-          </button>
-        </span>
-      )}
+    </>
+  )
+}
+
+interface QueuedMessagesProps {
+  chatId: string
+  items: readonly UserMessage[]
+}
+
+/**
+ * Сообщения, которые ждут, пока агент закончит текущий ответ. Их можно отправить сразу,
+ * поправить, убрать и переставить перетаскиванием.
+ */
+function QueuedMessages({ chatId, items }: QueuedMessagesProps) {
+  // Порядок после перетаскивания, пока очередь из main его не подтвердила: иначе сообщение
+  // на миг прыгнуло бы назад.
+  const [moved, setMoved] = useState<{ from: readonly UserMessage[]; ids: string[] } | null>(null)
+  const ordered =
+    moved?.from === items
+      ? moved.ids.flatMap((id) => items.find((item) => item.id === id) ?? [])
+      : items
+  if (ordered.length === 0) {
+    return null
+  }
+  const move = (id: string, toIndex: number) => {
+    const ids = ordered.map((item) => item.id).filter((other) => other !== id)
+    ids.splice(toIndex, 0, id)
+    setMoved({ from: items, ids })
+    void window.atox.conversations.reorderQueued(chatId, ids)
+  }
+  return (
+    <div className="queued-messages">
+      <SortableList items={ordered} onMove={move}>
+        {(item) => <QueuedMessage key={item.id} chatId={chatId} item={item} />}
+      </SortableList>
     </div>
+  )
+}
+
+/** Сообщение в очереди: приглушено, действия — при наведении. */
+function QueuedMessage({ chatId, item }: { chatId: string; item: UserMessage }) {
+  const [draft, setDraft] = useState<string | null>(null)
+  const editing = draft !== null
+  const { itemProps, handleProps } = useSortableItem(item.id, editing)
+  const { conversations } = window.atox
+
+  const save = () => {
+    if (draft !== null && draft.trim() !== item.text) {
+      void conversations.editQueued(chatId, item.id, draft)
+    }
+    setDraft(null)
+  }
+
+  return (
+    <li
+      {...itemProps}
+      className="user-message queued-message"
+      data-queued
+      data-editing={editing || undefined}
+    >
+      {editing ? (
+        <>
+          {(item.images || item.files) && (
+            <MessageAttachments images={item.images ?? []} files={item.files ?? []} />
+          )}
+          <textarea
+            className="queued-message__editor"
+            value={draft}
+            autoFocus
+            rows={Math.min(10, Math.max(2, draft.split('\n').length))}
+            aria-label="Edit the queued message"
+            onFocus={(event) => event.currentTarget.select()}
+            onChange={(event) => setDraft(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === 'Escape') {
+                event.preventDefault()
+                setDraft(null)
+              } else if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) {
+                event.preventDefault()
+                save()
+              }
+            }}
+          />
+          <div className="queued-message__edit-actions">
+            <button type="button" className="queued-message__text-button" onClick={() => setDraft(null)}>
+              Cancel
+            </button>
+            <button
+              type="button"
+              className="queued-message__text-button queued-message__text-button--primary"
+              onClick={save}
+            >
+              Save
+            </button>
+          </div>
+        </>
+      ) : (
+        <>
+          <div className="queued-message__row">
+            <button
+              type="button"
+              className="queued-message__handle"
+              aria-label="Drag to reorder"
+              title="Drag to reorder"
+              {...handleProps}
+            >
+              <GripVertical />
+            </button>
+            <div className="queued-message__body">
+              <UserMessageBody item={item} />
+            </div>
+          </div>
+          <div className="queued-message__actions">
+            <span className="queued-message__status" title="Waits until the agent finishes">
+              <Clock />
+            </span>
+            <IconAction
+              label="Send now"
+              hint="Stop the current reply and send this message now"
+              onClick={() => void conversations.sendQueuedNow(chatId, item.id)}
+            >
+              <ArrowUp />
+            </IconAction>
+            {item.text && (
+              <IconAction label="Edit" hint="Edit" onClick={() => setDraft(item.text)}>
+                <Pencil />
+              </IconAction>
+            )}
+            <IconAction
+              label="Delete"
+              hint="Remove from the queue"
+              onClick={() => void conversations.cancelQueued(chatId, item.id)}
+            >
+              <Trash2 />
+            </IconAction>
+          </div>
+        </>
+      )}
+    </li>
+  )
+}
+
+interface IconActionProps {
+  label: string
+  hint: string
+  onClick(): void
+  children: ReactNode
+}
+
+function IconAction({ label, hint, onClick, children }: IconActionProps) {
+  return (
+    <button
+      type="button"
+      className="queued-message__action"
+      aria-label={label}
+      title={hint}
+      onClick={onClick}
+    >
+      {children}
+    </button>
   )
 }
 

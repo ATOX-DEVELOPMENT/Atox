@@ -30,6 +30,8 @@ interface AppCommandHandlers {
   toggleSidebar(): void
   toggleTerminal(): void
   toggleChanges(): void
+  toggleFiles(): void
+  quickOpen(): void
   openSettings(): void
   toggleRepository(): void
   toggleAgents(): void
@@ -89,6 +91,12 @@ export function useAppCommands(handlers: AppCommandHandlers): void {
           break
         case 'toggle-changes':
           handlersRef.current.toggleChanges()
+          break
+        case 'toggle-files':
+          handlersRef.current.toggleFiles()
+          break
+        case 'quick-open':
+          handlersRef.current.quickOpen()
           break
         case 'previous-chat':
           selectRelative(-1)

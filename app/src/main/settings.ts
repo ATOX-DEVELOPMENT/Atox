@@ -23,6 +23,7 @@ import {
   type ShortcutId,
   type ShortcutOverrides
 } from '../shared/shortcuts'
+import { parsePromptTemplates } from '../shared/slashCommands'
 import { JsonFileWriter, readVersionedJson } from './jsonFile'
 
 const SETTINGS_VERSION = 1
@@ -93,7 +94,8 @@ function normalize(settings: Settings): Settings {
     boardMaxAgents: Number.isInteger(settings.boardMaxAgents)
       ? Math.min(BOARD_AGENTS.max, Math.max(BOARD_AGENTS.min, settings.boardMaxAgents))
       : BOARD_AGENTS.default,
-    boardAgent: parseTaskAgent(settings.boardAgent) ?? DEFAULT_SETTINGS.boardAgent
+    boardAgent: parseTaskAgent(settings.boardAgent) ?? DEFAULT_SETTINGS.boardAgent,
+    promptTemplates: parsePromptTemplates(settings.promptTemplates)
   }
 }
 

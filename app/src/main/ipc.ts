@@ -23,6 +23,7 @@ import type { UpdateState } from '../shared/update'
 import { findAgent, isAgentId, type AgentId } from '../shared/agents'
 import type { AgentDetector } from './agents'
 import type { WorkingTreeReader } from './changes'
+import type { ProjectFiles } from './projectFiles'
 import type { ConversationManager } from './conversations/manager'
 import { chooseExportTarget, confirm, describeWorkingAgents, inform } from './dialogs'
 import type { GitBranchTracker } from './gitBranches'
@@ -51,6 +52,7 @@ interface AppServices {
   branches: GitBranchTracker
   repository: RepositoryReader
   workingTree: WorkingTreeReader
+  projectFiles: ProjectFiles
   agents: AgentDetector
   /** `null` — обновления недоступны, например при запуске из исходников. */
   updater: AppUpdater | null
@@ -68,6 +70,7 @@ export function registerIpcHandlers({
   conversations,
   terminals,
   branches,
+  projectFiles,
   repository,
   workingTree,
   agents,
@@ -393,6 +396,14 @@ export function registerIpcHandlers({
     conversations.sendQueuedNow(chatId, String(itemId))
   )
   ipcMain.handle(
+    IpcChannel.ConversationsEditQueued,
+    (_event, chatId: string, itemId: unknown, text: unknown) =>
+      conversations.editQueued(chatId, String(itemId), String(text))
+  )
+  ipcMain.handle(IpcChannel.ConversationsReorderQueued, (_event, chatId: string, itemIds: unknown) =>
+    conversations.reorderQueued(chatId, Array.isArray(itemIds) ? itemIds.map(String) : [])
+  )
+  ipcMain.handle(
     IpcChannel.ConversationsAnswerRequest,
     (_event, chatId: string, itemId: unknown, answer: unknown) =>
       conversations.answerRequest(chatId, String(itemId), parseRequestAnswer(answer))
@@ -427,6 +438,12 @@ export function registerIpcHandlers({
 
   ipcMain.handle(IpcChannel.GitBranches, () => branches.list())
 
+  ipcMain.handle(IpcChannel.ProjectFilesList, (_event, projectId: string) =>
+    projectFiles.list(store.getProject(projectId).path)
+  )
+  ipcMain.handle(IpcChannel.ProjectFilesRead, (_event, projectId: string, path: unknown) =>
+    projectFiles.read(store.getProject(projectId).path, String(path))
+  )
   ipcMain.handle(IpcChannel.ChangesList, (_event, projectId: string) =>
     workingTree.list(store.getProject(projectId).path)
   )

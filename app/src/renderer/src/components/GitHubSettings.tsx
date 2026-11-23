@@ -1,17 +1,12 @@
 import { useEffect, useState } from 'react'
-import { Minus, Plus } from 'lucide-react'
-import { BOARD_AGENTS } from '../../../shared/board'
 import type { GitHubAccount } from '../../../shared/github'
-import { useSettings } from '../hooks/SettingsContext'
 import { githubAvatarUrl } from '../lib/github'
 import { ipcErrorMessage } from '../lib/ipcError'
-import { TaskAgentPicker } from './TaskAgentPicker'
 
 const { atox } = window
 
-/** Раздел настроек GitHub: учётные записи `gh` и то, сколько агентов доски работают сразу. */
+/** Раздел настроек GitHub: учётные записи `gh`. */
 export function GitHubSettings() {
-  const { boardMaxAgents, boardAgent } = useSettings()
   const [accounts, setAccounts] = useState<GitHubAccount[] | null>(null)
   const [switching, setSwitching] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -31,8 +26,6 @@ export function GitHubSettings() {
   useEffect(() => {
     void atox.github.accounts().then(setAccounts)
   }, [])
-
-  const setMaxAgents = (value: number) => void atox.settings.update({ boardMaxAgents: value })
 
   return (
     <>
@@ -84,57 +77,6 @@ export function GitHubSettings() {
               ? `Couldn’t switch the account: ${error}`
               : 'The active account is the one gh and git use in Terminal and in agents.'}
           </p>
-        </div>
-      </div>
-
-      <div className="settings__group">
-        <div className="settings__subgroup">
-          <h2 className="settings__subgroup-title">Board</h2>
-          <div className="settings__card">
-            <div className="settings__row settings__row--stacked">
-              <span className="settings__label">
-                <span>Agent for tasks</span>
-                <span className="settings__description">
-                  Suggested when you start a task. You can pick another one for each task.
-                </span>
-              </span>
-              <TaskAgentPicker
-                value={boardAgent}
-                onChange={(value) => void atox.settings.update({ boardAgent: value })}
-              />
-            </div>
-            <div className="settings__row">
-              <span className="settings__label">
-                <span>Agents at once</span>
-                <span className="settings__description">
-                  Queued tasks wait until one of the running agents finishes.
-                </span>
-              </span>
-              <div className="stepper" role="group" aria-label="Agents at once">
-                <button
-                  type="button"
-                  className="stepper__button"
-                  aria-label="Fewer agents"
-                  disabled={boardMaxAgents <= BOARD_AGENTS.min}
-                  onClick={() => setMaxAgents(boardMaxAgents - 1)}
-                >
-                  <Minus className="stepper__icon" />
-                </button>
-                <span className="stepper__value" aria-live="polite">
-                  {boardMaxAgents}
-                </span>
-                <button
-                  type="button"
-                  className="stepper__button"
-                  aria-label="More agents"
-                  disabled={boardMaxAgents >= BOARD_AGENTS.max}
-                  onClick={() => setMaxAgents(boardMaxAgents + 1)}
-                >
-                  <Plus className="stepper__icon" />
-                </button>
-              </div>
-            </div>
-          </div>
         </div>
       </div>
     </>

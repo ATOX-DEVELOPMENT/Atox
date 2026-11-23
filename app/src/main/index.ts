@@ -3,6 +3,7 @@ import { basename, delimiter, join } from 'node:path'
 import { app, BrowserWindow, nativeTheme, protocol, shell as electronShell } from 'electron'
 import { AgentDetector } from './agents'
 import { WorkingTreeReader } from './changes'
+import { ProjectFiles } from './projectFiles'
 import { claudeDriver } from './conversations/claude'
 import { createCodexDriver } from './conversations/codex'
 import { ConversationManager } from './conversations/manager'
@@ -252,6 +253,7 @@ async function bootstrap(): Promise<void> {
     githubAccounts,
     board,
     workingTree: new WorkingTreeReader(shell),
+    projectFiles: new ProjectFiles(shell),
     updater,
     agents,
     menu,

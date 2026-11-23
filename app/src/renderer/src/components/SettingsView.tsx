@@ -6,7 +6,9 @@ import {
   Palette,
   Plug,
   Puzzle,
+  SlashSquare,
   SlidersHorizontal,
+  SquareKanban,
   Sparkles,
   X,
   type LucideIcon
@@ -16,6 +18,8 @@ import { useProjectsContext } from '../hooks/ProjectsContext'
 import { useIntegrationLists } from '../hooks/useIntegrationLists'
 import { AgentIntegrations } from './AgentIntegrations'
 import { ArchivedChats } from './ArchivedChats'
+import { BoardSettings } from './BoardSettings'
+import { CommandSettings } from './CommandSettings'
 import { GitHubMark } from './GitHubMark'
 import { GitHubSettings } from './GitHubSettings'
 import { SettingsAppearance } from './SettingsAppearance'
@@ -24,7 +28,7 @@ import { ShortcutList } from './ShortcutList'
 import { UsageSettings } from './UsageSettings'
 
 export type SettingsSection =
-  'general' | 'appearance' | 'shortcuts' | 'usage' | 'github' | 'archived' | IntegrationKind
+  'general' | 'appearance' | 'shortcuts' | 'usage' | 'board' | 'commands' | 'github' | 'archived' | IntegrationKind
 
 interface SectionItem {
   id: SettingsSection
@@ -46,7 +50,9 @@ const SECTION_GROUPS: ReadonlyArray<{ title?: string; items: ReadonlyArray<Secti
     items: [
       { id: 'plugins', label: 'Plugins', icon: Puzzle },
       { id: 'skills', label: 'Skills', icon: Sparkles },
-      { id: 'mcp', label: 'MCP', icon: Plug }
+      { id: 'mcp', label: 'MCP', icon: Plug },
+      { id: 'commands', label: 'Commands', icon: SlashSquare },
+      { id: 'board', label: 'Board', icon: SquareKanban }
     ]
   },
   {
@@ -150,6 +156,10 @@ export function SettingsView({ initialSection, onClose }: SettingsViewProps) {
               </div>
             ) : section === 'usage' ? (
               <UsageSettings />
+            ) : section === 'commands' ? (
+              <CommandSettings />
+            ) : section === 'board' ? (
+              <BoardSettings />
             ) : section === 'github' ? (
               <GitHubSettings />
             ) : section === 'archived' ? (

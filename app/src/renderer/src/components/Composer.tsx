@@ -6,9 +6,11 @@ import {
   type ConversationUsage
 } from '../../../shared/conversation'
 import type { Chat } from '../../../shared/models'
+import { LOCAL_COMMAND_ALIASES, type PromptTemplate } from '../../../shared/slashCommands'
 import { useProjectsContext } from '../hooks/ProjectsContext'
 import { useAgentCatalog } from '../hooks/useAgentCatalog'
-import { LOCAL_COMMAND_ALIASES, useAgentCommands } from '../hooks/useAgentCommands'
+import { useSettings } from '../hooks/SettingsContext'
+import { useAgentCommands } from '../hooks/useAgentCommands'
 import {
   attachFiles,
   attachPicked,
@@ -84,6 +86,9 @@ export const Composer = memo(function Composer({
   // Подсказки команд: видны, пока набирается имя команды и их не закрыли Escape.
   const commandQuery = COMMAND_NAME.exec(text)?.[1]
   const commands = useAgentCommands(chat.id, chat.agent, commandQuery !== undefined)
+  const { promptTemplates } = useSettings()
+  const findTemplate = (name: string): PromptTemplate | undefined =>
+    promptTemplates.find((template) => template.name === name)
   const [dismissedText, setDismissedText] = useState<string | null>(null)
   const suggestions =
     commandQuery !== undefined && dismissedText !== text
@@ -176,8 +181,22 @@ export const Composer = memo(function Composer({
     return true
   }
 
+  /**
+   * Набранная целиком «/шаблон» — например, когда подсказки закрыли Escape, — уходит агенту
+   * текстом шаблона; написанное после имени дописывается следом.
+   */
+  const expandTemplate = (message: string): string => {
+    const [, name, argument = ''] = COMMAND_LINE.exec(message) ?? []
+    const template = name ? findTemplate(name) : undefined
+    if (!template) {
+      return message
+    }
+    const prompt = template.prompt.trim()
+    return argument.trim() ? `${prompt}\n\n${argument.trim()}` : prompt
+  }
+
   const submit = (value: string) => {
-    const message = value.trim()
+    const message = expandTemplate(value.trim())
     if ((!message && attachments.length === 0) || pending.length > 0) {
       return
     }
@@ -223,9 +242,20 @@ export const Composer = memo(function Composer({
 
   const send = () => submit(text)
 
-  /** Выбор подсказки: команда с аргументами дописывается в поле, без них — сразу выполняется. */
+  /**
+   * Выбор подсказки: шаблон подставляет в поле свой текст, чтобы его можно было дописать;
+   * команда с аргументами дописывается в поле, без них — сразу выполняется.
+   */
   const chooseCommand = (command: AgentCommand, run: boolean) => {
-    if (run && !command.argumentHint) {
+    const template = findTemplate(command.name)
+    if (template) {
+      setText(template.prompt)
+      // Курсор встаёт в конец подставленного текста, а не туда, где кончалось имя команды.
+      requestAnimationFrame(() => {
+        const input = inputRef.current
+        input?.setSelectionRange(input.value.length, input.value.length)
+      })
+    } else if (run && !command.argumentHint) {
       submit(`/${command.name}`)
     } else {
       setText(`/${command.name} `)
