@@ -2,7 +2,6 @@ import { memo, useEffect, useMemo, useState, type ReactNode } from 'react'
 import {
   ArrowUp,
   ChevronRight,
-  Clock,
   CircleAlert,
   FoldVertical,
   FileText,
@@ -247,9 +246,6 @@ function QueuedMessage({ chatId, item }: { chatId: string; item: UserMessage }) 
             </div>
           </div>
           <div className="queued-message__actions">
-            <span className="queued-message__status" title="Waits until the agent finishes">
-              <Clock />
-            </span>
             <IconAction
               label="Send now"
               hint="Stop the current reply and send this message now"
