@@ -2,6 +2,7 @@ import { DEFAULT_AGENT_ID, type AgentId } from './agents'
 import { BOARD_AGENTS, type TaskAgent } from './board'
 import type { ModelSelection } from './conversation'
 import type { ShortcutOverrides } from './shortcuts'
+import { DEFAULT_PROMPT_TEMPLATES, type PromptTemplate } from './slashCommands'
 
 /** Тема окна: следовать системной или всегда светлая или тёмная. */
 export const THEME_MODES = ['system', 'light', 'dark'] as const
@@ -77,6 +78,8 @@ export interface Settings {
   boardMaxAgents: number
   /** Агент, модель и эффорт, которые предлагаются задаче с доски по умолчанию. */
   boardAgent: TaskAgent
+  /** Свои слеш-команды: «/имя» в поле ввода подставляет текст промпта. */
+  promptTemplates: PromptTemplate[]
 }
 
 /** Длиннее имя в таблетке профиля не помещается. */
@@ -136,7 +139,8 @@ export const DEFAULT_SETTINGS: Settings = {
   accent: DEFAULT_ACCENT,
   sidebarButtons: DEFAULT_SIDEBAR_BUTTON_STYLE,
   boardMaxAgents: BOARD_AGENTS.default,
-  boardAgent: { agent: DEFAULT_AGENT_ID }
+  boardAgent: { agent: DEFAULT_AGENT_ID },
+  promptTemplates: [...DEFAULT_PROMPT_TEMPLATES]
 }
 
 /** Приводит ширину панели к целому числу пикселей в её пределах. */

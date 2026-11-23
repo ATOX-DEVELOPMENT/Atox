@@ -1,3 +1,4 @@
+import type { ProjectFileContent, ProjectFileList } from './projectFiles'
 import type { AgentId } from './agents'
 import type { MessageAttachments, PickedFile } from './attachments'
 import type {
@@ -155,6 +156,10 @@ export interface AtoxApi {
     /** Убирает сообщение из очереди, пока агент его не взял. */
     cancelQueued(chatId: string, itemId: string): Promise<void>
     sendQueuedNow(chatId: string, itemId: string): Promise<void>
+    /** Меняет текст сообщения в очереди; если агент уже взял его, ничего не меняется. */
+    editQueued(chatId: string, itemId: string, text: string): Promise<void>
+    /** Ставит сообщения очереди в этом порядке. */
+    reorderQueued(chatId: string, itemIds: string[]): Promise<void>
     /** Ответ на разрешение, вопросы или форму агента — элемент ленты `approval` или `question`. */
     answerRequest(chatId: string, itemId: string, answer: RequestAnswer): Promise<void>
     /** События ленты одного чата. */
@@ -202,6 +207,12 @@ export interface AtoxApi {
     subscribe(listener: (branches: GitBranches) => void): () => void
   }
   /** Незакоммиченные изменения в папке проекта. */
+  projectFiles: {
+    /** Файлы проекта для просмотра кода, без игнорируемых git. */
+    list(projectId: string): Promise<ProjectFileList>
+    /** Содержимое файла проекта; путь — относительно папки проекта. */
+    read(projectId: string, path: string): Promise<ProjectFileContent>
+  }
   changes: {
     list(projectId: string): Promise<ChangesResult>
     /** Изменения файла построчно; `null` — файл уже не изменён. */
@@ -399,6 +410,8 @@ export const IpcChannel = {
   ConversationsInterrupt: 'conversations:interrupt',
   ConversationsCancelQueued: 'conversations:cancel-queued',
   ConversationsSendQueuedNow: 'conversations:send-queued-now',
+  ConversationsEditQueued: 'conversations:edit-queued',
+  ConversationsReorderQueued: 'conversations:reorder-queued',
   ConversationsAnswerRequest: 'conversations:answer-request',
   ConversationsCommands: 'conversations:commands',
   ConversationsRunCommand: 'conversations:run-command',
@@ -415,6 +428,8 @@ export const IpcChannel = {
   ImagesSaveAs: 'images:save-as',
   GitBranches: 'git:branches',
   GitBranchesChanged: 'git:branches-changed',
+  ProjectFilesList: 'project-files:list',
+  ProjectFilesRead: 'project-files:read',
   ChangesList: 'changes:list',
   ChangesDiff: 'changes:diff',
   ChangesDiscard: 'changes:discard',

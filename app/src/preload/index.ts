@@ -158,6 +158,10 @@ const api: AtoxApi = {
       ipcRenderer.invoke(IpcChannel.ConversationsCancelQueued, chatId, itemId),
     sendQueuedNow: (chatId, itemId) =>
       ipcRenderer.invoke(IpcChannel.ConversationsSendQueuedNow, chatId, itemId),
+    editQueued: (chatId, itemId, text) =>
+      ipcRenderer.invoke(IpcChannel.ConversationsEditQueued, chatId, itemId, text),
+    reorderQueued: (chatId, itemIds) =>
+      ipcRenderer.invoke(IpcChannel.ConversationsReorderQueued, chatId, itemIds),
     answerRequest: (chatId, itemId, answer) =>
       ipcRenderer.invoke(IpcChannel.ConversationsAnswerRequest, chatId, itemId, answer),
     onEvent: conversationEvents.onEvent,
@@ -191,6 +195,10 @@ const api: AtoxApi = {
       ipcRenderer.on(IpcChannel.GitBranchesChanged, handler)
       return () => ipcRenderer.removeListener(IpcChannel.GitBranchesChanged, handler)
     }
+  },
+  projectFiles: {
+    list: (projectId) => ipcRenderer.invoke(IpcChannel.ProjectFilesList, projectId),
+    read: (projectId, path) => ipcRenderer.invoke(IpcChannel.ProjectFilesRead, projectId, path)
   },
   changes: {
     list: (projectId) => ipcRenderer.invoke(IpcChannel.ChangesList, projectId),

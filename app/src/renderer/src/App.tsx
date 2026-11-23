@@ -4,7 +4,7 @@ import { MenuLayer } from './components/MenuLayer'
 import { SettingsView, type SettingsSection } from './components/SettingsView'
 import { Sidebar } from './components/Sidebar'
 import { WindowPill } from './components/WindowPill'
-import { Workspace, type WorkspacePage } from './components/Workspace'
+import { Workspace, type SidePanel, type WorkspacePage } from './components/Workspace'
 import {
   CanvasesProvider,
   CanvasNavigationProvider,
@@ -41,8 +41,10 @@ function Layout() {
   // Раздел страницы репозитория не сбрасывается, когда её закрывают и открывают снова.
   const [repositorySection, setRepositorySection] = useState<RepositorySection>('pulls')
   const terminals = useTerminalPanel()
-  // Изменения показываются вместо терминала, у текущего проекта.
-  const [changesOpen, setChangesOpen] = useState(false)
+  // Изменения или файлы показываются вместо терминала, у текущего проекта.
+  const [sidePanel, setSidePanel] = useState<SidePanel | null>(null)
+  // Растёт с каждым ⌘P: панель файлов открывает поиск файла.
+  const [quickOpenRequest, setQuickOpenRequest] = useState(0)
   const { currentProjectId } = projects
 
   const toggleSidebar = useCallback(() => setSidebarVisible((visible) => !visible), [])
@@ -111,19 +113,34 @@ function Layout() {
       return
     }
     setPage(null)
-    if (changesOpen) {
-      setChangesOpen(false)
+    if (sidePanel) {
+      setSidePanel(null)
       if (terminals.openProjectIds.includes(currentProjectId)) {
         return
       }
     }
     terminals.toggle(currentProjectId)
-  }, [currentProjectId, changesOpen, terminals.openProjectIds, terminals.toggle])
+  }, [currentProjectId, sidePanel, terminals.openProjectIds, terminals.toggle])
 
   const toggleChanges = useCallback(() => {
     if (currentProjectId) {
       setPage(null)
-      setChangesOpen((open) => !open)
+      setSidePanel((open) => (open === 'changes' ? null : 'changes'))
+    }
+  }, [currentProjectId])
+
+  const toggleFiles = useCallback(() => {
+    if (currentProjectId) {
+      setPage(null)
+      setSidePanel((open) => (open === 'files' ? null : 'files'))
+    }
+  }, [currentProjectId])
+
+  const quickOpen = useCallback(() => {
+    if (currentProjectId) {
+      setPage(null)
+      setSidePanel('files')
+      setQuickOpenRequest((request) => request + 1)
     }
   }, [currentProjectId])
 
@@ -156,6 +173,8 @@ function Layout() {
     toggleSidebar,
     toggleTerminal,
     toggleChanges,
+    toggleFiles,
+    quickOpen,
     openSettings,
     toggleRepository,
     toggleAgents
@@ -187,9 +206,11 @@ function Layout() {
           onClosePage={closePage}
           onOpenChat={openChat}
           terminals={terminals}
-          changesOpen={changesOpen}
+          sidePanel={sidePanel}
+          quickOpenRequest={quickOpenRequest}
           onToggleTerminal={toggleTerminal}
           onToggleChanges={toggleChanges}
+          onToggleFiles={toggleFiles}
         />
         {/*
           Закрытому сайдбару остаётся одна таблетка. Она стоит после рабочей области намеренно: шапка

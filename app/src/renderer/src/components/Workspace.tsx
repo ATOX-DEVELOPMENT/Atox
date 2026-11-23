@@ -9,6 +9,7 @@ import { BoardView } from './BoardView'
 import { CanvasList } from './canvas/CanvasList'
 import { CanvasPage } from './canvas/CanvasPage'
 import { ChangesPanel } from './ChangesPanel'
+import { FilesPanel } from './FilesPanel'
 import { ChatView } from './ChatView'
 import { RepositoryView, type RepositorySection } from './RepositoryView'
 import { SplitResizer } from './SplitResizer'
@@ -16,6 +17,9 @@ import { TerminalPanel } from './TerminalPanel'
 import { Welcome } from './Welcome'
 import { WorkspaceTitle } from './WorkspaceTitle'
 import { WorkspaceToolbar } from './WorkspaceToolbar'
+
+/** Панель справа от чатов, на месте терминала. */
+export type SidePanel = 'changes' | 'files'
 
 /** Страница, открытая поверх чатов. */
 export type WorkspacePage =
@@ -32,10 +36,13 @@ interface WorkspaceProps {
   onClosePage(): void
   onOpenChat(chatId: string): void
   terminals: TerminalPanelState
-  /** Панель изменений открыта вместо терминала. */
-  changesOpen: boolean
+  /** Панель, открытая вместо терминала. */
+  sidePanel: SidePanel | null
+  /** Растёт с каждым ⌘P: панель файлов открывает поиск файла. */
+  quickOpenRequest: number
   onToggleTerminal(): void
   onToggleChanges(): void
+  onToggleFiles(): void
 }
 
 export function Workspace({
@@ -45,9 +52,11 @@ export function Workspace({
   onClosePage,
   onOpenChat,
   terminals,
-  changesOpen,
+  sidePanel,
+  quickOpenRequest,
   onToggleTerminal,
-  onToggleChanges
+  onToggleChanges,
+  onToggleFiles
 }: WorkspaceProps) {
   const {
     projects,
@@ -79,9 +88,9 @@ export function Workspace({
   const terminalProjectIds = terminals.attachedProjectIds.filter((id) =>
     projects.some((project) => project.id === id)
   )
-  const changesShown = changesOpen && Boolean(currentProjectId)
+  const shownPanel = currentProjectId ? sidePanel : null
   const terminalOpen =
-    !changesShown &&
+    !shownPanel &&
     Boolean(currentProjectId && terminals.openProjectIds.includes(currentProjectId))
   // Чат вместе с папкой его проекта: чату нужны только они, а не весь список проектов.
   const chatEntries = new Map(
@@ -113,10 +122,12 @@ export function Workspace({
           {!pageOpen && (
             <WorkspaceToolbar
               terminalOpen={terminalOpen}
-              changesOpen={changesShown}
+              changesOpen={shownPanel === 'changes'}
+              filesOpen={shownPanel === 'files'}
               projectAvailable={Boolean(currentProjectId)}
               onToggleTerminal={onToggleTerminal}
               onToggleChanges={onToggleChanges}
+              onToggleFiles={onToggleFiles}
             />
           )}
         </header>
@@ -178,8 +189,16 @@ export function Workspace({
           )}
         </div>
       </div>
-      {!pageOpen && changesShown && currentProjectId && (
+      {!pageOpen && shownPanel === 'changes' && currentProjectId && (
         <ChangesPanel projectId={currentProjectId} />
+      )}
+      {!pageOpen && shownPanel === 'files' && currentProjectId && (
+        <FilesPanel
+          // Открытый файл и раскрытые папки у каждого проекта свои.
+          key={currentProjectId}
+          projectId={currentProjectId}
+          quickOpenRequest={quickOpenRequest}
+        />
       )}
       <TerminalPanel
         projectIds={terminalProjectIds}

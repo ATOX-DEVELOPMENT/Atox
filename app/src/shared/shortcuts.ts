@@ -41,6 +41,11 @@ export const SHORTCUTS = {
     label: 'Show or hide changes',
     accelerator: byPlatform('CmdOrCtrl+Shift+D', 'Ctrl+Shift+D')
   },
+  toggleFiles: {
+    label: 'Show or hide files',
+    accelerator: byPlatform('CmdOrCtrl+Shift+E', 'Ctrl+Shift+E')
+  },
+  quickOpen: { label: 'Go to file', accelerator: byPlatform('CmdOrCtrl+P', 'Ctrl+Shift+P') },
   toggleRepository: {
     label: 'Pull requests and issues',
     accelerator: byPlatform('CmdOrCtrl+Shift+G', 'Ctrl+Shift+G')
@@ -83,6 +88,8 @@ export const SHORTCUT_GROUPS: ReadonlyArray<{ title: string; shortcuts: readonly
       'toggleSidebar',
       'toggleTerminal',
       'toggleChanges',
+      'toggleFiles',
+      'quickOpen',
       'toggleRepository',
       'toggleAgents',
       'openSettings'

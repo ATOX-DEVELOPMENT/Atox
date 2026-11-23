@@ -1,25 +1,37 @@
-import { FileDiff, SquareTerminal } from 'lucide-react'
+import { FileDiff, FolderTree, SquareTerminal } from 'lucide-react'
 import { ToolbarButton } from './ToolbarButton'
 
 interface WorkspaceToolbarProps {
   terminalOpen: boolean
   changesOpen: boolean
+  filesOpen: boolean
   /** Без выбранного проекта терминалу и изменениям негде открыться. */
   projectAvailable: boolean
   onToggleTerminal(): void
   onToggleChanges(): void
+  onToggleFiles(): void
 }
 
 /** Кнопки в правом верхнем углу рабочей области, как в Claude. */
 export function WorkspaceToolbar({
   terminalOpen,
   changesOpen,
+  filesOpen,
   projectAvailable,
   onToggleTerminal,
-  onToggleChanges
+  onToggleChanges,
+  onToggleFiles
 }: WorkspaceToolbarProps) {
   return (
     <div className="workspace-toolbar">
+      <ToolbarButton
+        icon={FolderTree}
+        shortcut="toggleFiles"
+        label={filesOpen ? 'Hide files' : 'Show files'}
+        active={filesOpen}
+        disabled={!projectAvailable}
+        onClick={onToggleFiles}
+      />
       <ToolbarButton
         icon={FileDiff}
         shortcut="toggleChanges"
