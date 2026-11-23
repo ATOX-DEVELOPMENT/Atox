@@ -53,6 +53,11 @@ jobs:
           if ($app.HasExited) { throw "Atox exited with code $($app.ExitCode)" }
           Stop-Process -Id $app.Id -Force
 
+      - name: Sign update manifest
+        run: npm run release:manifest -- dist "0.0.${{ github.run_number }}" windows && cat dist/latest-windows.json
+        env:
+          ATOX_UPDATE_SIGNING_KEY: ${{ secrets.ATOX_UPDATE_SIGNING_KEY }}
+
       - uses: actions/upload-artifact@v4
         with:
           name: atox-windows

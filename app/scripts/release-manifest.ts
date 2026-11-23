@@ -1,6 +1,6 @@
 /**
  * Собирает и подписывает описание релиза для обновлений:
- * `npm run release:manifest -- <dist> <version> <mac|linux>`.
+ * `npm run release:manifest -- <dist> <version> <mac|linux|windows>`.
  * Закрытый ключ Ed25519 (PEM) берётся из переменной окружения ATOX_UPDATE_SIGNING_KEY.
  */
 import { createHash, createPrivateKey, sign } from 'node:crypto'
