@@ -10,6 +10,8 @@ on:
 defaults:
   run:
     working-directory: app
+    # PowerShell разбирает аргументы вроде `-c.extraMetadata.version` по-своему.
+    shell: bash
 
 jobs:
   build:
