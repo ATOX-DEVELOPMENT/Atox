@@ -5487,92 +5487,6 @@ ul {
   font-variant-numeric: tabular-nums;
 }
 
-/* Фоновые задачи агента над полем ввода */
-
-.background-tasks {
-  margin-bottom: 8px;
-  border: 1px solid var(--color-border);
-  border-radius: calc(var(--radius) + 4px);
-  background: var(--color-group);
-  font-size: 13px;
-  user-select: none;
-}
-
-.background-tasks__header {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  width: 100%;
-  padding: 8px 12px;
-  text-align: left;
-  color: var(--color-text-muted);
-}
-
-.background-tasks__header:hover {
-  color: var(--color-text);
-}
-
-.background-tasks__spinner {
-  width: 14px;
-  height: 14px;
-  flex-shrink: 0;
-  color: var(--color-accent-text);
-  animation: spin 1.4s linear infinite;
-}
-
-.background-tasks__title {
-  flex: 1;
-  font-weight: 500;
-}
-
-.background-tasks__chevron {
-  width: 14px;
-  height: 14px;
-  transition: rotate var(--collapse-duration) var(--collapse-easing);
-}
-
-.background-tasks[data-expanded='false'] .background-tasks__chevron {
-  rotate: -90deg;
-}
-
-.background-tasks__list {
-  margin: 0;
-  padding: 0 12px 8px;
-  list-style: none;
-}
-
-.background-tasks__item {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-width: 0;
-  padding: 5px 0;
-}
-
-.background-tasks__item + .background-tasks__item {
-  border-top: 1px solid var(--color-border);
-}
-
-.background-tasks__icon {
-  width: 14px;
-  height: 14px;
-  flex-shrink: 0;
-  color: var(--color-text-muted);
-}
-
-.background-tasks__kind {
-  flex-shrink: 0;
-  font-size: var(--font-size-small);
-  color: var(--color-text-muted);
-}
-
-.background-tasks__description {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
 .board-card__assignees {
   display: flex;
   flex-shrink: 0;
@@ -7429,4 +7343,107 @@ ul {
   font-size: 13px;
   text-align: center;
   color: var(--color-text-muted);
+}
+
+/* Фоновые задачи агента: таблетка в строке поля ввода и список в панели справа. */
+.background-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 26px;
+  padding: 0 10px;
+  font: inherit;
+  font-size: var(--font-size-small);
+  color: var(--color-text-muted);
+  background: var(--color-hover);
+  border: none;
+  border-radius: 13px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.background-pill:hover {
+  color: var(--color-text);
+  background: var(--color-active);
+}
+
+.background-pill__spinner,
+.task-list__spinner,
+.workspace-toolbar__badge-spinner {
+  flex-shrink: 0;
+  width: 13px;
+  height: 13px;
+  color: var(--color-accent-text);
+  animation: spin 1.4s linear infinite;
+}
+
+.task-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.task-list__item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 8px;
+  border-radius: 8px;
+}
+
+.task-list__item + .task-list__item {
+  border-top: 1px solid var(--color-border);
+}
+
+.task-list__icon {
+  flex-shrink: 0;
+  width: 15px;
+  height: 15px;
+  margin-top: 2px;
+  color: var(--color-text-muted);
+}
+
+.task-list__text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.task-list__description {
+  font-size: 13px;
+  overflow-wrap: anywhere;
+  user-select: text;
+}
+
+.task-list__kind {
+  font-size: var(--font-size-small);
+  color: var(--color-text-muted);
+}
+
+.task-list__spinner {
+  margin-top: 3px;
+}
+
+/* Кнопка фоновых задач в шапке: пока они идут, на ней число. */
+.workspace-toolbar__button {
+  position: relative;
+}
+
+.workspace-toolbar__badge {
+  position: absolute;
+  top: 2px;
+  right: 1px;
+  min-width: 15px;
+  height: 15px;
+  padding: 0 4px;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 15px;
+  text-align: center;
+  color: #fff;
+  background: var(--color-accent);
+  border-radius: 8px;
+  pointer-events: none;
 }

@@ -3,7 +3,7 @@ import { useConversation } from '../hooks/useConversation'
 import type { UserMessage } from '../../../shared/conversation'
 import type { Chat } from '../../../shared/models'
 import { LinkBaseDirectoryContext } from '../lib/linkTargets'
-import { BackgroundTasks } from './BackgroundTasks'
+import { useReportBackgroundTasks } from '../hooks/BackgroundTasksContext'
 import { Composer } from './Composer'
 import { Timeline } from './Timeline'
 
@@ -34,6 +34,8 @@ interface ChatViewProps {
   projectPath: string
   visible: boolean
   focused: boolean
+  /** Открывает фоновые задачи справа — по таблетке у поля ввода. */
+  onShowTasks(): void
 }
 
 /**
@@ -44,10 +46,12 @@ export const ChatView = memo(function ChatView({
   chat,
   projectPath,
   visible,
-  focused
+  focused,
+  onShowTasks
 }: ChatViewProps) {
   const chatId = chat.id
   const conversation = useConversation(chatId, visible)
+  useReportBackgroundTasks(chatId, conversation.backgroundTasks)
   const scrollRef = useRef<HTMLDivElement>(null)
   const columnRef = useRef<HTMLDivElement>(null)
   // Пользователь внизу ленты: новые сообщения прокручивают её; отлистал вверх — не мешаем читать.
@@ -165,14 +169,13 @@ export const ChatView = memo(function ChatView({
         </div>
       </div>
       <div className="chat-view__composer">
-        {conversation.backgroundTasks && (
-          <BackgroundTasks tasks={conversation.backgroundTasks} />
-        )}
         <Composer
           chat={chat}
           running={conversation.running}
           focused={focused}
           usage={conversation.usage}
+          backgroundTasks={conversation.backgroundTasks}
+          onShowTasks={onShowTasks}
           onSend={followAgent}
         />
       </div>
