@@ -3244,8 +3244,7 @@ ul {
 }
 
 .queued-message__handle svg,
-.queued-message__action svg,
-.queued-message__status svg {
+.queued-message__action svg {
   width: 14px;
   height: 14px;
 }
@@ -3259,13 +3258,6 @@ ul {
   display: flex;
   align-items: center;
   gap: 2px;
-}
-
-/* Часы видны всегда — это знак ожидания; кнопки появляются при наведении. */
-.queued-message__status {
-  display: inline-flex;
-  padding: 0 4px;
-  color: var(--color-text-muted);
 }
 
 .queued-message__action {
