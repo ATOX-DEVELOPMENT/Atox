@@ -271,6 +271,27 @@ export class ConversationManager {
   }
 
   /**
+   * Отправляет сообщение из очереди сразу: оно встаёт первым, а текущий ответ агента
+   * прерывается — следом агент возьмёт это сообщение.
+   */
+  async sendQueuedNow(chatId: string, itemId: string): Promise<void> {
+    const conversation = await this.conversation(chatId)
+    const index = conversation.queue.findIndex(({ item }) => item.id === itemId)
+    if (index === -1) {
+      return
+    }
+    const [message] = conversation.queue.splice(index, 1)
+    conversation.queue.unshift(message)
+    conversation.queuePaused = false
+    this.emitQueue(chatId, conversation)
+    if (conversation.turn) {
+      await this.interrupt(chatId)
+    } else {
+      this.pump(chatId, conversation)
+    }
+  }
+
+  /**
    * Агент не остановил ход сам: его сессия закрывается, ход заканчивается. Разговор не
    * теряется — следующее сообщение продолжит его в новой сессии.
    */

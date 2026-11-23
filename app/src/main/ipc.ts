@@ -389,6 +389,9 @@ export function registerIpcHandlers({
   ipcMain.handle(IpcChannel.ConversationsCancelQueued, (_event, chatId: string, itemId: unknown) =>
     conversations.cancelQueued(chatId, String(itemId))
   )
+  ipcMain.handle(IpcChannel.ConversationsSendQueuedNow, (_event, chatId: string, itemId: unknown) =>
+    conversations.sendQueuedNow(chatId, String(itemId))
+  )
   ipcMain.handle(
     IpcChannel.ConversationsAnswerRequest,
     (_event, chatId: string, itemId: unknown, answer: unknown) =>

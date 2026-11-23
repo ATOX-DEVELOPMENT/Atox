@@ -154,6 +154,7 @@ export interface AtoxApi {
     interrupt(chatId: string): Promise<void>
     /** Убирает сообщение из очереди, пока агент его не взял. */
     cancelQueued(chatId: string, itemId: string): Promise<void>
+    sendQueuedNow(chatId: string, itemId: string): Promise<void>
     /** Ответ на разрешение, вопросы или форму агента — элемент ленты `approval` или `question`. */
     answerRequest(chatId: string, itemId: string, answer: RequestAnswer): Promise<void>
     /** События ленты одного чата. */
@@ -397,6 +398,7 @@ export const IpcChannel = {
   ConversationsSend: 'conversations:send',
   ConversationsInterrupt: 'conversations:interrupt',
   ConversationsCancelQueued: 'conversations:cancel-queued',
+  ConversationsSendQueuedNow: 'conversations:send-queued-now',
   ConversationsAnswerRequest: 'conversations:answer-request',
   ConversationsCommands: 'conversations:commands',
   ConversationsRunCommand: 'conversations:run-command',
