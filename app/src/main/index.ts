@@ -1,4 +1,4 @@
-import { tmpdir } from 'node:os'
+import { tmpdir, userInfo } from 'node:os'
 import { basename, delimiter, join } from 'node:path'
 import { app, BrowserWindow, nativeTheme, protocol, shell as electronShell } from 'electron'
 import { AgentDetector } from './agents'
@@ -204,8 +204,12 @@ async function bootstrap(): Promise<void> {
     agents,
     canvas,
     // Путь к сокету ограничен ~100 символами, поэтому он во временном каталоге пользователя,
-    // а не в длинном пути данных приложения. Имя различает сборку для разработки.
-    socketPath: join(tmpdir(), `${basename(userData)}.sock`),
+    // а не в длинном пути данных приложения. Имя различает сборку для разработки. На Windows
+    // вместо сокета — именованный канал, у каждого пользователя свой.
+    socketPath:
+      process.platform === 'win32'
+        ? `\\\\.\\pipe\\${basename(userData)}-${userInfo().username}`
+        : join(tmpdir(), `${basename(userData)}.sock`),
     cliPath,
     modelSelection: (agent) => settings.get().agentModels[agent] ?? {},
     onProjectsChanged: () => broadcastProjectsChanged(store.list())

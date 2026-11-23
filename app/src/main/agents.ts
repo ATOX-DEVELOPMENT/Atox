@@ -2,6 +2,7 @@ import { constants } from 'node:fs'
 import { access } from 'node:fs/promises'
 import { delimiter, join } from 'node:path'
 import { AGENTS, type AgentId } from '../shared/agents'
+import { IS_WINDOWS } from '../shared/platform'
 import type { ShellEnvironment } from './shellEnvironment'
 
 /**
@@ -92,14 +93,24 @@ async function findAgents(environment: Record<string, string>): Promise<Map<Agen
   return found
 }
 
+/**
+ * Расширения программ Windows, которые запускаются по имени без расширения: npm ставит
+ * агентов как `.cmd`, установщики — как `.exe`.
+ */
+const WINDOWS_PROGRAM_EXTENSIONS = ['.exe', '.cmd', '.bat']
+
 async function findProgram(name: string, directories: readonly string[]): Promise<string | null> {
+  const names = IS_WINDOWS ? WINDOWS_PROGRAM_EXTENSIONS.map((extension) => name + extension) : [name]
   for (const directory of directories) {
-    const candidate = join(directory, name)
-    try {
-      await access(candidate, constants.X_OK)
-      return candidate
-    } catch {
-      // В этом каталоге программы нет — ищем дальше.
+    for (const file of names) {
+      const candidate = join(directory, file)
+      try {
+        // На Windows права на запуск не проверить: программой считается файл с её расширением.
+        await access(candidate, IS_WINDOWS ? constants.F_OK : constants.X_OK)
+        return candidate
+      } catch {
+        // В этом каталоге программы нет — ищем дальше.
+      }
     }
   }
   return null

@@ -1,7 +1,7 @@
 import { existsSync } from 'node:fs'
 import { spawn, type IPty } from 'node-pty'
 import type { TerminalSize } from '../shared/api'
-import { resolveShell, sessionEnvironment } from './shellEnvironment'
+import { resolveShell, sessionEnvironment, shellArguments } from './shellEnvironment'
 
 /**
  * Сколько последнего вывода держать в памяти: панель терминала, открытая заново (или окно после
@@ -123,7 +123,7 @@ export class TerminalManager {
     }
 
     // Оболочка входа сама настроит PATH, алиасы и переменные инструментов из профиля пользователя.
-    const pty = spawn(resolveShell(), ['-l'], {
+    const pty = spawn(resolveShell(), shellArguments(), {
       name: 'xterm-256color',
       cols: size.cols,
       rows: size.rows,

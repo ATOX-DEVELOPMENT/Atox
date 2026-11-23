@@ -46,7 +46,7 @@ export class JsonRpcProcess {
     options: { cwd: string; env: Record<string, string> },
     private readonly handlers: JsonRpcHandlers
   ) {
-    this.process = spawn(command, args, { cwd: options.cwd, env: options.env })
+    this.process = spawnProgram(command, args, options)
     createInterface({ input: this.process.stdout }).on('line', (line) => this.receive(line))
     this.process.stderr.setEncoding('utf8')
     this.process.stderr.on('data', (chunk: string) => {
@@ -156,4 +156,20 @@ export class JsonRpcProcess {
     const reason = signal ? `was stopped by ${signal}` : `exited with code ${code ?? 'unknown'}`
     return `The agent ${reason}${details ? `: ${details}` : ''}`
   }
+}
+
+/**
+ * Запускает программу агента. `.cmd` и `.bat` на Windows — скрипты, их запускает только
+ * cmd.exe: Node без оболочки отказывается их выполнять.
+ */
+function spawnProgram(
+  command: string,
+  args: readonly string[],
+  { cwd, env }: { cwd: string; env: Record<string, string> }
+) {
+  if (process.platform === 'win32' && /\.(cmd|bat)$/i.test(command)) {
+    const quote = (value: string) => `"${value.replace(/"/g, '""')}"`
+    return spawn([command, ...args].map(quote).join(' '), { cwd, env, shell: true })
+  }
+  return spawn(command, args, { cwd, env })
 }
