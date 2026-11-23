@@ -154,7 +154,41 @@
         "from": "resources/canvas-vendor",
         "to": "canvas-vendor"
       }
-    ]
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "executableName": "Atox",
+      "files": [
+        "out/**/*",
+        "!node_modules/node-pty/prebuilds/darwin-*/**",
+        "!node_modules/node-pty/prebuilds/linux-*/**",
+        "!node_modules/@esbuild/**",
+        "!node_modules/esbuild/bin/**"
+      ],
+      "extraResources": [
+        {
+          "from": "node_modules/@anthropic-ai/claude-agent-sdk-win32-${arch}/claude.exe",
+          "to": "claude-cli/claude.exe"
+        },
+        {
+          "from": "node_modules/@esbuild/win32-${arch}/esbuild.exe",
+          "to": "esbuild/esbuild.exe"
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "artifactName": "Atox-Setup-${version}.${ext}"
+    }
   },
   "author": "Malik Fattaev"
 }

@@ -151,12 +151,18 @@ function parseLocalCommand(text: string): LocalCommand | null {
 function bundledClaudeExecutable(): string | null {
   const platform = `${process.platform}-${process.arch}`
   if (app.isPackaged) {
-    const packaged = join(process.resourcesPath, 'claude-cli', 'claude')
+    const packaged = join(
+      process.resourcesPath,
+      'claude-cli',
+      process.platform === 'win32' ? 'claude.exe' : 'claude'
+    )
     return existsSync(packaged) ? packaged : null
   }
   try {
     // В разработке берём бинарь прямо из `node_modules` — так же, как electron-builder в сборке.
-    return require.resolve(`@anthropic-ai/claude-agent-sdk-${platform}/claude`)
+    return require.resolve(
+      `@anthropic-ai/claude-agent-sdk-${platform}/claude${process.platform === 'win32' ? '.exe' : ''}`
+    )
   } catch {
     return null
   }

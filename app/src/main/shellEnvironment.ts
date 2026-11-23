@@ -1,6 +1,7 @@
 import { spawn } from 'node:child_process'
 import { userInfo } from 'node:os'
 import { delimiter, dirname, sep } from 'node:path'
+import { IS_WINDOWS } from '../shared/platform'
 
 /** Стандартная оболочка системы — на случай, если система не сообщила оболочку пользователя. */
 const DEFAULT_SHELL = process.platform === 'darwin' ? '/bin/zsh' : '/bin/bash'
@@ -64,7 +65,18 @@ const FOCUS_REFRESH_INTERVAL_MS = 5 * 60 * 1000
 type Environment = Record<string, string>
 
 export function resolveShell(): string {
+  if (IS_WINDOWS) {
+    return WINDOWS_SHELL
+  }
   return process.env['SHELL'] || userInfo().shell || DEFAULT_SHELL
+}
+
+/** Оболочка терминала на Windows: PowerShell есть в каждой системе. */
+const WINDOWS_SHELL = 'powershell.exe'
+
+/** Аргументы оболочки терминала: на macOS и Linux — оболочка входа, она читает профиль. */
+export function shellArguments(): string[] {
+  return IS_WINDOWS ? ['-NoLogo'] : ['-l']
 }
 
 /**
@@ -117,6 +129,10 @@ export class ShellEnvironment {
   /** Окружение оболочки входа; `null` — прочитать его не получилось. */
   private async read(): Promise<Environment | null> {
     this.readAt = Date.now()
+    // На Windows оболочки входа нет: окружение пользователя приложение получает от системы.
+    if (IS_WINDOWS) {
+      return sessionEnvironment()
+    }
     try {
       const stdout = await runLoginShell(
         `printf '%s' ${OUTPUT_MARKER}; env -0; printf '%s' ${OUTPUT_MARKER}`,
@@ -199,6 +215,9 @@ function killGroup(pid: number | undefined): void {
 
 /** Базовое окружение сеанса без профиля пользователя: с ним стартует оболочка входа. */
 export function sessionEnvironment(): Record<string, string> {
+  if (IS_WINDOWS) {
+    return windowsEnvironment()
+  }
   const env: Record<string, string> = {}
   for (const key of SESSION_ENV_KEYS) {
     const value = process.env[key]
@@ -208,6 +227,21 @@ export function sessionEnvironment(): Record<string, string> {
   }
   env['PATH'] = inheritedPath()
   env['LANG'] ??= FALLBACK_LANG
+  return env
+}
+
+/**
+ * Окружение процесса целиком: на Windows его собирает система из реестра, профиля нет. Имена
+ * переменных там без учёта регистра, а в обычном объекте PATH записан как `Path` — приводится
+ * к `PATH`, как его ищет остальной код.
+ */
+function windowsEnvironment(): Record<string, string> {
+  const env: Record<string, string> = {}
+  for (const [key, value] of Object.entries(process.env)) {
+    if (value !== undefined) {
+      env[key.toUpperCase() === 'PATH' ? 'PATH' : key] = value
+    }
+  }
   return env
 }
 

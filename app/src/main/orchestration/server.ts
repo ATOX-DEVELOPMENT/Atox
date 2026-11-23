@@ -83,14 +83,20 @@ export class OrchestrationServer {
   constructor(private readonly services: OrchestrationServices) {}
 
   async start(): Promise<void> {
-    // Сокет прошлого запуска остаётся файлом и не даёт занять адрес.
-    await rm(this.services.socketPath, { force: true })
+    // Сокет прошлого запуска остаётся файлом и не даёт занять адрес. Канал Windows — не
+    // файл: он исчезает вместе с процессом, а права на него задаёт система.
+    const pipe = process.platform === 'win32'
+    if (!pipe) {
+      await rm(this.services.socketPath, { force: true })
+    }
     const server = createServer((socket) => this.accept(socket))
     await new Promise<void>((resolve, reject) => {
       server.once('error', reject)
       server.listen(this.services.socketPath, resolve)
     })
-    await chmod(this.services.socketPath, OWNER_ONLY)
+    if (!pipe) {
+      await chmod(this.services.socketPath, OWNER_ONLY)
+    }
     this.server = server
   }
 

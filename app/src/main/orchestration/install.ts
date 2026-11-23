@@ -20,8 +20,12 @@ export async function installCli(
   executablePath: string,
   scriptPath: string
 ): Promise<string> {
-  const cliPath = join(binDirectory, 'atox')
-  const content = `#!/bin/sh
+  // На Windows команда — `.cmd`: он находится по имени `atox`, как и программа без расширения.
+  const windows = process.platform === 'win32'
+  const cliPath = join(binDirectory, windows ? 'atox.cmd' : 'atox')
+  const content = windows
+    ? `@echo off\r\nset ELECTRON_RUN_AS_NODE=1\r\n"${executablePath}" "${scriptPath}" %*\r\n`
+    : `#!/bin/sh
 ELECTRON_RUN_AS_NODE=1 exec ${quoteShell(executablePath)} ${quoteShell(scriptPath)} "$@"
 `
   await mkdir(binDirectory, { recursive: true })
