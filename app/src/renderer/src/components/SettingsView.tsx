@@ -46,13 +46,18 @@ const SECTION_GROUPS: ReadonlyArray<{ title?: string; items: ReadonlyArray<Secti
     ]
   },
   {
+    title: 'Workspace',
+    items: [
+      { id: 'commands', label: 'Commands', icon: SlashSquare },
+      { id: 'board', label: 'Board', icon: SquareKanban }
+    ]
+  },
+  {
     title: 'Agents',
     items: [
       { id: 'plugins', label: 'Plugins', icon: Puzzle },
       { id: 'skills', label: 'Skills', icon: Sparkles },
-      { id: 'mcp', label: 'MCP', icon: Plug },
-      { id: 'commands', label: 'Commands', icon: SlashSquare },
-      { id: 'board', label: 'Board', icon: SquareKanban }
+      { id: 'mcp', label: 'MCP', icon: Plug }
     ]
   },
   {
