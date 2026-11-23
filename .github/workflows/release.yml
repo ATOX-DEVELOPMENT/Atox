@@ -21,6 +21,8 @@ concurrency:
 defaults:
   run:
     working-directory: app
+    # Один shell на всех платформах: PowerShell на Windows разбирает аргументы по-своему.
+    shell: bash
 
 jobs:
   # Версия — major.minor из package.json и номер сборки: 0.1.42. Общая для всех платформ.
@@ -57,6 +59,12 @@ jobs:
               app/dist/*.AppImage
               app/dist/*.pacman
               app/dist/latest-linux.json
+          - platform: windows
+            runner: windows-2025
+            builder: --win --x64
+            files: |
+              app/dist/*.exe
+              app/dist/latest-windows.json
     runs-on: ${{ matrix.runner }}
     env:
       VERSION: ${{ needs.version.outputs.version }}
@@ -140,6 +148,12 @@ jobs:
           test -x dist/linux-unpacked/resources/claude-cli/claude
           test -x dist/linux-unpacked/resources/esbuild/esbuild
           test -d dist/linux-unpacked/resources/canvas-vendor
+      - if: matrix.platform == 'windows'
+        run: |
+          set -eu
+          test -f dist/win-unpacked/resources/claude-cli/claude.exe
+          test -f dist/win-unpacked/resources/esbuild/esbuild.exe
+          test -d dist/win-unpacked/resources/canvas-vendor
 
       - name: Sign update manifest
         run: npm run release:manifest -- dist "$VERSION" ${{ matrix.platform }}

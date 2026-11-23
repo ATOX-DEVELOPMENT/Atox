@@ -1,10 +1,11 @@
 /**
  * Платформы релиза. У каждой среди файлов релиза на GitHub своё описание последней версии
- * и свой файл, которым обновляется приложение: архив бандла на macOS, AppImage на Linux.
+ * и свой файл, которым обновляется приложение: архив бандла на macOS, AppImage на Linux, установщик на Windows.
  */
 export const UPDATE_PLATFORMS = {
   mac: { manifest: 'latest-mac.json', extension: 'zip' },
-  linux: { manifest: 'latest-linux.json', extension: 'AppImage' }
+  linux: { manifest: 'latest-linux.json', extension: 'AppImage' },
+  windows: { manifest: 'latest-windows.json', extension: 'exe' }
 } as const
 
 export type UpdatePlatform = keyof typeof UPDATE_PLATFORMS

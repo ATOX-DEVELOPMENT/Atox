@@ -37,6 +37,9 @@ export function createUpdateInstaller(): UpdateInstaller | null {
   if (process.platform === 'darwin') {
     return macInstaller
   }
+  if (process.platform === 'win32') {
+    return windowsInstaller
+  }
   // Пакет pacman обновляет менеджер пакетов; приложение обновляет себя, только если оно AppImage.
   const appImage = process.env['APPIMAGE']
   return process.platform === 'linux' && appImage ? createAppImageInstaller(appImage) : null
@@ -133,12 +136,7 @@ function createAppImageInstaller(appImagePath: string): UpdateInstaller {
       return filePath
     },
 
-    async verify(filePath, file) {
-      const { size } = await fs.stat(filePath)
-      if (size !== file.size || (await sha512(filePath)) !== file.sha512) {
-        throw new Error('Downloaded update was modified')
-      }
-    },
+    verify: verifyFileHash,
 
     install(updatePath, relaunch) {
       renameSync(updatePath, appImagePath)
@@ -147,6 +145,39 @@ function createAppImageInstaller(appImagePath: string): UpdateInstaller {
         app.relaunch({ execPath: appImagePath, args: [] })
       }
     }
+  }
+}
+
+/**
+ * Windows: скачивается установщик новой версии. При выходе он запускается без окон (`/S`) и
+ * ставит новую версию поверх: `--updated` говорит ему, что это обновление, а `--force-run`
+ * запускает приложение после установки. Atox ставится в папку пользователя, права
+ * администратора не нужны.
+ */
+const windowsInstaller: UpdateInstaller = {
+  platform: 'windows',
+
+  canInstall: async () => app.isPackaged,
+
+  downloadsRoot: () => join(app.getPath('temp'), app.getName(), 'updates'),
+
+  prepare: async (filePath) => filePath,
+
+  verify: verifyFileHash,
+
+  install(installerPath, relaunch) {
+    spawn(installerPath, ['/S', '--updated', ...(relaunch ? ['--force-run'] : [])], {
+      detached: true,
+      stdio: 'ignore'
+    }).unref()
+  }
+}
+
+/** Скачанный файл тот же, что в подписанном описании релиза: размер и хеш совпадают. */
+async function verifyFileHash(filePath: string, file: UpdateFile): Promise<void> {
+  const { size } = await fs.stat(filePath)
+  if (size !== file.size || (await sha512(filePath)) !== file.sha512) {
+    throw new Error('Downloaded update was modified')
   }
 }
 
