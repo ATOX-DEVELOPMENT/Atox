@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { RELEASE_STAGE } from '../../../shared/release'
 import type { UpdateCheckResult, UpdateState } from '../../../shared/update'
 import { useUpdateState } from '../hooks/useUpdateState'
 import { ipcErrorMessage } from '../lib/ipcError'
@@ -37,7 +38,9 @@ export function UpdateSettings() {
   return (
     <div className="settings__row">
       <span className="settings__label">
-        <span>Atox {version}</span>
+        <span>
+          Atox {version} {RELEASE_STAGE}
+        </span>
         <span className="settings__description" aria-live="polite">
           {describe(update, status)}
         </span>
