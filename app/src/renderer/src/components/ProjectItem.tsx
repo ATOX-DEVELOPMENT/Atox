@@ -21,7 +21,7 @@ import {
 } from 'lucide-react'
 import { topLevelChats, workerChats } from '../../../shared/chats'
 import type { Chat, Project, Space } from '../../../shared/models'
-import { IS_MAC } from '../../../shared/platform'
+import { IS_MAC, IS_WINDOWS } from '../../../shared/platform'
 import { findProjectColor } from '../../../shared/projectColors'
 import { useProjectActions } from '../hooks/ProjectsContext'
 import { NO_CHAT_IDS } from '../lib/chatLayout'
@@ -34,7 +34,11 @@ import { InlineRename } from './InlineRename'
 import { SortableList, useSortableItem } from './SortableList'
 
 /** Папка открывается в файловом менеджере системы: на macOS это Finder. */
-const REVEAL_LABEL = IS_MAC ? 'Open in Finder' : 'Open in File Manager'
+const REVEAL_LABEL = IS_MAC
+  ? 'Open in Finder'
+  : IS_WINDOWS
+    ? 'Show in Explorer'
+    : 'Open in File Manager'
 
 /** Пункт «Move to Space»: `space:<id>`. */
 const SPACE_ACTION_PREFIX = 'space:'
