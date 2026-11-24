@@ -4424,22 +4424,41 @@ ul {
   white-space: nowrap;
 }
 
-.model-picker__chevron {
-  width: 14px;
-  height: 14px;
+/* Аккаунт чата — круглая кнопка с цветным кружком рядом с моделью; имя — в подсказке. */
+.account-picker {
+  display: grid;
+  flex-shrink: 0;
+  place-items: center;
+  width: var(--composer-button-size);
+  height: var(--composer-button-size);
+  border-radius: 50%;
 }
 
-/* Название дополнительного аккаунта: тише модели, чтобы не спорить с ней. */
-.model-picker__account {
-  overflow: hidden;
-  max-width: 96px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  color: var(--color-text-muted);
+.account-picker:hover {
+  background: var(--color-hover);
 }
 
-.model-picker__account::before {
-  content: '· ';
+/* Чат под аккаунтом, из которого вышли: кружок бледнеет — следующее сообщение не уйдёт. */
+.account-picker[data-signed-out] .account-avatar {
+  opacity: 0.45;
+}
+
+.account-avatar {
+  opacity: 0.45;
+}
+
+.account-avatar {
+  display: grid;
+  flex-shrink: 0;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--account-color);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1;
 }
 
 /* Карточки команд /usage и /context: полосы вместо текстовых таблиц для терминала. */
