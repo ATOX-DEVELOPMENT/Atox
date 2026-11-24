@@ -4446,14 +4446,6 @@ ul {
 }
 
 .account-avatar {
-  opacity: 0.45;
-}
-
-.account-avatar {
-  opacity: 0.45;
-}
-
-.account-avatar {
   display: grid;
   flex-shrink: 0;
   place-items: center;
