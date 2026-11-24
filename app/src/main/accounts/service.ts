@@ -69,6 +69,8 @@ export class AccountService {
   /** Что известно о вошедшем аккаунте: `null` — агент не вошёл, нет записи — ещё не спрашивали. */
   private readonly identities = new Map<string, AccountIdentity | null>()
   private readonly signIns = new Map<string, AccountSignIn>()
+  /** Страницы входа, которые сейчас ждут человека в браузере. */
+  private readonly signInUrls = new Map<string, string>()
   /** Подготовка папки каждого аккаунта идёт по очереди: две сразу переплели бы создание ссылок. */
   private readonly preparing = new Map<string, Promise<void>>()
   private refreshing: Promise<void> | null = null
@@ -211,12 +213,16 @@ export class AccountService {
     this.signIns.get(accountId)?.cancel()
     const signIn = await this.services.drivers[account.agent].signIn(await this.launch(account))
     this.signIns.set(accountId, signIn)
+    this.signInUrls.set(accountId, signIn.url)
+    this.services.onChange(this.list())
     this.services.openLink(signIn.url)
     try {
       await signIn.done
     } finally {
       if (this.signIns.get(accountId) === signIn) {
         this.signIns.delete(accountId)
+        this.signInUrls.delete(accountId)
+        this.services.onChange(this.list())
       }
     }
     await this.readIdentity(account)
@@ -249,6 +255,7 @@ export class AccountService {
 
   private describe(account: Account): AgentAccount {
     const identity = this.identities.get(account.id)
+    const signInUrl = this.signInUrls.get(account.id)
     return {
       id: account.id,
       agent: account.agent,
@@ -256,7 +263,8 @@ export class AccountService {
       main: account.main,
       signedIn: identity === undefined ? null : identity !== null,
       ...(identity?.email && { email: identity.email }),
-      ...(identity?.plan && { plan: identity.plan })
+      ...(identity?.plan && { plan: identity.plan }),
+      ...(signInUrl && { signInUrl })
     }
   }
 
