@@ -102,6 +102,8 @@ export interface ChatConfiguration {
   agent?: AgentId
   model?: string | null
   effort?: string | null
+  /** Дополнительный аккаунт агента; `null` — основной. */
+  account?: string | null
 }
 
 /** Чем занят инструмент — по этому выбираются значок и сводка «Ran 2 commands». */

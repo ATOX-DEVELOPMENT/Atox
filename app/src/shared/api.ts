@@ -1,4 +1,5 @@
 import type { ProjectFileContent, ProjectFileList } from './projectFiles'
+import type { AgentAccount } from './accounts'
 import type { AgentId } from './agents'
 import type { MessageAttachments, PickedFile } from './attachments'
 import type {
@@ -263,6 +264,28 @@ export interface AtoxApi {
     /** Принудительно перечитать лимиты у всех агентов — например, после смены аккаунта. */
     refresh(): Promise<void>
   }
+  /** Аккаунты агентов: основной у каждого и дополнительные подписки, которые добавил пользователь. */
+  accounts: {
+    /** Аккаунты всех агентов — то, что известно сейчас. */
+    list(): Promise<AgentAccount[]>
+    /** Спрашивает у агентов, в какие аккаунты они вошли, и возвращает обновлённый список. */
+    refresh(): Promise<AgentAccount[]>
+    /** Добавляет аккаунт агенту; войти в него — `signIn`. */
+    add(agent: AgentId): Promise<AgentAccount>
+    rename(accountId: string, name: string): Promise<void>
+    /**
+     * Удаляет дополнительный аккаунт после подтверждения: выходит из него и стирает его папку.
+     * `false` — пользователь передумал. Чаты под ним продолжаются под основным аккаунтом.
+     */
+    remove(accountId: string): Promise<boolean>
+    /**
+     * Открывает страницу входа в браузере и ждёт, пока человек её пройдёт. Завершается, когда
+     * вход закончен; отклоняется, если он не удался или его отменили.
+     */
+    signIn(accountId: string): Promise<void>
+    cancelSignIn(accountId: string): Promise<void>
+    onChanged(listener: (accounts: AgentAccount[]) => void): () => void
+  }
   tokenSpend: {
     /** Сколько токенов потратили агенты: сегодня и за всё время. */
     get(): Promise<TokenSpendSummary>
@@ -447,6 +470,14 @@ export const IpcChannel = {
   PlanLimitsGet: 'plan-limits:get',
   PlanLimitsRefresh: 'plan-limits:refresh',
   PlanLimitsChanged: 'plan-limits:changed',
+  AccountsList: 'accounts:list',
+  AccountsRefresh: 'accounts:refresh',
+  AccountsAdd: 'accounts:add',
+  AccountsRename: 'accounts:rename',
+  AccountsRemove: 'accounts:remove',
+  AccountsSignIn: 'accounts:sign-in',
+  AccountsCancelSignIn: 'accounts:cancel-sign-in',
+  AccountsChanged: 'accounts:changed',
   AgentsListsStale: 'agents:lists-stale',
   TokenSpendGet: 'token-spend:get',
   TokenSpendChanged: 'token-spend:changed',

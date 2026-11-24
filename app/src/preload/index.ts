@@ -1,4 +1,5 @@
 import { contextBridge, ipcRenderer, webUtils } from 'electron'
+import type { AgentAccount } from '../shared/accounts'
 import type { AgentId } from '../shared/agents'
 import type { AppCommand } from '../shared/commands'
 import type { BoardState } from '../shared/board'
@@ -238,6 +239,21 @@ const api: AtoxApi = {
       return () => ipcRenderer.removeListener(IpcChannel.PlanLimitsChanged, handler)
     },
     refresh: () => ipcRenderer.invoke(IpcChannel.PlanLimitsRefresh)
+  },
+  accounts: {
+    list: () => ipcRenderer.invoke(IpcChannel.AccountsList),
+    refresh: () => ipcRenderer.invoke(IpcChannel.AccountsRefresh),
+    add: (agent) => ipcRenderer.invoke(IpcChannel.AccountsAdd, agent),
+    rename: (accountId, name) => ipcRenderer.invoke(IpcChannel.AccountsRename, accountId, name),
+    remove: (accountId) => ipcRenderer.invoke(IpcChannel.AccountsRemove, accountId),
+    signIn: (accountId) => ipcRenderer.invoke(IpcChannel.AccountsSignIn, accountId),
+    cancelSignIn: (accountId) => ipcRenderer.invoke(IpcChannel.AccountsCancelSignIn, accountId),
+    onChanged: (listener) => {
+      const handler = (_event: Electron.IpcRendererEvent, accounts: AgentAccount[]) =>
+        listener(accounts)
+      ipcRenderer.on(IpcChannel.AccountsChanged, handler)
+      return () => ipcRenderer.removeListener(IpcChannel.AccountsChanged, handler)
+    }
   },
   tokenSpend: {
     get: () => ipcRenderer.invoke(IpcChannel.TokenSpendGet),
