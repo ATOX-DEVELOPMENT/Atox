@@ -1,6 +1,6 @@
-import { net } from 'electron'
 import type { AvailableRepository, BoardLabel, BoardRepository } from '../../shared/board'
 import type { GitHubAccounts } from '../githubAccounts'
+import { httpRequest } from '../httpRequest'
 
 const GRAPHQL_URL = 'https://api.github.com/graphql'
 
@@ -242,10 +242,9 @@ export class BoardGitHub {
 
   private async query<Data>(account: string, query: string, variables: Variables): Promise<Data> {
     const token = await this.token(account)
-    const response = await net.fetch(GRAPHQL_URL, {
+    const response = await httpRequest(GRAPHQL_URL, {
       method: 'POST',
       headers: { Authorization: `bearer ${token}`, 'Content-Type': 'application/json' },
-      credentials: 'omit',
       body: JSON.stringify({ query, variables }),
       signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS)
     })

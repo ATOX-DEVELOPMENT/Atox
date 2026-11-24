@@ -1,6 +1,7 @@
 import { readFile } from 'node:fs/promises'
 import { release } from 'node:os'
-import { app, net } from 'electron'
+import { app } from 'electron'
+import { httpRequest } from './httpRequest'
 import { JsonFileWriter, readVersionedJson } from './jsonFile'
 import type { SettingsStore } from './settings'
 
@@ -130,10 +131,9 @@ export class UsageStats {
   private async send(eventName: string): Promise<boolean> {
     try {
       this.osName ??= readOperatingSystem().then(([name]) => name)
-      const response = await net.fetch(this.endpoint, {
+      const response = await httpRequest(this.endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        credentials: 'omit',
         body: JSON.stringify({
           name: eventName,
           version: app.getVersion(),
