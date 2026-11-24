@@ -30,6 +30,14 @@ export function mainAccountId(agent: AgentId): string {
   return `main:${agent}`
 }
 
+/** Как в интерфейсе называется основной аккаунт агента. */
+export const MAIN_ACCOUNT_LABEL = 'Main account'
+
+/** Название аккаунта для интерфейса. */
+export function accountLabel({ name, main }: Pick<AgentAccount, 'name' | 'main'>): string {
+  return main ? MAIN_ACCOUNT_LABEL : name
+}
+
 /** Допустимая длина названия, которое пользователь дал аккаунту. */
 export const ACCOUNT_NAME_MAX_LENGTH = 40
 

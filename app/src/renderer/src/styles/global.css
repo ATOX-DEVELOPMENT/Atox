@@ -4429,6 +4429,19 @@ ul {
   height: 14px;
 }
 
+/* Название дополнительного аккаунта: тише модели, чтобы не спорить с ней. */
+.model-picker__account {
+  overflow: hidden;
+  max-width: 96px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--color-text-muted);
+}
+
+.model-picker__account::before {
+  content: '· ';
+}
+
 /* Карточки команд /usage и /context: полосы вместо текстовых таблиц для терминала. */
 
 .usage-card {
@@ -4528,6 +4541,17 @@ ul {
   margin: 0;
   font-size: var(--font-size);
   font-weight: 600;
+}
+
+.usage-agent__account {
+  margin: 0 0 8px;
+  font-size: var(--font-size-small);
+  font-weight: 500;
+  color: var(--color-text-muted);
+}
+
+.usage-agent__limits + .usage-agent__limits {
+  margin-top: 16px;
 }
 
 .usage-agent__tokens {
@@ -5422,6 +5446,25 @@ ul {
   margin: 0;
   flex-shrink: 0;
   accent-color: var(--color-accent);
+}
+
+/* Аккаунты агентов в настройках */
+
+.account-agent {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.account-agent__icon {
+  width: 14px;
+  height: 14px;
+}
+
+.account-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 /* Учётные записи GitHub в настройках */
