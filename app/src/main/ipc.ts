@@ -832,10 +832,12 @@ function parseConfiguration(value: unknown): ChatConfiguration {
     field === null ? null : typeof field === 'string' && field ? field : undefined
   const model = optionalString(source['model'])
   const effort = optionalString(source['effort'])
+  const account = optionalString(source['account'])
   return {
     ...(isAgentId(source['agent']) && { agent: source['agent'] }),
     ...(model !== undefined && { model }),
-    ...(effort !== undefined && { effort })
+    ...(effort !== undefined && { effort }),
+    ...(account !== undefined && { account })
   }
 }
 

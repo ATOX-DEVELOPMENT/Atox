@@ -10,12 +10,14 @@ import {
   SlidersHorizontal,
   SquareKanban,
   Sparkles,
+  UsersRound,
   X,
   type LucideIcon
 } from 'lucide-react'
 import { isIntegrationKind, type IntegrationKind } from '../../../shared/integrations'
 import { useProjectsContext } from '../hooks/ProjectsContext'
 import { useIntegrationLists } from '../hooks/useIntegrationLists'
+import { AccountSettings } from './AccountSettings'
 import { AgentIntegrations } from './AgentIntegrations'
 import { ArchivedChats } from './ArchivedChats'
 import { BoardSettings } from './BoardSettings'
@@ -28,7 +30,7 @@ import { ShortcutList } from './ShortcutList'
 import { UsageSettings } from './UsageSettings'
 
 export type SettingsSection =
-  'general' | 'appearance' | 'shortcuts' | 'usage' | 'board' | 'commands' | 'github' | 'archived' | IntegrationKind
+  'general' | 'appearance' | 'shortcuts' | 'accounts' | 'usage' | 'board' | 'commands' | 'github' | 'archived' | IntegrationKind
 
 interface SectionItem {
   id: SettingsSection
@@ -63,6 +65,7 @@ const SECTION_GROUPS: ReadonlyArray<{ title?: string; items: ReadonlyArray<Secti
   {
     title: 'Account',
     items: [
+      { id: 'accounts', label: 'Accounts', icon: UsersRound },
       { id: 'usage', label: 'Usage', icon: ChartNoAxesColumn },
       { id: 'github', label: 'GitHub', icon: GitHubMark },
       { id: 'archived', label: 'Archive', icon: Archive }
@@ -159,6 +162,8 @@ export function SettingsView({ initialSection, onClose }: SettingsViewProps) {
               <div className="settings__group">
                 <ShortcutList />
               </div>
+            ) : section === 'accounts' ? (
+              <AccountSettings />
             ) : section === 'usage' ? (
               <UsageSettings />
             ) : section === 'commands' ? (

@@ -300,8 +300,18 @@ function codexPlanName(planType: string): string {
   return words.charAt(0).toUpperCase() + words.slice(1)
 }
 
+/** Так Codex отвечает, когда вход есть в файле, но сервер его не принимает: токен отозван или истёк. */
+const REJECTED_LOGIN = /unauthorized|\b401\b/i
+
 async function readCodexAccount(rpc: JsonRpcProcess): Promise<AccountIdentity | null> {
-  const { account } = await rpc.request<CodexAccountResponse>('account/read', {})
+  const { account } = await rpc
+    .request<CodexAccountResponse>('account/read', {})
+    .catch((error: unknown) => {
+      if (REJECTED_LOGIN.test(errorMessage(error))) {
+        return { account: null }
+      }
+      throw error
+    })
   if (!account) {
     return null
   }
