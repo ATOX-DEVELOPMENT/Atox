@@ -3,10 +3,13 @@ import { defineConfig } from 'electron-vite'
 import react from '@vitejs/plugin-react'
 import packageJson from './package.json'
 
-/** Релизы лежат в репозитории из package.json; `latest` всегда указывает на последний. */
-const updateFeedUrl = `${packageJson.repository.url}/releases/latest/download`
-/** Файлы конкретного релиза: `<адрес>/v<версия>/<файл>`. */
-const releaseDownloadUrl = `${packageJson.repository.url}/releases/download`
+/**
+ * Релизы лежат в закрытом репозитории, файлы отдаёт сайт Atox: `latest` — последний релиз,
+ * `v<версия>/<файл>` — файл конкретного релиза.
+ */
+const updatesUrl = 'https://atox.dev/updates'
+const updateFeedUrl = `${updatesUrl}/latest`
+const releaseDownloadUrl = updatesUrl
 
 /** Сервер анонимной статистики Atox (админка). */
 const usageStatsUrl = 'https://admin.atox.dev/v1/event'

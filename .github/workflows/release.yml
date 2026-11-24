@@ -1,13 +1,8 @@
-# Каждый коммит в main с изменениями приложения выпускается релизом на GitHub:
-# установленный Atox находит его и предлагает обновиться.
+# Релиз выпускается вручную (`gh workflow run release.yml`): сборки в закрытом репозитории
+# тратят минуты Actions. Установленный Atox находит релиз через atox.dev/updates.
 name: Release
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - app/**
-      - .github/workflows/release.yml
   workflow_dispatch:
 
 permissions:
