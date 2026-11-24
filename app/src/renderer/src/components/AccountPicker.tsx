@@ -77,7 +77,6 @@ export function AccountPicker({ chat }: { chat: Chat }) {
       className="account-picker"
       title={title}
       aria-label={title}
-      data-signed-out={signedOut || undefined}
       onClick={() => void openMenu()}
     >
       <AccountAvatar account={current} accounts={accounts} />

@@ -4424,13 +4424,16 @@ ul {
   white-space: nowrap;
 }
 
-/* Аккаунт чата — круглая кнопка с цветным кружком рядом с моделью; имя — в подсказке. */
+/*
+ * Аккаунт чата — кружок вплотную к модели, как часть той же группы; имя — в подсказке.
+ * Кнопка чуть больше кружка, а у модели после неё отступ меньше обычного.
+ */
 .account-picker {
   display: grid;
   flex-shrink: 0;
   place-items: center;
-  width: var(--composer-button-size);
-  height: var(--composer-button-size);
+  width: 24px;
+  height: 24px;
   border-radius: 50%;
 }
 
@@ -4438,8 +4441,11 @@ ul {
   background: var(--color-hover);
 }
 
-/* Чат под аккаунтом, из которого вышли: кружок бледнеет — следующее сообщение не уйдёт. */
-.account-picker[data-signed-out] .account-avatar {
+.composer__meta .account-picker + .model-picker {
+  padding-left: 6px;
+}
+
+.account-avatar {
   opacity: 0.45;
 }
 
