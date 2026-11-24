@@ -4,7 +4,7 @@ import { basename, join, relative, resolve, sep } from 'node:path'
 import { Readable, Transform } from 'node:stream'
 import { pipeline } from 'node:stream/promises'
 import { setTimeout as delay } from 'node:timers/promises'
-import { app, net } from 'electron'
+import { app } from 'electron'
 import {
   compareVersions,
   isSafeReleaseFileName,
@@ -15,6 +15,7 @@ import {
   type UpdateManifest,
   type UpdateState
 } from '../shared/update'
+import { httpRequest } from './httpRequest'
 import { isInstallableFile, type UpdateInstaller } from './updateInstallers'
 import { UPDATE_PUBLIC_KEY } from './updatePublicKey'
 
@@ -318,7 +319,7 @@ export class AppUpdater {
       const signal = run.interactive
         ? AbortSignal.timeout(INTERACTIVE_REQUEST_TIMEOUT_MS)
         : AbortSignal.any([AbortSignal.timeout(REQUEST_TIMEOUT_MS), run.wake.signal])
-      const response = await net.fetch(`${this.options.feedUrl}/${manifestName}`, {
+      const response = await httpRequest(`${this.options.feedUrl}/${manifestName}`, {
         cache: 'no-store',
         signal
       })
@@ -406,15 +407,13 @@ export class AppUpdater {
     offset: number
   ): Promise<number> {
     const stall = new StallTimer(DOWNLOAD_STALL_TIMEOUT_MS)
-    const response = await net
-      .fetch(this.options.fileUrl(manifest.version, file.name), {
-        signal: stall.signal,
-        headers: offset > 0 ? { Range: `bytes=${offset}-` } : {}
-      })
-      .catch((error: unknown) => {
-        stall.stop()
-        throw error
-      })
+    const response = await httpRequest(this.options.fileUrl(manifest.version, file.name), {
+      signal: stall.signal,
+      headers: offset > 0 ? { Range: `bytes=${offset}-` } : {}
+    }).catch((error: unknown) => {
+      stall.stop()
+      throw error
+    })
     if (!response.ok || !response.body) {
       stall.stop()
       throw new UpdateRequestError(
