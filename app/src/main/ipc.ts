@@ -11,6 +11,7 @@ import {
 import { archivedChats, chatGroup } from '../shared/chats'
 import { isIntegrationKind } from '../shared/integrations'
 import type { Project } from '../shared/models'
+import type { AgentAccount } from '../shared/accounts'
 import type { PlanLimitsState } from '../shared/planLimits'
 import type { TokenSpendSummary } from '../shared/tokenSpend'
 import { isProjectColor } from '../shared/projectColors'
@@ -30,6 +31,7 @@ import type { GitBranchTracker } from './gitBranches'
 import type { SettingsStore } from './settings'
 import type { ProjectStore } from './store'
 import type { AppMenu } from './menu'
+import type { AccountService } from './accounts/service'
 import type { PlanLimitsMonitor } from './planLimits'
 import type { TokenSpendLedger } from './tokenSpend'
 import { openFileLink } from './fileLinks'
@@ -58,6 +60,7 @@ interface AppServices {
   updater: AppUpdater | null
   menu: AppMenu
   planLimits: PlanLimitsMonitor
+  accounts: AccountService
   tokenSpend: TokenSpendLedger
   githubAccounts: GitHubAccounts
   board: BoardService
@@ -77,6 +80,7 @@ export function registerIpcHandlers({
   updater,
   menu,
   planLimits,
+  accounts,
   tokenSpend,
   githubAccounts,
   board,
@@ -507,6 +511,52 @@ export function registerIpcHandlers({
   ipcMain.handle(IpcChannel.PlanLimitsRefresh, () => planLimits.refreshAll())
   ipcMain.handle(IpcChannel.TokenSpendGet, () => tokenSpend.summary())
 
+  ipcMain.handle(IpcChannel.AccountsList, () => accounts.list())
+  ipcMain.handle(IpcChannel.AccountsRefresh, () => accounts.refresh())
+  ipcMain.handle(IpcChannel.AccountsAdd, (_event, agent: unknown) => {
+    if (!isAgentId(agent)) {
+      throw new Error('Invalid agent')
+    }
+    return accounts.add(agent)
+  })
+  ipcMain.handle(IpcChannel.AccountsRename, (_event, accountId: unknown, name: unknown) => {
+    if (typeof accountId !== 'string' || typeof name !== 'string') {
+      throw new Error('Invalid account')
+    }
+    accounts.rename(accountId, name)
+  })
+  ipcMain.handle(IpcChannel.AccountsRemove, async (event, accountId: unknown) => {
+    if (typeof accountId !== 'string') {
+      throw new Error('Invalid account')
+    }
+    const account = accounts.list().find(({ id }) => id === accountId)
+    if (!account || account.main) {
+      return false
+    }
+    const confirmed = await confirm(BrowserWindow.fromWebContents(event.sender), {
+      message: `Remove “${account.name}”?`,
+      detail:
+        'Atox signs out of this account and deletes its data. Chats that used it keep their ' +
+        'history and continue under the main account; running ones are stopped.',
+      confirmLabel: 'Remove'
+    })
+    if (confirmed) {
+      await accounts.remove(accountId)
+    }
+    return confirmed
+  })
+  ipcMain.handle(IpcChannel.AccountsSignIn, (_event, accountId: unknown) => {
+    if (typeof accountId !== 'string') {
+      throw new Error('Invalid account')
+    }
+    return accounts.signIn(accountId)
+  })
+  ipcMain.handle(IpcChannel.AccountsCancelSignIn, (_event, accountId: unknown) => {
+    if (typeof accountId === 'string') {
+      accounts.cancelSignIn(accountId)
+    }
+  })
+
   ipcMain.on(IpcChannel.SettingsGet, (event) => {
     event.returnValue = settings.get()
   })
@@ -862,6 +912,10 @@ export function broadcastAgentListsStale(agent: AgentId): void {
 
 export function broadcastPlanLimits(state: PlanLimitsState): void {
   broadcast(IpcChannel.PlanLimitsChanged, state)
+}
+
+export function broadcastAccounts(accounts: AgentAccount[]): void {
+  broadcast(IpcChannel.AccountsChanged, accounts)
 }
 
 export function broadcastTokenSpend(summary: TokenSpendSummary): void {

@@ -1,10 +1,12 @@
 import { tmpdir, userInfo } from 'node:os'
 import { basename, delimiter, join } from 'node:path'
 import { app, BrowserWindow, nativeTheme, protocol, shell as electronShell } from 'electron'
+import { AccountService } from './accounts/service'
 import { AgentDetector } from './agents'
 import { WorkingTreeReader } from './changes'
 import { ProjectFiles } from './projectFiles'
 import { claudeDriver } from './conversations/claude'
+import { limitsKey } from '../shared/accounts'
 import { createCodexDriver } from './conversations/codex'
 import { ConversationManager } from './conversations/manager'
 import { TranscriptStore } from './conversations/transcripts'
@@ -19,6 +21,7 @@ import { CANVAS_SCHEME, handleCanvasProtocol } from './canvas/protocol'
 import { canvasResourcePath } from './canvas/resources'
 import { CanvasService } from './canvas/service'
 import {
+  broadcastAccounts,
   broadcastBoard,
   broadcastCanvas,
   broadcastGitBranches,
@@ -64,6 +67,11 @@ const USAGE_STATS_FILE_NAME = 'usage-stats.json'
 const TOKEN_SPEND_FILE_NAME = 'token-spend.json'
 const PLAN_LIMITS_FILE_NAME = 'plan-limits.json'
 const PLAN_LIMITS_LOG_NAME = 'plan-limits.log'
+const ACCOUNTS_FILE_NAME = 'accounts.json'
+/** Через сколько после запуска узнавать аккаунты агентов: сначала должно открыться окно. */
+const ACCOUNTS_STARTUP_DELAY_MS = 3_000
+/** Каталог дополнительных аккаунтов агентов: у каждого своя папка. */
+const ACCOUNTS_DIRECTORY_NAME = 'accounts'
 /** Каталог с лентами чатов: у каждого чата свой файл. */
 const TRANSCRIPTS_DIRECTORY_NAME = 'conversations'
 
@@ -129,31 +137,50 @@ async function bootstrap(): Promise<void> {
       ...(chatId && orchestration.environment(chatId))
     }
   }
+  const drivers = {
+    claude: claudeDriver,
+    codex: createCodexDriver({
+      name: 'atox',
+      title: app.getName(),
+      version: app.getVersion()
+    })
+  }
+  const openLink = (url: string): void => {
+    if (URL.canParse(url) && EXTERNAL_LINK_PROTOCOLS.has(new URL(url).protocol)) {
+      void electronShell.openExternal(url)
+    }
+  }
+  const accounts = await AccountService.load(
+    {
+      drivers,
+      agents,
+      environment: () => shell.get(),
+      openLink,
+      onChange: broadcastAccounts,
+      onRemoving: (agent, accountId) => {
+        conversations.detachAccount(accountId)
+        planLimits.forget(limitsKey(agent, accountId))
+      },
+      onSignedIn: (agent) => conversations.accountSignedIn(agent)
+    },
+    join(userData, ACCOUNTS_FILE_NAME),
+    join(userData, ACCOUNTS_DIRECTORY_NAME)
+  )
   const conversations = new ConversationManager({
     store,
     agents,
-    drivers: {
-      claude: claudeDriver,
-      codex: createCodexDriver({
-        name: 'atox',
-        title: app.getName(),
-        version: app.getVersion()
-      })
-    },
+    drivers,
+    accounts,
     transcripts,
     environment: agentEnvironment,
     onEvent: (event) => {
       broadcastConversationEvent(event)
       board?.onConversationEvent(event)
     },
-    onPlanLimits: (agent, limits) => planLimits.report(agent, limits),
+    onPlanLimits: (key, limits) => planLimits.report(key, limits),
     onTokensSpent: (agent, counts) => tokenSpend.record(agent, counts),
     onProjectsChanged: () => broadcastProjectsChanged(store.list()),
-    openLink: (url) => {
-      if (URL.canParse(url) && EXTERNAL_LINK_PROTOCOLS.has(new URL(url).protocol)) {
-        void electronShell.openExternal(url)
-      }
-    },
+    openLink,
     onAgentListsStale: broadcastAgentListsStale,
     onAccountChanged: () => void planLimits.refreshAll()
   })
@@ -171,8 +198,17 @@ async function bootstrap(): Promise<void> {
   app.on('will-quit', () => canvas.dispose())
   const planLimits = await PlanLimitsMonitor.load(
     {
-      installed: () => agents.list(),
-      read: (agent) => conversations.planLimits(agent),
+      targets: async () =>
+        (await agents.list()).flatMap((agent) => [
+          { key: limitsKey(agent), agent },
+          // Лимиты дополнительных аккаунтов читаются, только пока агент в них вошёл.
+          ...accounts.signedInExtras(agent).map((account) => ({
+            key: limitsKey(agent, account),
+            agent,
+            account
+          }))
+        ]),
+      read: ({ agent, account }) => conversations.planLimits(agent, account),
       onChange: broadcastPlanLimits
     },
     join(userData, PLAN_LIMITS_FILE_NAME),
@@ -262,6 +298,7 @@ async function bootstrap(): Promise<void> {
     agents,
     menu,
     planLimits,
+    accounts,
     tokenSpend,
     canvas
   })
@@ -270,6 +307,14 @@ async function bootstrap(): Promise<void> {
   // Пока окно было не в фокусе, в терминале могли поставить программу или поправить профиль.
   app.on('browser-window-focus', () => shell.refreshOnFocus())
   app.on('will-quit', () => branches.dispose())
+  // В какие аккаунты вошли агенты, узнаём в фоне и не сразу: это запускает их процессы, а окну
+  // сначала нужно открыться. Лимиты дополнительных аккаунтов читаются, когда это известно.
+  setTimeout(() => {
+    void accounts
+      .refresh()
+      .then(() => planLimits.refreshStale())
+      .catch((error) => console.error('Failed to read the agent accounts', error))
+  }, ACCOUNTS_STARTUP_DELAY_MS)
   // Лимиты тратятся и в других программах агентов: вернувшись в окно, пользователь видит свежие.
   planLimits.start()
   app.on('browser-window-focus', () => void planLimits.refreshStale())
@@ -298,8 +343,8 @@ async function bootstrap(): Promise<void> {
     conversations,
     terminals,
     stores: usageStats
-      ? [store, settings, conversations, board, canvas, tokenSpend, planLimits, usageStats]
-      : [store, settings, conversations, board, canvas, tokenSpend, planLimits]
+      ? [store, settings, conversations, board, canvas, tokenSpend, planLimits, accounts, usageStats]
+      : [store, settings, conversations, board, canvas, tokenSpend, planLimits, accounts]
   })
   if (updater) {
     quitHandling.onQuitCancelled(() => updater.cancelRelaunch())

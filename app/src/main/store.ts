@@ -338,9 +338,12 @@ export class ProjectStore {
     }
     const { project } = location
     const trimmed = title?.trim()
+    const parent = location.chat
     const chat: Chat = {
       ...newChat(project, agent),
       ...selection,
+      // Помощник того же агента работает под тем же аккаунтом: основной мог упереться в лимит.
+      ...(parent.account && parent.agent === agent && { account: parent.account }),
       ...(trimmed && { title: trimmed, hasCustomTitle: true }),
       parentChatId
     }
@@ -368,12 +371,33 @@ export class ProjectStore {
       fork: true,
       ...(source.model && { model: source.model }),
       ...(source.effort && { effort: source.effort }),
+      ...(source.account && { account: source.account }),
       ...(source.worktree && { worktree: source.worktree }),
       ...(source.githubAccount && { githubAccount: source.githubAccount })
     }
     project.chats = insertWorkerChat(project.chats, chat)
     this.persist()
     return { project, chat }
+  }
+
+  /**
+   * Возвращает к основному аккаунту все чаты, которые работали под `accountId`, — в том числе
+   * архивные. Возвращает идентификаторы тех, что изменились.
+   */
+  clearAccount(accountId: string): string[] {
+    const cleared: string[] = []
+    for (const project of this.projects) {
+      for (const chat of [...project.chats, ...archivedChats(project)]) {
+        if (chat.account === accountId) {
+          delete chat.account
+          cleared.push(chat.id)
+        }
+      }
+    }
+    if (cleared.length > 0) {
+      this.persist()
+    }
+    return cleared
   }
 
   removeChat(chatId: string): void {
@@ -492,17 +516,21 @@ export class ProjectStore {
    * Агента можно сменить, только пока разговор с ним не начат (`started`).
    * `true` — что-то изменилось.
    */
-  configureChat(chatId: string, { agent, model, effort }: ChatConfiguration): boolean {
+  configureChat(chatId: string, { agent, model, effort, account }: ChatConfiguration): boolean {
     const chat = this.findChat(chatId)?.chat
     if (!chat) {
       return false
     }
-    const before = JSON.stringify([chat.agent, chat.model, chat.effort])
+    const before = JSON.stringify([chat.agent, chat.model, chat.effort, chat.account])
     if (agent && agent !== chat.agent) {
-      // Модели у агентов свои: выбор прежнего агента новому не подходит.
+      // Модели и аккаунты у агентов свои: выбор прежнего агента новому не подходит.
       chat.agent = agent
       delete chat.model
       delete chat.effort
+      delete chat.account
+    }
+    if (account !== undefined) {
+      setOptional(chat, 'account', account)
     }
     if (model !== undefined) {
       setOptional(chat, 'model', model)
@@ -510,7 +538,7 @@ export class ProjectStore {
     if (effort !== undefined) {
       setOptional(chat, 'effort', effort)
     }
-    const changed = JSON.stringify([chat.agent, chat.model, chat.effort]) !== before
+    const changed = JSON.stringify([chat.agent, chat.model, chat.effort, chat.account]) !== before
     if (changed) {
       this.persist()
     }
@@ -599,7 +627,7 @@ function unarchived({ archivedAt: _archivedAt, ...chat }: Chat): Chat {
   return chat
 }
 
-function setOptional(chat: Chat, key: 'model' | 'effort', value: string | null): void {
+function setOptional(chat: Chat, key: 'model' | 'effort' | 'account', value: string | null): void {
   if (value) {
     chat[key] = value
   } else {

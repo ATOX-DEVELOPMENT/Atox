@@ -29,9 +29,11 @@ import type {
   IntegrationList
 } from '../../shared/integrations'
 import type { Chat, Project } from '../../shared/models'
+import type { AccountService } from '../accounts/service'
 import type { AgentDetector } from '../agents'
 import type { ChatLocation, ProjectStore } from '../store'
 import type { TokenCounts } from '../../shared/tokenSpend'
+import { limitsKey } from '../../shared/accounts'
 import { errorMessage } from './display'
 import { handoffMessage } from './handoff'
 import { PromiseCache } from './promiseCache'
@@ -133,12 +135,14 @@ export interface ConversationServices {
   store: ProjectStore
   agents: AgentDetector
   drivers: Record<AgentId, AgentDriver>
+  /** Дополнительные аккаунты агентов: чат может работать под одним из них. */
+  accounts: Pick<AccountService, 'has' | 'environmentFor'>
   transcripts: TranscriptStore
   /** Окружение процесса агента; с `chatId` — с переменными для команды `atox` этого чата. */
   environment(chatId?: string): Promise<Record<string, string>>
   onEvent(event: ConversationEvent): void
-  /** Сессия агента сообщила лимиты подписки — после очередного ответа. */
-  onPlanLimits(agent: AgentId, limits: PlanLimit[]): void
+  /** Сессия агента сообщила лимиты подписки аккаунта `key` (`limitsKey`) — после очередного ответа. */
+  onPlanLimits(key: string, limits: PlanLimit[]): void
   /** Агент потратил токены на очередной запрос. */
   onTokensSpent(agent: AgentId, counts: TokenCounts): void
   /** Список чатов изменился без участия окна — например, чат получил название. */
@@ -415,6 +419,12 @@ export class ConversationManager {
    */
   async configure(chatId: string, configuration: ChatConfiguration): Promise<void> {
     const conversation = await this.conversation(chatId)
+    if (configuration.account) {
+      const agent = configuration.agent ?? this.findChat(chatId).chat.agent
+      if (!this.services.accounts.has(agent, configuration.account)) {
+        throw new Error('The account was not found.')
+      }
+    }
     if (this.services.store.configureChat(chatId, configuration) && conversation.session) {
       conversation.stale = true
       this.restartIfIdle(conversation)
@@ -470,7 +480,12 @@ export class ConversationManager {
     let sessionId: string | null = null
     if (source.sessionId && source.sessionAgent) {
       try {
-        const launch = await this.launch(source.sessionAgent, chatDirectory(location))
+        const launch = await this.launch(
+          source.sessionAgent,
+          chatDirectory(location),
+          undefined,
+          this.accountOf(location.chat, source.sessionAgent)
+        )
         sessionId = await this.services.drivers[source.sessionAgent].fork(launch, source.sessionId)
       } catch (error) {
         console.error('Failed to fork the agent conversation, the history will be replayed', error)
@@ -601,7 +616,13 @@ export class ConversationManager {
     }
     const location = this.findChat(chatId)
     const { agent } = location.chat
-    return this.services.drivers[agent].limits(await this.launch(agent, chatDirectory(location)))
+    const launch = await this.launch(
+      agent,
+      chatDirectory(location),
+      undefined,
+      this.accountOf(location.chat, agent)
+    )
+    return this.services.drivers[agent].limits(launch)
   }
 
   private async readContext(chatId: string, conversation: Conversation) {
@@ -610,7 +631,12 @@ export class ConversationManager {
     }
     const location = this.findChat(chatId)
     const { chat } = location
-    const launch = await this.launch(chat.agent, chatDirectory(location))
+    const launch = await this.launch(
+      chat.agent,
+      chatDirectory(location),
+      undefined,
+      this.accountOf(chat, chat.agent)
+    )
     return this.services.drivers[chat.agent].context(launch, conversation.sessionId ?? undefined)
   }
 
@@ -917,7 +943,9 @@ export class ConversationManager {
       conversation.sessionId = null
     }
     conversation.sessionAgent = agent
-    const launch = await this.launch(agent, directory, chatId)
+    // Аккаунт сессии не меняется, пока она жива: чат, у которого его сменили, получит новую.
+    const account = this.accountOf(this.findChat(chatId).chat, agent)
+    const launch = await this.launch(agent, directory, chatId, account)
     // Чат удалили или приложение закрывается, пока агент запускался: запускать его уже незачем.
     if (conversation.disposed || this.closing) {
       throw new Error('The chat was closed.')
@@ -960,15 +988,7 @@ export class ConversationManager {
       {
         ...launch,
         openLink: (url) => this.services.openLink(url),
-        onAccountChanged: () => {
-          // Модели и команды зависят от аккаунта: до входа Claude Code отдаёт урезанный список,
-          // и его нельзя держать в памяти после входа.
-          this.catalogs.clear()
-          this.commandLists.clear()
-          this.restartSessions(agent)
-          this.services.onAgentListsStale(agent)
-          this.services.onAccountChanged(agent)
-        },
+        onAccountChanged: () => this.accountSignedIn(agent),
         ...(resumedId && { sessionId: resumedId }),
         selection: {
           ...(sameAgent && chat.model && { model: chat.model }),
@@ -1008,7 +1028,7 @@ export class ConversationManager {
             } else {
               this.finishUnprompted(chatId, conversation)
             }
-            this.reportPlanLimits(agent, session)
+            this.reportPlanLimits(limitsKey(agent, account), session)
           }
         },
         spent: (counts) => this.services.onTokensSpent(agent, counts),
@@ -1068,7 +1088,24 @@ export class ConversationManager {
     }
   }
 
-  private async launch(agent: AgentId, cwd: string, chatId?: string): Promise<AgentLaunch> {
+  /** Аккаунт, под которым чат работает с агентом; `undefined` — основной. */
+  private accountOf(chat: Chat, agent: AgentId): string | undefined {
+    const { account } = chat
+    return account && chat.agent === agent && this.services.accounts.has(agent, account)
+      ? account
+      : undefined
+  }
+
+  /**
+   * Как запустить агента. `account` — дополнительный аккаунт, под которым он работает;
+   * без него — основной, как в терминале.
+   */
+  private async launch(
+    agent: AgentId,
+    cwd: string,
+    chatId?: string,
+    account?: string
+  ): Promise<AgentLaunch> {
     if (!existsSync(cwd)) {
       throw new Error(`The project folder was not found: ${cwd}`)
     }
@@ -1079,20 +1116,60 @@ export class ConversationManager {
         `${name} is not installed. Install the ${name} CLI, sign in, and send the message again.`
       )
     }
-    return { executable, cwd, env: await this.services.environment(chatId) }
+    const env = await this.services.environment(chatId)
+    return {
+      executable,
+      cwd,
+      env: { ...env, ...(await this.services.accounts.environmentFor(agent, account, env)) }
+    }
   }
 
-  /** Лимиты подписки агента без сессии чата — отдельным процессом агента. */
-  async planLimits(agent: AgentId): Promise<PlanLimit[]> {
-    return this.services.drivers[agent].limits(await this.launch(agent, homedir()))
+  /** Лимиты подписки аккаунта агента без сессии чата — отдельным процессом агента. */
+  async planLimits(agent: AgentId, account?: string): Promise<PlanLimit[]> {
+    return this.services.drivers[agent].limits(await this.launch(agent, homedir(), undefined, account))
+  }
+
+  /**
+   * Агент вошёл в другой аккаунт: модели и команды зависят от аккаунта — до входа Claude Code
+   * отдаёт урезанный список, и его нельзя держать в памяти после входа.
+   */
+  accountSignedIn(agent: AgentId): void {
+    this.catalogs.clear()
+    this.commandLists.clear()
+    this.restartSessions(agent)
+    this.services.onAgentListsStale(agent)
+    this.services.onAccountChanged(agent)
+  }
+
+  /**
+   * Дополнительный аккаунт удаляют: чаты под ним возвращаются к основному, а их сессии
+   * закрываются — следующее сообщение продолжит разговор уже под основным аккаунтом.
+   */
+  detachAccount(accountId: string): void {
+    const chatIds = this.services.store.clearAccount(accountId)
+    for (const chatId of chatIds) {
+      const conversation = this.loaded.get(chatId)
+      if (!conversation?.session) {
+        continue
+      }
+      conversation.session.close()
+      // Сессия, которой агент сейчас не пользуется, забывается сразу: сообщение, пришедшее
+      // до её выхода, не должно уйти в закрытую. Занятая завершит ход сама, как при остановке.
+      if (!isBusy(conversation)) {
+        conversation.session = null
+      }
+    }
+    if (chatIds.length > 0) {
+      this.services.onProjectsChanged()
+    }
   }
 
   /** Каждый ответ расходует лимиты: работающая сессия сразу сообщает, сколько осталось. */
-  private reportPlanLimits(agent: AgentId, session: AgentSession): void {
+  private reportPlanLimits(key: string, session: AgentSession): void {
     session
       .limits()
-      .then((limits) => this.services.onPlanLimits(agent, limits))
-      .catch((error) => console.error(`Failed to read ${agent} plan limits`, error))
+      .then((limits) => this.services.onPlanLimits(key, limits))
+      .catch((error) => console.error(`Failed to read ${key} plan limits`, error))
   }
 
   private async loadCatalog(agent: AgentId): Promise<AgentCatalog> {
