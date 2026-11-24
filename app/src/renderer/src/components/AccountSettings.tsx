@@ -28,6 +28,8 @@ export function AccountSettings() {
   /** Агент, которому сейчас добавляют аккаунт. */
   const [adding, setAdding] = useState<AgentId | null>(null)
   const [renaming, setRenaming] = useState<string | null>(null)
+  /** Аккаунт, ссылку входа которого только что скопировали. */
+  const [copied, setCopied] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   /** Агентов уже спросили, в какие аккаунты они вошли. */
   const [checked, setChecked] = useState(false)
@@ -56,6 +58,12 @@ export function AccountSettings() {
     } finally {
       setSigningIn(null)
     }
+  }
+
+  const copySignInLink = async (accountId: string, url: string) => {
+    await navigator.clipboard.writeText(url)
+    setCopied(accountId)
+    setTimeout(() => setCopied((current) => (current === accountId ? null : current)), 2000)
   }
 
   const cancelSignIn = (accountId: string) => {
@@ -143,6 +151,15 @@ export function AccountSettings() {
                     {signingIn === account.id ? (
                       <>
                         <span className="settings__description">Waiting for the browser…</span>
+                        {account.signInUrl && (
+                          <button
+                            type="button"
+                            className="settings__button"
+                            onClick={() => void copySignInLink(account.id, account.signInUrl!)}
+                          >
+                            {copied === account.id ? 'Copied' : 'Copy link'}
+                          </button>
+                        )}
                         <button
                           type="button"
                           className="settings__button"
@@ -204,7 +221,9 @@ export function AccountSettings() {
       ))}
       <p className="settings__note" role={error ? 'alert' : undefined}>
         {error ??
-          'Extra accounts share chats, settings, skills and plugins with the main account — only the login is separate. Switch a chat’s account from its model menu.'}
+          (signingIn !== null
+            ? 'Your browser may already be signed in to another account and confirm it without asking. To use a different one, copy the link and open it in a private window.'
+            : 'Extra accounts share chats, settings, skills and plugins with the main account — only the login is separate. Switch a chat’s account from its model menu.')}
       </p>
     </div>
   )
