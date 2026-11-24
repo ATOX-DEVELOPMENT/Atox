@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto'
+import type { AccountIdentity } from '../../shared/accounts'
 import {
   limitOutput,
   type AgentCatalog,
@@ -24,7 +25,14 @@ import {
 } from './codexIntegrations'
 import { JsonRpcProcess, type JsonRpcHandlers } from './jsonRpc'
 import { withTimeout } from './timeout'
-import type { AgentDriver, AgentLaunch, AgentSession, SessionEvents, SessionOptions } from './types'
+import type {
+  AccountSignIn,
+  AgentDriver,
+  AgentLaunch,
+  AgentSession,
+  SessionEvents,
+  SessionOptions
+} from './types'
 import { UserRequests, type NewRequest } from './userRequests'
 
 /*
@@ -197,6 +205,16 @@ export function createCodexDriver(client: ClientInfo): AgentDriver {
       )
     },
 
+    account(launch) {
+      return withAppServer(launch, client, readCodexAccount)
+    },
+
+    signIn: (launch) => startCodexSignIn(launch, client),
+
+    async signOut(launch) {
+      await withAppServer(launch, client, (rpc) => rpc.request('account/logout', {}))
+    },
+
     start(options, events) {
       return new CodexSession(options, events, client)
     },
@@ -253,6 +271,121 @@ async function withAppServer<T>(
     return await withTimeout(ask())
   } finally {
     rpc.kill()
+  }
+}
+
+/** Аккаунт из ответа `account/read`: `account: null` — Codex не вошёл ни в ChatGPT, ни по ключу. */
+interface CodexAccountResponse {
+  account:
+    | { type: 'chatgpt'; email: string | null; planType: string }
+    | { type: 'apiKey' }
+    | { type: string }
+    | null
+}
+
+/** Названия тарифов ChatGPT, которые пишутся не просто с заглавной буквы. */
+const CODEX_PLAN_NAMES: Readonly<Record<string, string>> = {
+  prolite: 'Pro Lite',
+  edu: 'Edu',
+  unknown: ''
+}
+
+/** Тариф для интерфейса: `plus` — «Plus», `self_serve_business_prolite` — «Self serve business prolite». */
+function codexPlanName(planType: string): string {
+  const known = CODEX_PLAN_NAMES[planType]
+  if (known !== undefined) {
+    return known
+  }
+  const words = planType.replace(/_/g, ' ')
+  return words.charAt(0).toUpperCase() + words.slice(1)
+}
+
+async function readCodexAccount(rpc: JsonRpcProcess): Promise<AccountIdentity | null> {
+  const { account } = await rpc.request<CodexAccountResponse>('account/read', {})
+  if (!account) {
+    return null
+  }
+  if (account.type !== 'chatgpt') {
+    // Вход по ключу API: почты и тарифа нет, но Codex работает.
+    return {}
+  }
+  const { email, planType } = account as { email: string | null; planType: string }
+  const plan = codexPlanName(planType)
+  return { ...(email && { email }), ...(plan && { plan }) }
+}
+
+/** Ответ на начало входа в ChatGPT: страница, которую нужно открыть в браузере. */
+interface CodexLoginResponse {
+  type: string
+  authUrl?: string
+  loginId?: string
+}
+
+/** Итог входа, который Codex присылает уведомлением, когда человек прошёл страницу входа. */
+interface CodexLoginCompleted {
+  loginId: string | null
+  success: boolean
+  error: string | null
+}
+
+/** Сколько ждать, пока человек пройдёт вход в браузере; потом процесс входа закрывается. */
+const CODEX_SIGN_IN_TIMEOUT_MS = 10 * 60 * 1000
+
+/**
+ * Начинает вход в ChatGPT. Браузер после входа возвращается на локальный адрес, который
+ * слушает сам `codex app-server`, поэтому процесс живёт, пока вход не завершится.
+ */
+async function startCodexSignIn(launch: AgentLaunch, client: ClientInfo): Promise<AccountSignIn> {
+  let loginId: string | null = null
+  let succeed!: () => void
+  let fail!: (error: Error) => void
+  const done = new Promise<void>((resolve, reject) => {
+    succeed = resolve
+    fail = reject
+  })
+  // Вход может завершиться раньше, чем кто-то начнёт его ждать: ошибка не должна падать «вникуда».
+  done.catch(() => undefined)
+  const rpc = startAppServer(launch, {
+    notification: (method, params) => {
+      const result = params as CodexLoginCompleted
+      if (method !== 'account/login/completed' || (loginId && result.loginId !== loginId)) {
+        return
+      }
+      if (result.success) {
+        succeed()
+      } else {
+        fail(new Error(result.error ?? 'Codex could not sign in.'))
+      }
+    },
+    request: () => Promise.reject(new Error('Not supported')),
+    exit: (error) => fail(error ?? new Error('Codex stopped before sign-in finished.'))
+  })
+  const timer = setTimeout(
+    () => fail(new Error('Sign-in took too long.')),
+    CODEX_SIGN_IN_TIMEOUT_MS
+  )
+  const close = (): void => {
+    clearTimeout(timer)
+    rpc.kill()
+  }
+  void done.then(close, close)
+  try {
+    await withTimeout(initialize(rpc, client))
+    const response = await withTimeout(
+      rpc.request<CodexLoginResponse>('account/login/start', { type: 'chatgpt' })
+    )
+    if (response.type !== 'chatgpt' || !response.authUrl) {
+      throw new Error('Codex did not give a sign-in link.')
+    }
+    loginId = response.loginId ?? null
+    return {
+      url: response.authUrl,
+      done,
+      cancel: () => fail(new Error('Sign-in was cancelled.'))
+    }
+  } catch (error) {
+    fail(error instanceof Error ? error : new Error(String(error)))
+    throw error
   }
 }
 

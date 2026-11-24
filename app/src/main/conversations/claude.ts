@@ -1,7 +1,9 @@
+import { execFile } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
 import { existsSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
 import { extname, join } from 'node:path'
+import { promisify } from 'node:util'
 import { app } from 'electron'
 import {
   forkSession,
@@ -10,6 +12,7 @@ import {
   type EffortLevel,
   type ElicitationRequest,
   type ElicitationResult,
+  type AccountInfo,
   type ModelInfo,
   type Options,
   type PermissionResult,
@@ -33,13 +36,21 @@ import {
   type TimelineItem,
   type ToolKind
 } from '../../shared/conversation'
+import type { AccountIdentity } from '../../shared/accounts'
 import { AsyncQueue } from './asyncQueue'
 import { readClaudeMcpServers, readClaudePlugins, readClaudeSkills } from './claudeIntegrations'
 import { displayPath, errorMessage } from './display'
 import { elicitationContent, elicitationFields } from './elicitation'
 import { withTimeout } from './timeout'
 import { UserRequests } from './userRequests'
-import type { AgentDriver, AgentLaunch, AgentSession, SessionEvents, SessionOptions } from './types'
+import type {
+  AccountSignIn,
+  AgentDriver,
+  AgentLaunch,
+  AgentSession,
+  SessionEvents,
+  SessionOptions
+} from './types'
 
 type ToolItem = Extract<TimelineItem, { kind: 'tool' }>
 
@@ -218,6 +229,14 @@ export const claudeDriver: AgentDriver = {
     return withIdleSession(launch, readClaudeMcpServers)
   },
 
+  account(launch) {
+    return withIdleSession(launch, async (session) => toIdentity(await session.accountInfo()))
+  },
+
+  signIn: startSignIn,
+
+  signOut,
+
   start(options, events) {
     return new ClaudeSession(options, events)
   },
@@ -384,6 +403,93 @@ async function readContext(session: Query): Promise<ContextReport> {
       .map(({ name, tokens }) => ({ name, tokens }))
   }
 }
+
+/** Название тарифа для интерфейса: `max` — «Max». */
+function planName(subscriptionType: string): string {
+  return subscriptionType.charAt(0).toUpperCase() + subscriptionType.slice(1)
+}
+
+/** Источник входа, которым Claude Code сообщает, что входа нет. */
+const NO_CREDENTIALS = 'none'
+
+/** Аккаунт из ответа Claude Code; без почты, токена и ключа вход не выполнен. */
+function toIdentity(info: AccountInfo): AccountIdentity | null {
+  const hasCredentials = [info.tokenSource, info.apiKeySource].some(
+    (source) => source !== undefined && source !== NO_CREDENTIALS
+  )
+  if (!info.email && !hasCredentials) {
+    return null
+  }
+  return {
+    ...(info.email && { email: info.email }),
+    ...(info.subscriptionType && { plan: planName(info.subscriptionType) })
+  }
+}
+
+/**
+ * Начинает вход в аккаунт Claude: страница входа открывается в браузере, а когда человек
+ * её пройдёт, `done` завершается.
+ *
+ * Браузер после «Authorize» возвращается на локальный адрес, который слушает сам процесс
+ * Claude Code, начавший вход. Поэтому вход идёт в отдельном процессе: процесс чата закрывается
+ * при смене модели или агента, и страница в браузере тогда падает — слушать больше некому.
+ */
+async function startSignIn(launch: AgentLaunch): Promise<AccountSignIn> {
+  const input = new AsyncQueue<SDKUserMessage>()
+  const login = query({ prompt: input, options: launchOptions(launch) })
+  const close = (): void => {
+    input.end()
+    login.close()
+  }
+  try {
+    const controls = login as unknown as AccountControls
+    if (!controls.claudeAuthenticate || !controls.claudeOAuthWaitForCompletion) {
+      throw new Error('This version of Claude Code cannot sign in from here.')
+    }
+    const { automaticUrl, manualUrl } = await withTimeout(controls.claudeAuthenticate(true))
+    const url = automaticUrl ?? manualUrl
+    if (!url) {
+      throw new Error('Claude Code did not give a sign-in link.')
+    }
+    let cancel = (): void => undefined
+    const cancelled = new Promise<never>((_resolve, reject) => {
+      cancel = () => reject(new Error('Sign-in was cancelled.'))
+    })
+    // Вход может занять минуты: он идёт, пока человек не закончит или не отменит его.
+    const done = Promise.race([
+      withTimeout(controls.claudeOAuthWaitForCompletion(), SIGN_IN_TIMEOUT_MS),
+      cancelled
+    ])
+      .then(() => undefined)
+      .finally(close)
+    return {
+      url,
+      done,
+      cancel: () => {
+        cancel()
+        close()
+      }
+    }
+  } catch (error) {
+    close()
+    throw error
+  }
+}
+
+const execFileAsync = promisify(execFile)
+
+/** Выход из аккаунта делает сам Claude Code: он знает, где хранит вход — в связке ключей или в файле. */
+async function signOut(launch: AgentLaunch): Promise<void> {
+  await execFileAsync(claudeExecutablePath(launch), ['auth', 'logout'], {
+    cwd: launch.cwd,
+    env: launch.env,
+    timeout: SIGN_OUT_TIMEOUT_MS,
+    windowsHide: true
+  })
+}
+
+/** Сколько ждать, пока Claude Code удалит вход. */
+const SIGN_OUT_TIMEOUT_MS = 30_000
 
 /**
  * Спрашивает что-то у Claude Code без разговора: сессия без сообщений к модели не обращается,
@@ -583,49 +689,23 @@ class ClaudeSession implements AgentSession {
     )
   }
 
-  /**
-   * Вход в аккаунт Claude: страница входа открывается в браузере, итог дописывается в ту же запись.
-   *
-   * Браузер после «Authorize» возвращается на локальный адрес, который слушает сам процесс
-   * Claude Code, начавший вход. Поэтому вход идёт в отдельном процессе: процесс чата закрывается
-   * при смене модели или агента, и страница в браузере тогда падает — слушать больше некому.
-   */
+  /** Вход в аккаунт Claude из чата (`/login`): страница открывается в браузере, итог дописывается в ту же запись. */
   private async signIn(): Promise<void> {
-    const input = new AsyncQueue<SDKUserMessage>()
-    const login = query({ prompt: input, options: launchOptions(this.options) })
-    const close = (): void => {
-      input.end()
-      login.close()
-    }
-    try {
-      const controls = login as unknown as AccountControls
-      if (!controls.claudeAuthenticate || !controls.claudeOAuthWaitForCompletion) {
-        throw new Error('This version of Claude Code cannot sign in from here.')
-      }
-      const { automaticUrl, manualUrl } = await withTimeout(controls.claudeAuthenticate(true))
-      const url = automaticUrl ?? manualUrl
-      if (!url) {
-        throw new Error('Claude Code did not give a sign-in link.')
-      }
-      const id = randomUUID()
-      this.options.openLink(url)
-      this.showCommandOutput(
-        `Finish signing in to Claude in your browser. ` +
-          `If it did not open, use [this link](${url}).`,
-        id
-      )
-      // Вход может занять минуты: чат уже свободен, а запись обновится, когда всё закончится.
-      void withTimeout(controls.claudeOAuthWaitForCompletion(), SIGN_IN_TIMEOUT_MS)
-        .then(() => {
-          this.options.onAccountChanged()
-          this.showCommandOutput('Signed in to Claude.', id)
-        })
-        .catch((error) => this.showCommandOutput(`Sign-in failed. ${errorMessage(error)}`, id))
-        .finally(close)
-    } catch (error) {
-      close()
-      throw error
-    }
+    const { url, done } = await startSignIn(this.options)
+    const id = randomUUID()
+    this.options.openLink(url)
+    this.showCommandOutput(
+      `Finish signing in to Claude in your browser. ` +
+        `If it did not open, use [this link](${url}).`,
+      id
+    )
+    // Вход может занять минуты: чат уже свободен, а запись обновится, когда всё закончится.
+    void done
+      .then(() => {
+        this.options.onAccountChanged()
+        this.showCommandOutput('Signed in to Claude.', id)
+      })
+      .catch((error) => this.showCommandOutput(`Sign-in failed. ${errorMessage(error)}`, id))
   }
 
   async interrupt(): Promise<void> {

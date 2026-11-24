@@ -1,3 +1,4 @@
+import type { AccountIdentity } from '../../shared/accounts'
 import type { AgentId } from '../../shared/agents'
 import type { TokenCounts } from '../../shared/tokenSpend'
 import type {
@@ -80,6 +81,16 @@ export interface AgentSession {
   close(): void
 }
 
+/** Вход в аккаунт в браузере: идёт, пока человек не закончит его или не отменит. */
+export interface AccountSignIn {
+  /** Страница входа: её нужно открыть в браузере. */
+  url: string
+  /** Завершается, когда вход пройден; отклоняется, если он не удался, истёк или был отменён. */
+  done: Promise<void>
+  /** Отменяет вход и закрывает процесс агента, который его ждёт. */
+  cancel(): void
+}
+
 /** Подключение к агенту через его служебный протокол. */
 export interface AgentDriver {
   readonly agent: AgentId
@@ -93,6 +104,12 @@ export interface AgentDriver {
   skills(launch: AgentLaunch): Promise<SkillInfo[]>
   /** Серверы MCP и их состояние после попытки подключиться. */
   mcpServers(launch: AgentLaunch): Promise<McpServerInfo[]>
+  /** Аккаунт, под которым агент работает с этим окружением; `null` — агент не вошёл. */
+  account(launch: AgentLaunch): Promise<AccountIdentity | null>
+  /** Начинает вход в аккаунт; страницу входа открывает вызывающий. */
+  signIn(launch: AgentLaunch): Promise<AccountSignIn>
+  /** Выходит из аккаунта: сохранённый вход удаляется. */
+  signOut(launch: AgentLaunch): Promise<void>
   start(options: SessionOptions, events: SessionEvents): AgentSession
   /** Лимиты подписки, когда в чате ещё нет запущенной сессии. */
   limits(launch: AgentLaunch): Promise<PlanLimit[]>
