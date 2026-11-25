@@ -2,6 +2,7 @@ import { join } from 'node:path'
 import { BrowserWindow, nativeTheme, shell, type BrowserWindowConstructorOptions } from 'electron'
 import { EXTERNAL_LINK_PROTOCOLS } from '../shared/links'
 import { IS_MAC } from '../shared/platform'
+import { DEFAULT_SURFACE, findSurface, type SurfaceId } from '../shared/settings'
 
 const WINDOW_SIZE = {
   width: 1200,
@@ -10,8 +11,25 @@ const WINDOW_SIZE = {
   minHeight: 480
 } as const
 
-/** Фон окна до первой отрисовки — цвет чата (`--color-surface` в стилях), на нём лежит сайдбар. */
-const WINDOW_BACKGROUND = { light: '#f3f2f7', dark: '#1c1c1e' } as const
+/** Фон окна, выбранный в настройках. */
+let surface: SurfaceId = DEFAULT_SURFACE
+
+/**
+ * Фон окна до первой отрисовки и при изменении размера — цвет чата (`--color-surface` в стилях)
+ * в текущей теме: на нём лежит сайдбар.
+ */
+function windowBackground(): string {
+  const { light, dark } = findSurface(surface)
+  return nativeTheme.shouldUseDarkColors ? dark : light
+}
+
+/** Выбрали другой фон или сменилась тема: открытые окна перекрашиваются, новые откроются в нём. */
+export function setWindowSurface(next: SurfaceId): void {
+  surface = next
+  for (const window of BrowserWindow.getAllWindows()) {
+    window.setBackgroundColor(windowBackground())
+  }
+}
 
 /**
  * Левый верхний угол кнопок окна macOS: они стоят в верхней таблетке сайдбара, по её вертикальному
@@ -26,7 +44,7 @@ const TRAFFIC_LIGHTS_POSITION = { x: 23, y: 22 } as const
  */
 function platformWindowOptions(): BrowserWindowConstructorOptions {
   return {
-    backgroundColor: WINDOW_BACKGROUND[nativeTheme.shouldUseDarkColors ? 'dark' : 'light'],
+    backgroundColor: windowBackground(),
     ...(IS_MAC && {
       titleBarStyle: 'hiddenInset' as const,
       trafficLightPosition: TRAFFIC_LIGHTS_POSITION
