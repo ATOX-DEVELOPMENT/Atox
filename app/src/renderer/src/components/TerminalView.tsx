@@ -44,7 +44,7 @@ interface TerminalViewProps {
 }
 
 export function TerminalView({ projectId, visible, focusRequest, onExit }: TerminalViewProps) {
-  const { shortcuts } = useSettings()
+  const { shortcuts, surface, accent } = useSettings()
   // Сочетания меню читает обработчик клавиш терминала, который создаётся один раз.
   const menuAcceleratorsRef = useRef(menuAccelerators(shortcuts))
   menuAcceleratorsRef.current = menuAccelerators(shortcuts)
@@ -192,6 +192,15 @@ export function TerminalView({ projectId, visible, focusRequest, onExit }: Termi
       fitRef.current = null
     }
   }, [projectId])
+
+  // Выбрали другой фон или акцент: терминал перекрашивается вместе с окном.
+  useEffect(() => {
+    const terminal = terminalRef.current
+    const container = containerRef.current
+    if (terminal && container) {
+      terminal.options.theme = readTerminalAppearance(container).theme
+    }
+  }, [surface, accent])
 
   // Показанный терминал подгоняется под своё место: пока он был скрыт, размер не менялся.
   useEffect(() => {
