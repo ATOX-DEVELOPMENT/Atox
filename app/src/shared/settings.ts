@@ -29,6 +29,31 @@ export function isAccentId(value: unknown): value is AccentId {
   return ACCENTS.some(({ id }) => id === value)
 }
 
+/**
+ * Фоны окна — цвет чата, на котором лежат сайдбар и поле ввода. У каждого два оттенка: для
+ * светлой и тёмной темы. `graphite` — прежний фон, он и выбран по умолчанию; `black` — почти
+ * чёрный, как у Codex.
+ */
+export const SURFACES = [
+  { id: 'graphite', name: 'Graphite', light: '#f3f2f7', dark: '#1c1c1e' },
+  { id: 'black', name: 'Black', light: '#ffffff', dark: '#111111' },
+  { id: 'slate', name: 'Slate', light: '#eef1f6', dark: '#141922' },
+  { id: 'sand', name: 'Sand', light: '#f6f3ee', dark: '#1c1a17' }
+] as const
+export type SurfaceId = (typeof SURFACES)[number]['id']
+export type Surface = (typeof SURFACES)[number]
+
+export const DEFAULT_SURFACE: SurfaceId = 'graphite'
+
+export function isSurfaceId(value: unknown): value is SurfaceId {
+  return SURFACES.some(({ id }) => id === value)
+}
+
+/** Фон по идентификатору; неизвестный — фон по умолчанию. */
+export function findSurface(id: SurfaceId): Surface {
+  return SURFACES.find((surface) => surface.id === id) ?? SURFACES[0]
+}
+
 export function isThemeMode(value: unknown): value is ThemeMode {
   return THEME_MODES.some((mode) => mode === value)
 }
@@ -72,6 +97,8 @@ export interface Settings {
   theme: ThemeMode
   /** Акцентный цвет: выделения, переключатели, кнопки. */
   accent: AccentId
+  /** Фон окна и чата. */
+  surface: SurfaceId
   /** Вид кнопок над списком проектов: строки с подписями или ряд иконок. */
   sidebarButtons: SidebarButtonStyle
   /** Сколько агентов доски работают одновременно; остальные задачи ждут в очереди. */
@@ -137,6 +164,7 @@ export const DEFAULT_SETTINGS: Settings = {
   profileAvatar: '',
   theme: 'system',
   accent: DEFAULT_ACCENT,
+  surface: DEFAULT_SURFACE,
   sidebarButtons: DEFAULT_SIDEBAR_BUTTON_STYLE,
   boardMaxAgents: BOARD_AGENTS.default,
   boardAgent: { agent: DEFAULT_AGENT_ID },

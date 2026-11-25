@@ -55,7 +55,7 @@ import { checkForUpdatesFromMenu } from './updateCheck'
 import { createUpdateInstaller } from './updateInstallers'
 import { AppUpdater } from './updater'
 import { UsageStats } from './usageStats'
-import { APP_FRAME_SOURCE, createMainWindow } from './window'
+import { APP_FRAME_SOURCE, createMainWindow, setWindowSurface } from './window'
 
 const STORE_FILE_NAME = 'projects.json'
 const SETTINGS_FILE_NAME = 'settings.json'
@@ -106,9 +106,13 @@ async function bootstrap(): Promise<void> {
   const settings = await SettingsStore.load(join(userData, SETTINGS_FILE_NAME))
   // Тема окна: `prefers-color-scheme` в окне и цвет фона окна следуют за ней.
   nativeTheme.themeSource = settings.get().theme
-  settings.onChange(({ theme }) => {
+  setWindowSurface(settings.get().surface)
+  settings.onChange(({ theme, surface }) => {
     nativeTheme.themeSource = theme
+    setWindowSurface(surface)
   })
+  // Системная тема сменилась: фон окна под отрисовкой — тоже.
+  nativeTheme.on('updated', () => setWindowSurface(settings.get().surface))
   const tokenSpend = await TokenSpendLedger.load(join(userData, TOKEN_SPEND_FILE_NAME))
   tokenSpend.onChange(broadcastTokenSpend)
   const transcripts = await TranscriptStore.open(join(userData, TRANSCRIPTS_DIRECTORY_NAME))

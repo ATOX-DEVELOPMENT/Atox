@@ -1,6 +1,7 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { IS_MAC } from '../../shared/platform'
+import { findSurface, type Settings } from '../../shared/settings'
 import { App } from './App'
 import { trackWindowFocus } from './lib/windowFocus'
 import './styles/global.css'
@@ -13,12 +14,15 @@ if (!container) {
 
 // Оформление окна различается: на macOS — прозрачный сайдбар и кнопки окна в нём.
 document.documentElement.dataset['platform'] = IS_MAC ? 'mac' : 'linux'
-// Акцентный цвет задаётся до первой отрисовки, чтобы не мигать синим.
-const applyAccent = ({ accent }: { accent: string }) => {
-  document.documentElement.dataset['accent'] = accent
+// Акцентный цвет и фон задаются до первой отрисовки, чтобы окно не мигало прежними.
+const applyAppearance = ({ accent, surface }: Pick<Settings, 'accent' | 'surface'>) => {
+  const root = document.documentElement
+  root.dataset['accent'] = accent
+  const { light, dark } = findSurface(surface)
+  root.style.setProperty('--color-surface', `light-dark(${light}, ${dark})`)
 }
-applyAccent(window.atox.settings.get())
-window.atox.settings.subscribe(applyAccent)
+applyAppearance(window.atox.settings.get())
+window.atox.settings.subscribe(applyAppearance)
 trackWindowFocus()
 
 createRoot(container).render(
