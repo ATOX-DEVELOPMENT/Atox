@@ -1,5 +1,6 @@
 import { LayoutGrid, List, Monitor, Moon, Sun, type LucideIcon } from 'lucide-react'
-import { ACCENTS, type SidebarButtonStyle, type ThemeMode } from '../../../shared/settings'
+import type { CSSProperties } from 'react'
+import { ACCENTS, SURFACES, type SidebarButtonStyle, type ThemeMode } from '../../../shared/settings'
 import { useSettings } from '../hooks/SettingsContext'
 
 const { atox } = window
@@ -23,9 +24,9 @@ const SIDEBAR_BUTTON_OPTIONS: ReadonlyArray<{
   { id: 'icons', label: 'Icons', icon: LayoutGrid }
 ]
 
-/** Раздел «Appearance»: тема, вид кнопок сайдбара и акцентный цвет. */
+/** Раздел «Appearance»: тема, фон, вид кнопок сайдбара и акцентный цвет. */
 export function SettingsAppearance() {
-  const { theme, accent, sidebarButtons } = useSettings()
+  const { theme, accent, surface, sidebarButtons } = useSettings()
 
   return (
     <div className="settings__group">
@@ -50,6 +51,29 @@ export function SettingsAppearance() {
                 <Icon className="segmented__icon" />
                 {label}
               </button>
+            ))}
+          </div>
+        </div>
+        <div className="settings__row">
+          <span className="settings__label">
+            <span>Background</span>
+            <span className="settings__description">
+              The color of the window and the chat, in the light and the dark theme.
+            </span>
+          </span>
+          <div className="accent-swatches" role="radiogroup" aria-label="Background">
+            {SURFACES.map(({ id, name, light, dark }) => (
+              <button
+                key={id}
+                type="button"
+                role="radio"
+                aria-checked={surface === id}
+                aria-label={name}
+                title={name}
+                className="surface-swatch"
+                style={{ '--surface-pick': `light-dark(${light}, ${dark})` } as CSSProperties}
+                onClick={() => void atox.settings.update({ surface: id })}
+              />
             ))}
           </div>
         </div>

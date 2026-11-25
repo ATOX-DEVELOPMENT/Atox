@@ -6,6 +6,8 @@ import {
   DEFAULT_SETTINGS,
   DEFAULT_SIDEBAR_BUTTON_STYLE,
   isAccentId,
+  isSurfaceId,
+  DEFAULT_SURFACE,
   isProfileAvatar,
   isSidebarButtonStyle,
   isThemeMode,
@@ -88,6 +90,7 @@ function normalize(settings: Settings): Settings {
     profileAvatar: isProfileAvatar(settings.profileAvatar) ? settings.profileAvatar : '',
     theme: isThemeMode(settings.theme) ? settings.theme : 'system',
     accent: isAccentId(settings.accent) ? settings.accent : DEFAULT_ACCENT,
+    surface: isSurfaceId(settings.surface) ? settings.surface : DEFAULT_SURFACE,
     sidebarButtons: isSidebarButtonStyle(settings.sidebarButtons)
       ? settings.sidebarButtons
       : DEFAULT_SIDEBAR_BUTTON_STYLE,
