@@ -182,6 +182,8 @@
               <tr><td><code>atox start &lt;agent&gt; "&lt;task&gt;"</code></td><td>Start a worker with a task; add <code>--model</code> and <code>--effort</code> to choose them</td></tr>
               <tr><td><code>atox workers</code></td><td>List your workers and their state</td></tr>
               <tr><td><code>atox send &lt;chat-id&gt; "&lt;message&gt;"</code></td><td>Message a worker</td></tr>
+              <tr><td><code>atox send --now &lt;chat-id&gt; "&lt;message&gt;"</code></td><td>Interrupt a worker's turn and give it the message right away</td></tr>
+              <tr><td><code>atox interrupt &lt;chat-id&gt;</code></td><td>Stop a worker's current turn; its chat and context stay</td></tr>
               <tr><td><code>atox remove &lt;chat-id&gt;</code></td><td>Stop a worker and delete its chat</td></tr>
               <tr><td><code>atox send parent "&lt;question&gt;"</code></td><td>Worker: ask the agent that started it</td></tr>
               <tr><td><code>atox report "&lt;summary&gt;"</code></td><td>Worker: send the result back</td></tr>

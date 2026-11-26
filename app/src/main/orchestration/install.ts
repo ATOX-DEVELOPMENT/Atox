@@ -50,7 +50,9 @@ atox models claude                           # the agent's models: id, name, eff
 atox start claude --title "Fix checkout" "<task>"
 atox start claude --model opus --effort high --title "Plan the migration" "<task>"
 atox workers                                 # your workers, oldest first: id, agent and model, state, age, title
-atox send <worker-chat-id> "<message>"       # follow-up or answer to a worker's question
+atox send <worker-chat-id> "<message>"       # follow-up or answer to a worker's question; read after its current turn
+atox send --now <worker-chat-id> "<message>" # interrupt the worker's turn and give it the message right away
+atox interrupt <worker-chat-id>              # stop the worker's current turn; chat and context stay
 atox remove <worker-chat-id> [...]           # stop workers and remove their chats
 atox send parent "<question>"                # worker: ask the agent that started you
 atox report "<summary>"                      # worker: final result, exactly once
@@ -64,6 +66,12 @@ atox report "<summary>"                      # worker: final result, exactly onc
 - Workers share the folder with you and each other, so give them separate files or areas.
 - After starting, keep working or end your turn. Do not poll or wait in a loop: the report arrives as a new message. Use \`atox workers\` only when the user asks for status.
 - Workers cannot start workers of their own.
+
+## Correcting and interrupting workers
+
+- \`atox send\` queues the message: the worker reads it only after its current turn ends. If the correction cannot wait (wrong direction, wrong files, the user changed the task), use \`atox send --now <worker-chat-id> "<message>"\`: the worker's turn stops and it starts on your message right away, with its context intact.
+- \`atox interrupt <worker-chat-id>\` only stops the current turn: the worker goes idle and keeps its chat and context; your next \`atox send\` continues it. Messages already queued for it are taken next. Interrupting an idle worker does nothing.
+- Prefer these over \`atox remove\` for a correction: removing loses the worker's context. You can interrupt only your own workers.
 
 ## Removing workers
 
