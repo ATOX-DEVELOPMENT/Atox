@@ -4540,6 +4540,36 @@ button.usage-indicator:hover {
   color: var(--color-text);
 }
 
+button.usage-indicator[data-open='true'] {
+  background: var(--color-active);
+  color: var(--color-text);
+}
+
+/* Разбор контекста над кольцом: окно поверх, а не карточка в ленте. */
+.context-popover {
+  position: fixed;
+  z-index: 1000;
+  width: 300px;
+  max-width: calc(100vw - 16px);
+  border: 1px solid var(--color-menu-border);
+  border-radius: 10px;
+  background: var(--color-menu);
+  box-shadow: var(--shadow-menu);
+  animation: hover-hint-in 120ms ease-out;
+}
+
+.context-popover .usage-card {
+  border: none;
+  background: none;
+}
+
+.context-popover__note {
+  margin: 0;
+  padding: 12px 14px;
+  font-size: var(--font-size-small);
+  color: var(--color-text-muted);
+}
+
 button.usage-indicator[data-warning='true']:hover {
   color: var(--color-danger);
 }

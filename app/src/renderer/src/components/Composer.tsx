@@ -1,4 +1,4 @@
-import { memo, useEffect, useRef, useState, type KeyboardEvent } from 'react'
+import { memo, useCallback, useEffect, useRef, useState, type KeyboardEvent } from 'react'
 import { ArrowUp, CircleAlert, FileText, LoaderCircle, Plus, Square, X } from 'lucide-react'
 import {
   isChatCommand,
@@ -82,6 +82,7 @@ export const Composer = memo(function Composer({
   // Черновик хранится вне компонента: выгруженный чат не теряет набранное.
   const { text, attachments, pending, error } = useComposerDraft(chat.id)
   const chatId = chat.id
+  const loadContext = useCallback(() => atox.conversations.context(chatId), [chatId])
   const update = (change: (draft: ComposerDraft) => Partial<ComposerDraft>) =>
     updateDraft(chatId, change)
   const setText = (value: string) => update(() => ({ text: value }))
@@ -536,9 +537,7 @@ export const Composer = memo(function Composer({
               {usage && (
                 <UsageIndicator
                   usage={usage}
-                  {...(findAgent(chat.agent)?.reportsContext && {
-                    onOpen: () => void atox.conversations.runCommand(chat.id, 'context')
-                  })}
+                  {...(findAgent(chat.agent)?.reportsContext && { loadContext })}
                 />
               )}
             </div>

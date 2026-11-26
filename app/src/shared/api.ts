@@ -24,6 +24,7 @@ import type {
   AgentCatalog,
   AgentCommand,
   ChatCommand,
+  ContextReport,
   ChatConfiguration,
   ConversationEvent,
   ConversationSnapshot,
@@ -154,6 +155,8 @@ export interface AtoxApi {
     commands(chatId: string): Promise<AgentCommand[]>
     /** Выполняет команду Atox (`/usage`, `/context`, `/clear`), не отправляя её агенту. */
     runCommand(chatId: string, command: ChatCommand): Promise<void>
+    /** Из чего сейчас состоит контекст чата — для окна у кольца, без записи в ленту. */
+    context(chatId: string): Promise<ContextReport>
     /** Останавливает текущий ответ агента; сообщения в очереди уходят ему следом. */
     interrupt(chatId: string): Promise<void>
     /** Убирает сообщение из очереди, пока агент его не взял. */
@@ -452,6 +455,7 @@ export const IpcChannel = {
   ConversationsAnswerRequest: 'conversations:answer-request',
   ConversationsCommands: 'conversations:commands',
   ConversationsRunCommand: 'conversations:run-command',
+  ConversationsContext: 'conversations:context',
   ConversationsEvent: 'conversations:event',
   TerminalsAttach: 'terminals:attach',
   TerminalsWrite: 'terminals:write',
