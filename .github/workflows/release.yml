@@ -1,8 +1,12 @@
-# Релиз выпускается вручную (`gh workflow run release.yml`): сборки в закрытом репозитории
-# тратят минуты Actions. Установленный Atox находит релиз через atox.dev/updates.
+# Релиз выпускается мержем релизного PR `pre-release → main`: в main больше ничего не попадает,
+# поэтому каждый push в неё — новый релиз. Работа копится в pre-release и релизов не запускает:
+# сборки в закрытом репозитории тратят минуты Actions. Ручной запуск — тоже только из main.
+# Установленный Atox находит релиз через atox.dev/updates.
 name: Release
 
 on:
+  push:
+    branches: [main]
   workflow_dispatch:
 
 permissions:
