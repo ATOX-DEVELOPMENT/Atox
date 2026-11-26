@@ -82,9 +82,21 @@ export interface OrchestrationMethods {
     params: { agent: string; task: string; title?: string; model?: string; effort?: string }
     result: { chatId: string; title: string; model?: string; effort?: string }
   }
-  send: { params: { to: string; message: string }; result: { chatId: string } }
+  /**
+   * Ставит сообщение в очередь агенту. `now` — только своему помощнику: его текущий ход
+   * прерывается, и сообщение уходит сразу следующим.
+   */
+  send: {
+    params: { to: string; message: string; now?: boolean }
+    result: { chatId: string; interrupted?: boolean }
+  }
   report: { params: { summary: string }; result: { chatId: string } }
   workers: { params: Record<string, never>; result: WorkerInfo[] }
+  /**
+   * Прерывает текущий ход своего помощника; чат и разговор остаются. `interrupted` — помощник
+   * работал; `queued` — сколько сообщений ждёт: следующее он возьмёт сразу.
+   */
+  interrupt: { params: { chatId: string }; result: { interrupted: boolean; queued: number } }
   /** Останавливает помощников и убирает их чаты из списка. */
   remove: { params: { chatIds: string[] }; result: { removed: string[] } }
   /**
