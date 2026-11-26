@@ -4056,9 +4056,12 @@ ul {
 }
 
 .composer__bar-end {
+  --composer-meta-padding: 6px;
+  --composer-meta-gap: calc(2 * var(--composer-meta-padding));
   display: flex;
   align-items: center;
-  gap: 4px;
+  /* Вместе с полем последней кнопки строки — тот же промежуток, что между ними. */
+  gap: calc(var(--composer-meta-gap) - var(--composer-meta-padding));
   min-width: 0;
 }
 
@@ -4144,17 +4147,22 @@ ul {
   color: var(--color-text-muted);
 }
 
-/* Модель и контекст — в нижней строке рядом с отправкой, тихо: нужны редко и не теснят текст. */
+/*
+ * Аккаунт, модель и контекст — в нижней строке рядом с отправкой, тихо: нужны редко и не
+ * теснят текст. Кнопки вплотную, с одинаковыми полями: между содержимым соседей — ровно
+ * `--composer-meta-gap`, и подсветка у каждой своя.
+ */
 .composer__meta {
   display: flex;
   align-items: center;
-  gap: 2px;
   min-width: 0;
 }
 
-.composer__meta .model-picker {
+.composer__meta .model-picker,
+.composer__meta .account-picker,
+.composer__meta button.usage-indicator {
   height: var(--composer-button-size);
-  padding: 0 10px;
+  padding: 0 var(--composer-meta-padding);
   border-radius: 999px;
 }
 
@@ -4530,8 +4538,6 @@ ul {
 
 /* Кольцо, которое открывает разбор контекста: как кнопки рядом — пилюля с подсветкой. */
 button.usage-indicator {
-  height: var(--composer-button-size);
-  padding: 0 8px;
   border-radius: 999px;
 }
 
@@ -4625,7 +4631,7 @@ button.usage-indicator[data-warning='true']:hover {
   display: grid;
   flex-shrink: 0;
   place-items: center;
-  width: 24px;
+  min-width: 24px;
   height: 24px;
   border-radius: 50%;
 }
@@ -4634,9 +4640,6 @@ button.usage-indicator[data-warning='true']:hover {
   background: var(--color-hover);
 }
 
-.composer__meta .account-picker + .model-picker {
-  padding-left: 6px;
-}
 
 .account-avatar {
   display: grid;
