@@ -31,6 +31,7 @@ import { currentModel, matchEffort, matchModel, modelConfiguration } from '../li
 import { CommandMenu, filterCommands } from './CommandMenu'
 import { ImageViewer } from './ImageViewer'
 import { imageContextMenu, type ShownImage } from '../lib/imageActions'
+import { findAgent } from '../../../shared/agents'
 import { AccountPicker } from './AccountPicker'
 import { ModelPicker } from './ModelPicker'
 import { UsageIndicator } from './UsageIndicator'
@@ -532,7 +533,14 @@ export const Composer = memo(function Composer({
               )}
               <AccountPicker chat={chat} />
               <ModelPicker chat={chat} openRequest={pickerRequest} />
-              {usage && <UsageIndicator usage={usage} />}
+              {usage && (
+                <UsageIndicator
+                  usage={usage}
+                  {...(findAgent(chat.agent)?.reportsContext && {
+                    onOpen: () => void atox.conversations.runCommand(chat.id, 'context')
+                  })}
+                />
+              )}
             </div>
             {running && !hasContent ? (
               <button
