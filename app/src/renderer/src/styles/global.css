@@ -4731,6 +4731,8 @@ button.usage-indicator[data-warning='true']:hover {
 
 /* Агенты рядом, карточки одной ширины и высоты; в узком окне — друг под другом. */
 .usage-page__agents {
+  /* Самая узкая плитка трат токенов, в которой «180.7M» и «Cached» стоят в три колонки. */
+  --token-tile-min-width: 190px;
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
   gap: 16px;
@@ -4801,7 +4803,11 @@ button.usage-indicator[data-warning='true']:hover {
   /* Траты токенов внизу карточки: у соседней лимитов может быть больше, а низ — вровень. */
   margin-top: auto;
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  /*
+   * «Сегодня» и «За всё время» рядом, пока плитка помещается целиком; в узкой карточке или
+   * с длинными числами — одна под другой. Плитка не бывает шире карточки.
+   */
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, var(--token-tile-min-width)), 1fr));
   gap: 12px;
   padding-top: 16px;
   border-top: 1px solid var(--color-border);
@@ -4810,6 +4816,7 @@ button.usage-indicator[data-warning='true']:hover {
 .token-tile {
   display: flex;
   flex-direction: column;
+  min-width: 0;
   padding: 12px 14px;
   border: 1px solid var(--color-border);
   border-radius: var(--radius);
@@ -4836,8 +4843,10 @@ button.usage-indicator[data-warning='true']:hover {
 }
 
 .token-tile__parts {
-  display: flex;
-  gap: 16px;
+  /* In, Out и Cached делят ширину плитки поровну, а не раздвигают её своими числами. */
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
   margin: 12px 0 0;
   padding-top: 10px;
   border-top: 1px solid var(--color-border);
@@ -4851,6 +4860,13 @@ button.usage-indicator[data-warning='true']:hover {
 .token-tile__parts dd {
   margin: 2px 0 0;
   font-variant-numeric: tabular-nums;
+}
+
+.token-tile__parts dt,
+.token-tile__parts dd {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .usage-page__note {
