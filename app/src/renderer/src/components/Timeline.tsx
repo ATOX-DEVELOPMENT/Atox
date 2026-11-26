@@ -63,6 +63,13 @@ const FRESH_MESSAGE_MS = 2000
 /** Как часто обновлять секундомер работающего агента. */
 const CLOCK_INTERVAL_MS = 1000
 
+/**
+ * Сколько законченный ответ остаётся развёрнутым, прежде чем свернуться в «Worked for». Claude
+ * может закончить ход и тут же продолжить сам — например, когда пришёл результат фоновой
+ * задачи. Без паузы ответ в этот миг сворачивался и разворачивался обратно: текст пропадал.
+ */
+const FOLD_DELAY_MS = 3000
+
 interface TimelineProps {
   chatId: string
   items: readonly TimelineItem[]
@@ -85,6 +92,7 @@ export const Timeline = memo(function Timeline({
 }: TimelineProps) {
   const blocks = useMemo(() => buildBlocks(items), [items])
   const lastTurn = blocks.findLast((block) => block.type === 'turn')
+  const unfolded = useFoldDelay(running)
   return (
     <div className="timeline">
       {blocks.map((block) => {
@@ -103,6 +111,7 @@ export const Timeline = memo(function Timeline({
                 // Агент мог продолжить сам — после фоновой задачи, — когда ответ уже закончен:
                 // его работа всё равно относится к последнему сообщению и видна по ходу.
                 live={running && block === lastTurn}
+                unfolded={unfolded && block === lastTurn}
                 tokens={turnTokens}
                 visible={visible}
               />
@@ -380,6 +389,8 @@ interface TurnProps {
   items: readonly TimelineItem[]
   /** Агент ещё отвечает на это сообщение. */
   live: boolean
+  /** Ответ только что закончился и ещё не свёрнут: агент может тут же продолжить. */
+  unfolded: boolean
   tokens: number
   visible: boolean
 }
@@ -387,14 +398,18 @@ interface TurnProps {
 /**
  * Ответ на сообщение. Пока агент работает, видно всё по порядку: что он пишет и что делает.
  * Законченный ответ — это последний текст агента с временем и копированием, а работа до него
- * свёрнута в «Worked for».
+ * свёрнута в «Worked for». Остановленный ответ не сворачивается: всё, что агент успел, остаётся.
  */
-function Turn({ chatId, user, items, live, tokens, visible }: TurnProps) {
-  if (live) {
+function Turn({ chatId, user, items, live, unfolded, tokens, visible }: TurnProps) {
+  if (live || unfolded || user.stopped) {
     return (
       <>
         <WorkLog chatId={chatId} items={items} />
-        <WorkingStatus user={user} items={items} tokens={tokens} visible={visible} />
+        {live ? (
+          <WorkingStatus user={user} items={items} tokens={tokens} visible={visible} />
+        ) : (
+          user.stopped && <StoppedNote user={user} />
+        )}
       </>
     )
   }
@@ -417,6 +432,41 @@ function Turn({ chatId, user, items, live, tokens, visible }: TurnProps) {
       )}
     </>
   )
+}
+
+/** «Stopped after 40s» под оборванным ответом: агента остановили, дальше он не писал. */
+function StoppedNote({ user }: { user: UserItem }) {
+  const finishedAt = knownFinish(user)
+  return (
+    <div className="turn-stopped">
+      {finishedAt === undefined
+        ? 'Stopped'
+        : `Stopped after ${formatDuration(finishedAt - user.createdAt)}`}
+    </div>
+  )
+}
+
+/**
+ * Развёрнут ли последний ответ: пока агент работает и ещё `FOLD_DELAY_MS` после. Пауза
+ * считается от момента, когда агент перестал работать, и начинается заново, если он снова
+ * взялся и снова закончил. Чат, открытый уже после ответа, показывает его сразу свёрнутым.
+ */
+function useFoldDelay(running: boolean): boolean {
+  const [wasRunning, setWasRunning] = useState(running)
+  const [stoppedAt, setStoppedAt] = useState<number | null>(null)
+  // Состояние меняется прямо при отрисовке, а не в эффекте: иначе на один кадр ответ свернулся бы.
+  if (wasRunning !== running) {
+    setWasRunning(running)
+    setStoppedAt(running ? null : Date.now())
+  }
+  useEffect(() => {
+    if (stoppedAt === null) {
+      return
+    }
+    const timer = setTimeout(() => setStoppedAt(null), FOLD_DELAY_MS)
+    return () => clearTimeout(timer)
+  }, [stoppedAt])
+  return running || stoppedAt !== null
 }
 
 /**

@@ -3739,6 +3739,13 @@ ul {
   border-bottom: 1px solid var(--color-border);
 }
 
+/* Под оборванным ответом: тихая строка, как «Worked for», без раскрытия — всё и так на виду. */
+.turn-stopped {
+  padding-bottom: var(--chat-block-gap);
+  border-bottom: 1px solid var(--color-border);
+  color: var(--color-text-muted);
+}
+
 .work-summary__toggle {
   display: flex;
   align-items: center;
