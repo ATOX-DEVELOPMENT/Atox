@@ -42,6 +42,7 @@ import type { BoardService } from './board/service'
 import type { CanvasService } from './canvas/service'
 import type { GitHubAccounts } from './githubAccounts'
 import type { RepositoryReader } from './repository'
+import type { ChatPullRequests } from './chatPullRequests'
 import { getUserProfile } from './system'
 import type { TerminalManager } from './terminals'
 import type { AppUpdater } from './updater'
@@ -53,6 +54,7 @@ interface AppServices {
   terminals: TerminalManager
   branches: GitBranchTracker
   repository: RepositoryReader
+  chatPullRequests: ChatPullRequests
   workingTree: WorkingTreeReader
   projectFiles: ProjectFiles
   agents: AgentDetector
@@ -75,6 +77,7 @@ export function registerIpcHandlers({
   branches,
   projectFiles,
   repository,
+  chatPullRequests,
   workingTree,
   agents,
   updater,
@@ -483,6 +486,14 @@ export function registerIpcHandlers({
     (_event, projectId: string, kind: GitHubKind, state: ListState, cursor: string) =>
       repository.moreGitHub(store.getProject(projectId).path, kind, state, cursor)
   )
+  ipcMain.handle(IpcChannel.RepositoryChatPullRequest, (_event, chatId: string, fresh?: boolean) => {
+    const location = store.findChat(chatId)
+    if (!location) {
+      return null
+    }
+    const { chat, project } = location
+    return chatPullRequests.get(chat.worktree ?? project.path, chat.githubAccount, fresh)
+  })
 
   ipcMain.handle(IpcChannel.UpdatesState, () => updater?.state ?? null)
   ipcMain.on(IpcChannel.UpdatesInstall, () => updater?.installAndRelaunch())

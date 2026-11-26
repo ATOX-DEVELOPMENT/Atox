@@ -1,5 +1,6 @@
 import { setTimeout as delay } from 'node:timers/promises'
 import type {
+  BranchPullRequest,
   CheckStatus,
   GitHubCounts,
   GitHubItems,
@@ -11,6 +12,7 @@ import type {
   Listing,
   Page,
   PullRequest,
+  PullRequestState,
   RepositoryError,
   RepositoryResult,
   ReviewDecision
@@ -215,6 +217,37 @@ export class RepositoryReader {
     return this.withGitHubAccess(path, (token) =>
       this.githubPage(path, kind, state, cursor, GITHUB_PAGE_SIZE, token)
     )
+  }
+
+  /**
+   * PR ветки репозитория папки: открытый, если он есть, иначе последний. `null` — у ветки нет
+   * PR, `gh` нет или GitHub недоступен. `account` — учётная запись gh чата: под ней агент
+   * и создаёт PR; без неё — активная или та, у которой есть доступ к репозиторию.
+   */
+  async branchPullRequest(
+    path: string,
+    branch: string,
+    account?: string
+  ): Promise<BranchPullRequest | null> {
+    const view = async (token?: string): Promise<BranchPullRequest> => {
+      const output = await this.run(
+        'gh',
+        ['pr', 'view', branch, '--json', 'number,title,url,state,isDraft'],
+        path,
+        token ? { GH_TOKEN: token } : {}
+      )
+      return toBranchPullRequest(JSON.parse(output) as BranchPullRequestNode)
+    }
+    try {
+      const token = account ? await this.accounts.token(account) : null
+      if (token) {
+        return await view(token)
+      }
+      const result = await this.withGitHubAccess(path, view)
+      return result.ok ? result.data : null
+    } catch {
+      return null
+    }
   }
 
   /**
@@ -467,14 +500,7 @@ function toPullRequest(node: PullRequestNode): PullRequest {
     number: node.number,
     title: node.title,
     url: node.url,
-    state:
-      node.state === 'MERGED'
-        ? 'merged'
-        : node.state === 'CLOSED'
-          ? 'closed'
-          : node.isDraft
-            ? 'draft'
-            : 'open',
+    state: toPullRequestState(node.state, node.isDraft),
     author: node.author?.login ?? GHOST_AUTHOR,
     branch: node.headRefName,
     updatedAt: Date.parse(node.updatedAt),
@@ -484,6 +510,28 @@ function toPullRequest(node: PullRequestNode): PullRequest {
     checks: toCheckStatus(node.commits.nodes[0]?.commit.statusCheckRollup?.state),
     review: toReviewDecision(node.reviewDecision)
   }
+}
+
+/** Ответ `gh pr view --json number,title,url,state,isDraft`. */
+interface BranchPullRequestNode {
+  number: number
+  title: string
+  url: string
+  state: 'OPEN' | 'CLOSED' | 'MERGED'
+  isDraft: boolean
+}
+
+function toBranchPullRequest(node: BranchPullRequestNode): BranchPullRequest {
+  return {
+    number: node.number,
+    title: node.title,
+    url: node.url,
+    state: toPullRequestState(node.state, node.isDraft)
+  }
+}
+
+function toPullRequestState(state: string, isDraft: boolean): PullRequestState {
+  return state === 'MERGED' ? 'merged' : state === 'CLOSED' ? 'closed' : isDraft ? 'draft' : 'open'
 }
 
 function toIssue(node: IssueNode): Issue {

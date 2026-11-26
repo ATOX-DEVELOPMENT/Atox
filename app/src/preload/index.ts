@@ -209,7 +209,9 @@ const api: AtoxApi = {
   repository: {
     github: (projectId, loaded) => ipcRenderer.invoke(IpcChannel.RepositoryGitHub, projectId, loaded),
     moreGitHub: (projectId, kind, state, cursor) =>
-      ipcRenderer.invoke(IpcChannel.RepositoryMoreGitHub, projectId, kind, state, cursor)
+      ipcRenderer.invoke(IpcChannel.RepositoryMoreGitHub, projectId, kind, state, cursor),
+    chatPullRequest: (chatId, fresh) =>
+      ipcRenderer.invoke(IpcChannel.RepositoryChatPullRequest, chatId, fresh)
   },
   updates: {
     state: () => ipcRenderer.invoke(IpcChannel.UpdatesState),

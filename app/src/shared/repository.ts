@@ -22,6 +22,9 @@ export interface PullRequest {
   review: ReviewDecision
 }
 
+/** PR ветки, в которой работает чат: то, что видно у чата в сайдбаре. */
+export type BranchPullRequest = Pick<PullRequest, 'number' | 'title' | 'url' | 'state'>
+
 export type IssueState = 'open' | 'completed' | 'not-planned'
 
 export interface IssueLabel {
