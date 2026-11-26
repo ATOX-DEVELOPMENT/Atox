@@ -1,10 +1,8 @@
 import { execFile } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
-import { existsSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
-import { extname, join } from 'node:path'
+import { extname } from 'node:path'
 import { promisify } from 'node:util'
-import { app } from 'electron'
 import {
   forkSession,
   query,
@@ -153,43 +151,12 @@ function parseLocalCommand(text: string): LocalCommand | null {
   return name === '/login' && rest.length === 0 ? { name: 'login' } : null
 }
 
-/**
- * Claude Code, который Atox принёс с собой: он той же версии, что и SDK, и понимает служебные
- * запросы вроде лимитов подписки (`get_usage`). У пользователя может стоять более старая версия,
- * где этих запросов ещё нет, — тогда лимитов не видно и список моделей урезан. `null` — бандл
- * не нашёлся: это бывает на платформах, для которых SDK не кладёт native-бинарь.
- */
-function bundledClaudeExecutable(): string | null {
-  const platform = `${process.platform}-${process.arch}`
-  if (app.isPackaged) {
-    const packaged = join(
-      process.resourcesPath,
-      'claude-cli',
-      process.platform === 'win32' ? 'claude.exe' : 'claude'
-    )
-    return existsSync(packaged) ? packaged : null
-  }
-  try {
-    // В разработке берём бинарь прямо из `node_modules` — так же, как electron-builder в сборке.
-    return require.resolve(
-      `@anthropic-ai/claude-agent-sdk-${platform}/claude${process.platform === 'win32' ? '.exe' : ''}`
-    )
-  } catch {
-    return null
-  }
-}
-
-/** Путь к Claude Code, который используется для сессий Atox: сначала наш бандл, потом системный. */
-function claudeExecutablePath(launch: AgentLaunch): string {
-  return bundledClaudeExecutable() ?? launch.executable
-}
-
 function launchOptions(launch: AgentLaunch): Options {
   const { env, cwd } = launch
   return {
     cwd,
     env,
-    pathToClaudeCodeExecutable: claudeExecutablePath(launch),
+    pathToClaudeCodeExecutable: launch.executable,
     // Те же настройки, CLAUDE.md, навыки и хуки, что у Claude Code в терминале.
     settingSources: ['user', 'project', 'local'],
     systemPrompt: { type: 'preset', preset: 'claude_code', append: ATOX_SYSTEM_PROMPT },
@@ -480,7 +447,7 @@ const execFileAsync = promisify(execFile)
 
 /** Выход из аккаунта делает сам Claude Code: он знает, где хранит вход — в связке ключей или в файле. */
 async function signOut(launch: AgentLaunch): Promise<void> {
-  await execFileAsync(claudeExecutablePath(launch), ['auth', 'logout'], {
+  await execFileAsync(launch.executable, ['auth', 'logout'], {
     cwd: launch.cwd,
     env: launch.env,
     timeout: SIGN_OUT_TIMEOUT_MS,

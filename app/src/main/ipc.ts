@@ -23,6 +23,8 @@ import type { Settings } from '../shared/settings'
 import type { UpdateState } from '../shared/update'
 import { findAgent, isAgentId, type AgentId } from '../shared/agents'
 import type { AgentDetector } from './agents'
+import type { AgentCliService } from './agentCli'
+import type { AgentCliStatus } from '../shared/agentCli'
 import type { WorkingTreeReader } from './changes'
 import type { ProjectFiles } from './projectFiles'
 import type { ConversationManager } from './conversations/manager'
@@ -60,6 +62,7 @@ interface AppServices {
   workingTree: WorkingTreeReader
   projectFiles: ProjectFiles
   agents: AgentDetector
+  agentCli: AgentCliService
   /** `null` — обновления недоступны, например при запуске из исходников. */
   updater: AppUpdater | null
   menu: AppMenu
@@ -83,6 +86,7 @@ export function registerIpcHandlers({
   linkPreviews,
   workingTree,
   agents,
+  agentCli,
   updater,
   menu,
   planLimits,
@@ -245,6 +249,23 @@ export function registerIpcHandlers({
         typeof projectId === 'string' ? projectId : null
       )
     }
+  )
+
+  const agentFrom = (agent: unknown): AgentId => {
+    if (!isAgentId(agent)) {
+      throw new Error('Unknown agent')
+    }
+    return agent
+  }
+  ipcMain.handle(IpcChannel.AgentCliList, () => agentCli.list())
+  ipcMain.handle(IpcChannel.AgentCliInstall, (_event, agent: unknown) =>
+    agentCli.install(agentFrom(agent))
+  )
+  ipcMain.handle(IpcChannel.AgentCliUpdate, (_event, agent: unknown) =>
+    agentCli.update(agentFrom(agent))
+  )
+  ipcMain.handle(IpcChannel.AgentCliDismiss, (_event, agent: unknown) =>
+    agentCli.dismiss(agentFrom(agent))
   )
 
   /** Агент по умолчанию, если он установлен, иначе первый установленный. */
@@ -944,6 +965,10 @@ export function broadcastTerminalExit(projectId: string): void {
 
 export function broadcastAgentListsStale(agent: AgentId): void {
   broadcast(IpcChannel.AgentsListsStale, agent)
+}
+
+export function broadcastAgentCli(statuses: AgentCliStatus[]): void {
+  broadcast(IpcChannel.AgentCliChanged, statuses)
 }
 
 export function broadcastPlanLimits(state: PlanLimitsState): void {

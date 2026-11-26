@@ -1,5 +1,6 @@
 import { contextBridge, ipcRenderer, webUtils } from 'electron'
 import type { AgentAccount } from '../shared/accounts'
+import type { AgentCliStatus } from '../shared/agentCli'
 import type { AgentId } from '../shared/agents'
 import type { AppCommand } from '../shared/commands'
 import type { BoardState } from '../shared/board'
@@ -132,6 +133,18 @@ const api: AtoxApi = {
     },
     integrations: (agent, kind, projectId) =>
       ipcRenderer.invoke(IpcChannel.AgentsIntegrations, agent, kind, projectId)
+  },
+  agentCli: {
+    list: () => ipcRenderer.invoke(IpcChannel.AgentCliList),
+    install: (agent) => ipcRenderer.invoke(IpcChannel.AgentCliInstall, agent),
+    update: (agent) => ipcRenderer.invoke(IpcChannel.AgentCliUpdate, agent),
+    dismiss: (agent) => ipcRenderer.invoke(IpcChannel.AgentCliDismiss, agent),
+    onChanged: (listener) => {
+      const handler = (_event: Electron.IpcRendererEvent, statuses: AgentCliStatus[]) =>
+        listener(statuses)
+      ipcRenderer.on(IpcChannel.AgentCliChanged, handler)
+      return () => ipcRenderer.removeListener(IpcChannel.AgentCliChanged, handler)
+    }
   },
   chats: {
     create: (projectId, agent) => ipcRenderer.invoke(IpcChannel.ChatsCreate, projectId, agent),

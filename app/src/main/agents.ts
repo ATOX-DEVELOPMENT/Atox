@@ -1,5 +1,6 @@
 import { constants } from 'node:fs'
 import { access } from 'node:fs/promises'
+import { homedir } from 'node:os'
 import { delimiter, join } from 'node:path'
 import { AGENTS, type AgentId } from '../shared/agents'
 import { IS_WINDOWS } from '../shared/platform'
@@ -28,6 +29,14 @@ export class AgentDetector {
 
   async list(): Promise<AgentId[]> {
     return [...(await this.known()).keys()]
+  }
+
+  /**
+   * Ищет агентов заново, в перечитанном окружении оболочки: агента только что установили или
+   * обновили, и PATH к нему могли дописать в профиле. Пока идёт поиск, отдаётся прежний ответ.
+   */
+  async redetect(): Promise<void> {
+    this.executables = Promise.resolve(await findAgents(await this.shell.fresh(0)))
   }
 
   /** Путь к программе агента; `null` — агент не установлен. */
@@ -81,8 +90,17 @@ export class AgentDetector {
   }
 }
 
+/**
+ * Куда установщики кладут программы агентов, даже когда их каталога нет в PATH: установщик
+ * Claude Code пишет в `~/.local/bin` и только советует дописать его в PATH.
+ */
+const FALLBACK_DIRECTORIES = [join('.local', 'bin'), join('.claude', 'local')]
+
 async function findAgents(environment: Record<string, string>): Promise<Map<AgentId, string>> {
-  const directories = (environment['PATH'] ?? '').split(delimiter).filter(Boolean)
+  const directories = [
+    ...(environment['PATH'] ?? '').split(delimiter).filter(Boolean),
+    ...FALLBACK_DIRECTORIES.map((directory) => join(homedir(), directory))
+  ]
   const found = new Map<AgentId, string>()
   for (const agent of AGENTS) {
     const path = await findProgram(agent.program, directories)
@@ -99,7 +117,10 @@ async function findAgents(environment: Record<string, string>): Promise<Map<Agen
  */
 const WINDOWS_PROGRAM_EXTENSIONS = ['.exe', '.cmd', '.bat']
 
-async function findProgram(name: string, directories: readonly string[]): Promise<string | null> {
+export async function findProgram(
+  name: string,
+  directories: readonly string[]
+): Promise<string | null> {
   const names = IS_WINDOWS ? WINDOWS_PROGRAM_EXTENSIONS.map((extension) => name + extension) : [name]
   for (const directory of directories) {
     for (const file of names) {
