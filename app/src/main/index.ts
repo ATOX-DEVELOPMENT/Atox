@@ -46,6 +46,7 @@ import { BoardService } from './board/service'
 import { BoardWorktrees } from './board/worktrees'
 import { GitHubAccounts } from './githubAccounts'
 import { ChatPullRequests } from './chatPullRequests'
+import { LinkPreviews } from './linkPreviews'
 import { RepositoryReader } from './repository'
 import { SettingsStore } from './settings'
 import { ShellEnvironment } from './shellEnvironment'
@@ -297,6 +298,7 @@ async function bootstrap(): Promise<void> {
     branches,
     repository,
     chatPullRequests: new ChatPullRequests(shell, repository),
+    linkPreviews: new LinkPreviews(shell, githubAccounts),
     githubAccounts,
     board,
     workingTree: new WorkingTreeReader(shell),

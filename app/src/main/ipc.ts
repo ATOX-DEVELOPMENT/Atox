@@ -43,6 +43,7 @@ import type { CanvasService } from './canvas/service'
 import type { GitHubAccounts } from './githubAccounts'
 import type { RepositoryReader } from './repository'
 import type { ChatPullRequests } from './chatPullRequests'
+import type { LinkPreviews } from './linkPreviews'
 import { getUserProfile } from './system'
 import type { TerminalManager } from './terminals'
 import type { AppUpdater } from './updater'
@@ -55,6 +56,7 @@ interface AppServices {
   branches: GitBranchTracker
   repository: RepositoryReader
   chatPullRequests: ChatPullRequests
+  linkPreviews: LinkPreviews
   workingTree: WorkingTreeReader
   projectFiles: ProjectFiles
   agents: AgentDetector
@@ -78,6 +80,7 @@ export function registerIpcHandlers({
   projectFiles,
   repository,
   chatPullRequests,
+  linkPreviews,
   workingTree,
   agents,
   updater,
@@ -485,6 +488,9 @@ export function registerIpcHandlers({
     IpcChannel.RepositoryMoreGitHub,
     (_event, projectId: string, kind: GitHubKind, state: ListState, cursor: string) =>
       repository.moreGitHub(store.getProject(projectId).path, kind, state, cursor)
+  )
+  ipcMain.handle(IpcChannel.LinksPreview, (_event, url: string, chatId?: string) =>
+    linkPreviews.preview(url, chatId ? store.findChat(chatId)?.chat.githubAccount : undefined)
   )
   ipcMain.handle(IpcChannel.RepositoryChatPullRequest, (_event, chatId: string, fresh?: boolean) => {
     const location = store.findChat(chatId)

@@ -34,6 +34,7 @@ import type {
 import type { IntegrationKind, IntegrationList } from './integrations'
 import type { Project, SpacesState, UserProfile } from './models'
 import type { PlanLimitsState } from './planLimits'
+import type { LinkPreview } from './linkPreview'
 import type { TokenSpendSummary } from './tokenSpend'
 import type {
   BranchPullRequest,
@@ -197,6 +198,13 @@ export interface AtoxApi {
      * `baseDirectory`. Программы и скрипты не запускаются, а показываются в файловом менеджере.
      */
     open(path: string, baseDirectory?: string): Promise<void>
+  }
+  links: {
+    /**
+     * Карточка ссылки из ответа агента: PR или issue GitHub — под учётной записью gh чата,
+     * сайт — его заголовок и описание. `null` — показать нечего.
+     */
+    preview(url: string, chatId?: string): Promise<LinkPreview | null>
   }
   images: {
     /** Картинка с диска как data URL; `null` — файла нет, он слишком большой или это не картинка. */
@@ -453,6 +461,7 @@ export const IpcChannel = {
   FilesSavePastedImage: 'files:save-pasted-image',
   FilesPick: 'files:pick',
   FilesOpen: 'files:open',
+  LinksPreview: 'links:preview',
   ImagesRead: 'images:read',
   ImagesSaveAs: 'images:save-as',
   GitBranches: 'git:branches',

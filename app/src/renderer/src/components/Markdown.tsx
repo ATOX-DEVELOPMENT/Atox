@@ -11,9 +11,10 @@ import remarkBreaks from 'remark-breaks'
 import remarkGfm from 'remark-gfm'
 import { imageTypeOfPath } from '../../../shared/attachments'
 import { ipcErrorMessage } from '../lib/ipcError'
-import { LinkBaseDirectoryContext, linkTarget } from '../lib/linkTargets'
+import { LinkBaseDirectoryContext, LinkChatContext, linkTarget } from '../lib/linkTargets'
 import { splitMarkdownBlocks } from '../lib/markdownBlocks'
 import { LocalImage } from './GeneratedImage'
+import { useLinkPreview } from './LinkPreviewCard'
 
 const { atox } = window
 
@@ -55,7 +56,7 @@ function MarkdownLink(props: AnchorHTMLAttributes<HTMLAnchorElement>) {
   const baseDirectory = useContext(LinkBaseDirectoryContext)
   const target = linkTarget(props.href)
   if (target.kind === 'external') {
-    return <a {...props} target="_blank" rel="noreferrer" />
+    return <ExternalLink {...props} />
   }
   const open = (event: MouseEvent<HTMLAnchorElement>) => {
     event.preventDefault()
@@ -66,6 +67,17 @@ function MarkdownLink(props: AnchorHTMLAttributes<HTMLAnchorElement>) {
     }
   }
   return <a {...props} title={target.kind === 'file' ? target.path : props.title} onClick={open} />
+}
+
+/** Сайт или почта: открывается во внешнем приложении, при наведении — карточка ссылки. */
+function ExternalLink(props: AnchorHTMLAttributes<HTMLAnchorElement>) {
+  const { anchorProps, card } = useLinkPreview(props.href, useContext(LinkChatContext))
+  return (
+    <>
+      <a {...props} target="_blank" rel="noreferrer" {...anchorProps} />
+      {card}
+    </>
+  )
 }
 
 /** Картинка на диске — и в виде `![](путь)`, и в виде ссылки на файл — видна прямо в ответе. */

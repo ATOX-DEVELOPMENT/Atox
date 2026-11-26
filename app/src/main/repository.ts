@@ -530,17 +530,12 @@ function toBranchPullRequest(node: BranchPullRequestNode): BranchPullRequest {
   }
 }
 
-function toPullRequestState(state: string, isDraft: boolean): PullRequestState {
+export function toPullRequestState(state: string, isDraft: boolean): PullRequestState {
   return state === 'MERGED' ? 'merged' : state === 'CLOSED' ? 'closed' : isDraft ? 'draft' : 'open'
 }
 
 function toIssue(node: IssueNode): Issue {
-  const state: IssueState =
-    node.state === 'OPEN'
-      ? 'open'
-      : node.stateReason === 'NOT_PLANNED'
-        ? 'not-planned'
-        : 'completed'
+  const state = toIssueState(node.state, node.stateReason)
   return {
     number: node.number,
     title: node.title,
@@ -554,7 +549,11 @@ function toIssue(node: IssueNode): Issue {
   }
 }
 
-function toCheckStatus(state: string | undefined): CheckStatus {
+export function toIssueState(state: string, stateReason: string | null | undefined): IssueState {
+  return state === 'OPEN' ? 'open' : stateReason === 'NOT_PLANNED' ? 'not-planned' : 'completed'
+}
+
+export function toCheckStatus(state: string | undefined): CheckStatus {
   switch (state) {
     case 'SUCCESS':
       return 'success'
@@ -569,7 +568,7 @@ function toCheckStatus(state: string | undefined): CheckStatus {
   }
 }
 
-function toReviewDecision(decision: PullRequestNode['reviewDecision']): ReviewDecision {
+export function toReviewDecision(decision: string | null | undefined): ReviewDecision {
   switch (decision) {
     case 'APPROVED':
       return 'approved'
@@ -583,7 +582,7 @@ function toReviewDecision(decision: PullRequestNode['reviewDecision']): ReviewDe
 }
 
 /** GitHub не нашёл репозиторий: его нет или у активной учётной записи gh нет к нему доступа. */
-function isInaccessibleRepository(error: unknown): boolean {
+export function isInaccessibleRepository(error: unknown): boolean {
   return error instanceof CommandError && error.stderr.includes('Could not resolve to a Repository')
 }
 

@@ -2,7 +2,7 @@ import { memo, useCallback, useEffect, useLayoutEffect, useRef } from 'react'
 import { useConversation } from '../hooks/useConversation'
 import type { UserMessage } from '../../../shared/conversation'
 import type { Chat } from '../../../shared/models'
-import { LinkBaseDirectoryContext } from '../lib/linkTargets'
+import { LinkBaseDirectoryContext, LinkChatContext } from '../lib/linkTargets'
 import { useReportBackgroundTasks } from '../hooks/BackgroundTasksContext'
 import { Composer } from './Composer'
 import { Timeline } from './Timeline'
@@ -156,14 +156,16 @@ export const ChatView = memo(function ChatView({
           {started && (
             // Относительные пути в ссылках из ответов считаются от папки проекта.
             <LinkBaseDirectoryContext.Provider value={projectPath}>
-              <Timeline
-                chatId={chat.id}
-                items={conversation.items}
-                queued={conversation.queued ?? NO_QUEUED_MESSAGES}
-                running={conversation.running}
-                turnTokens={conversation.turnTokens ?? 0}
-                visible={visible}
-              />
+              <LinkChatContext.Provider value={chat.id}>
+                <Timeline
+                  chatId={chat.id}
+                  items={conversation.items}
+                  queued={conversation.queued ?? NO_QUEUED_MESSAGES}
+                  running={conversation.running}
+                  turnTokens={conversation.turnTokens ?? 0}
+                  visible={visible}
+                />
+              </LinkChatContext.Provider>
             </LinkBaseDirectoryContext.Provider>
           )}
         </div>
