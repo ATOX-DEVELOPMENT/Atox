@@ -133,6 +133,10 @@ export function settleItem(item: TimelineItem, endedAt?: number): TimelineItem {
     case 'approval':
     case 'question':
       return item.status === 'pending' ? { ...item, status: 'cancelled' } : item
+    case 'reconnect':
+      return item.status === 'offline' || item.status === 'retrying'
+        ? { ...item, status: 'failed' }
+        : item
     default:
       return item
   }

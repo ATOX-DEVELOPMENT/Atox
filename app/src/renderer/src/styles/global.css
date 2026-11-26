@@ -3505,6 +3505,21 @@ ul {
 
 /* Сжатие разговора: разделитель, выше которого агент помнит только сводку */
 
+/* Ход оборвался и продолжается сам: приглушённая строка, без тревоги, пока есть попытки. */
+.reconnect {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--font-size-small);
+  color: var(--color-text-muted);
+}
+
+.reconnect .icon {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+}
+
 .compaction {
   display: flex;
   align-items: center;

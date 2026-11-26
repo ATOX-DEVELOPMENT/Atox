@@ -131,6 +131,14 @@ export function workingLabel(items: readonly TimelineItem[], seed: string): stri
         return 'Generating image'
       }
       break
+    case 'reconnect':
+      if (last.status === 'offline') {
+        return 'Waiting for the network'
+      }
+      if (last.status === 'retrying') {
+        return 'Reconnecting'
+      }
+      break
   }
   return WORKING_VERBS[hashString(seed) % WORKING_VERBS.length]!
 }

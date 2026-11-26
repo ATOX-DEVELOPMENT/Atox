@@ -18,6 +18,7 @@ import {
   type ConversationSnapshot,
   type ConversationSummary,
   type PlanLimit,
+  type ReconnectStatus,
   type RequestAnswer,
   type StreamedField,
   type TimelineItem,
@@ -37,6 +38,12 @@ import { limitsKey } from '../../shared/accounts'
 import { errorMessage } from './display'
 import { handoffMessage } from './handoff'
 import { PromiseCache } from './promiseCache'
+import {
+  CONTINUE_PROMPT,
+  NETWORK_CHECK_INTERVAL_MS,
+  RECOVERY_DELAYS_MS,
+  isTransientError
+} from './recovery'
 import { settleItem, type QueuedMessage, type TranscriptStore } from './transcripts'
 import type { AgentDriver, AgentLaunch, AgentSession } from './types'
 
@@ -83,6 +90,18 @@ interface PendingDelta {
   delta: string
 }
 
+/** Ход, который оборвался — пропала сеть или упал агент, — и который Atox продолжает сам. */
+interface Recovery {
+  turn: QueuedMessage
+  /** Сколько попыток продолжить ход уже начато. */
+  attempts: number
+  /** Строка о переподключении в ленте и что в ней сейчас. */
+  itemId: string
+  status: ReconnectStatus
+  /** Пауза перед следующей попыткой или проверка, вернулась ли сеть. */
+  timer: ReturnType<typeof setTimeout> | null
+}
+
 interface Conversation {
   snapshot: ConversationSnapshot
   session: AgentSession | null
@@ -121,6 +140,17 @@ interface Conversation {
   unprompted: boolean
   /** Сообщение, которое остановили, пока агент ещё запускался: отправлять его не нужно. */
   interruptedTurn: QueuedMessage | null
+  /**
+   * Агент уже начал отвечать на текущее сообщение: оно дошло, и оборвавшийся ход продолжают
+   * просьбой продолжить, а не этим сообщением ещё раз.
+   */
+  turnAnswered: boolean
+  /** Ошибки сети в текущей попытке хода: их покажут, только если ход не удастся продолжить. */
+  networkErrors: TimelineItem[]
+  /** В текущей попытке хода была ошибка, которую повтор не исправит, — например, нет входа. */
+  turnFailed: boolean
+  /** Ход оборвался, и Atox продолжает его сам; `null` — не обрывался. */
+  recovery: Recovery | null
   /** Текст ответа, который ещё не отправлен окну, по элементу и полю. */
   pendingDeltas: Map<string, PendingDelta>
   /** Последний счётчик токенов хода, который ещё не отправлен окну. */
@@ -151,6 +181,8 @@ export interface ConversationServices {
   openLink(url: string): void
   /** Агент только что сменил аккаунт: обновлённые лимиты нужно показать сразу. */
   onAccountChanged(agent: AgentId): void
+  /** Есть ли сеть: оборвавшийся ход продолжают, только когда она вернётся. */
+  isOnline(): boolean
   /** Списки моделей и команд агента устарели: окну нужно спросить их заново. */
   onAgentListsStale(agent: AgentId): void
 }
@@ -247,6 +279,12 @@ export class ConversationManager {
     }
     // Пока агент запускается, сессии ещё нет: сообщение просто не уйдёт ему.
     conversation.interruptedTurn = turn
+    // Оборвавшийся ход ждёт сети или следующей попытки: агент ничего не делает, и ход
+    // просто заканчивается.
+    if (conversation.recovery?.turn === turn && conversation.recovery.timer) {
+      this.finishTurn(chatId, conversation)
+      return
+    }
     if (!session) {
       return
     }
@@ -648,6 +686,7 @@ export class ConversationManager {
     conversation.turn = null
     conversation.interruptedTurn = null
     this.clearInterruptTimer(conversation)
+    this.dropRecovery(conversation)
     conversation.session?.close()
     conversation.session = null
     conversation.sessionId = null
@@ -697,6 +736,10 @@ export class ConversationManager {
             turn: null,
             unprompted: false,
             interruptedTurn: null,
+            turnAnswered: false,
+            networkErrors: [],
+            turnFailed: false,
+            recovery: null,
             pendingDeltas: new Map(),
             pendingTokens: null,
             streamTimer: null,
@@ -733,14 +776,25 @@ export class ConversationManager {
       })
     }
     conversation.lastAgent = next.agent
+    conversation.turnAnswered = false
     next.item = { ...next.item, createdAt: Date.now() }
     this.emit(chatId, conversation, { type: 'item', item: next.item })
     this.runTurn(chatId, conversation, next)
   }
 
-  /** Отправляет агенту сообщение, которое уже стоит в ленте. */
-  private runTurn(chatId: string, conversation: Conversation, next: QueuedMessage): void {
+  /**
+   * Отправляет агенту сообщение, которое уже стоит в ленте. `text` — что отправить вместо
+   * него: просьба продолжить оборвавшийся ход.
+   */
+  private runTurn(
+    chatId: string,
+    conversation: Conversation,
+    next: QueuedMessage,
+    text?: string
+  ): void {
     conversation.turn = next
+    conversation.networkErrors = []
+    conversation.turnFailed = false
     this.emit(chatId, conversation, { type: 'tokens', turnTokens: 0 })
     this.updateRunning(chatId, conversation)
     this.ensureSession(chatId, conversation, next.agent)
@@ -758,7 +812,11 @@ export class ConversationManager {
           this.finishTurn(chatId, conversation)
           return
         }
-        session.send(this.messageForAgent(conversation, next), next.images)
+        if (text) {
+          session.send(text, [])
+        } else {
+          session.send(this.messageForAgent(conversation, next), next.images)
+        }
       })
       .catch((error) => {
         // Ошибка запуска относится к сообщению, которого уже нет: показывать её незачем.
@@ -803,6 +861,15 @@ export class ConversationManager {
     conversation.turn = null
     conversation.interruptedTurn = null
     this.clearInterruptTimer(conversation)
+    // Ход, который продолжали после обрыва, дошёл до конца — или его остановили.
+    const recovery = conversation.recovery
+    if (recovery) {
+      conversation.recovery = null
+      clearTimeout(recovery.timer ?? undefined)
+      if (recovery.status === 'offline' || recovery.status === 'retrying') {
+        this.showReconnect(chatId, conversation, recovery, stopped ? 'stopped' : 'recovered')
+      }
+    }
     const { items } = conversation.snapshot
     const index = items.findIndex(({ id }) => id === turn.item.id)
     const item = items[index]
@@ -1007,13 +1074,32 @@ export class ConversationManager {
             heldErrors.push(item)
             return
           }
+          if (
+            item.kind === 'error' &&
+            conversation.session === session &&
+            this.holdNetworkError(conversation, item)
+          ) {
+            return
+          }
+          // Процесс агента без дела завершился или потерял связь: следующее сообщение
+          // запустит сессию заново, с тем же разговором, — сырая ошибка тут ни к чему.
+          if (
+            item.kind === 'error' &&
+            !conversation.turn &&
+            !conversation.unprompted &&
+            isTransientError(item.message)
+          ) {
+            return
+          }
           if (WORK_KINDS.has(item.kind)) {
+            this.noteAnswer(conversation, session)
             this.noteActivity(chatId, conversation, session)
           }
           this.emit(chatId, conversation, { type: 'item', item })
         },
         delta: (itemId, field, delta) => {
           if (!abandoned) {
+            this.noteAnswer(conversation, session)
             this.noteActivity(chatId, conversation, session)
             this.emit(chatId, conversation, {
               type: 'delta',
@@ -1027,7 +1113,9 @@ export class ConversationManager {
           if (conversation.session === session && !resumeFailed()) {
             releaseErrors()
             if (conversation.turn) {
-              this.finishTurn(chatId, conversation)
+              if (!this.recoverTurn(chatId, conversation, { crashed: false })) {
+                this.finishTurn(chatId, conversation)
+              }
             } else {
               this.finishUnprompted(chatId, conversation)
             }
@@ -1063,7 +1151,10 @@ export class ConversationManager {
             conversation.session = null
             // Фоновые задачи живут в процессе агента и закончились вместе с ним.
             this.emit(chatId, conversation, { type: 'background', tasks: [] })
-            this.finishTurn(chatId, conversation)
+            // Процесс агента завершился посреди хода, хотя его никто не останавливал.
+            if (!this.recoverTurn(chatId, conversation, { crashed: true })) {
+              this.finishTurn(chatId, conversation)
+            }
             this.finishUnprompted(chatId, conversation)
           }
         }
@@ -1071,6 +1162,143 @@ export class ConversationManager {
     )
     conversation.session = session
     return session
+  }
+
+  /** Агент отвечает на текущее сообщение: значит, оно до него дошло. */
+  private noteAnswer(conversation: Conversation, session: AgentSession): void {
+    if (conversation.turn && conversation.session === session) {
+      conversation.turnAnswered = true
+    }
+  }
+
+  /**
+   * Ошибка сессии посреди хода. Обрыв сети или падение процесса придерживается: если ход
+   * удастся продолжить, пользователю она ни к чему. Остальные ошибки видны сразу, и после
+   * них ход не повторяется — повтор их не исправит.
+   */
+  private holdNetworkError(
+    conversation: Conversation,
+    item: Extract<TimelineItem, { kind: 'error' }>
+  ): boolean {
+    const { turn } = conversation
+    if (!turn || conversation.interruptedTurn === turn) {
+      return false
+    }
+    if (!isTransientError(item.message)) {
+      conversation.turnFailed = true
+      return false
+    }
+    conversation.networkErrors.push(item)
+    return true
+  }
+
+  /**
+   * Ход оборвался: закончился сетевой ошибкой или процесс агента завершился посреди него.
+   * Если его можно продолжить, через паузу сессия перезапускается — с тем же разговором —
+   * и агента просят продолжить; ход при этом не кончается. `false` — продолжать нечего или
+   * попытки кончились: придержанные ошибки показываются, и ход заканчивают как обычно.
+   */
+  private recoverTurn(
+    chatId: string,
+    conversation: Conversation,
+    { crashed }: { crashed: boolean }
+  ): boolean {
+    const { turn } = conversation
+    const networkErrors = conversation.networkErrors
+    conversation.networkErrors = []
+    // Ход закончился штатно — в том числе продолжённый после обрыва: продолжать нечего.
+    if (!turn || !(crashed || networkErrors.length > 0 || conversation.turnFailed)) {
+      return false
+    }
+    const current = conversation.recovery?.turn === turn ? conversation.recovery : null
+    const recoverable =
+      !conversation.disposed &&
+      !this.closing &&
+      conversation.interruptedTurn !== turn &&
+      !conversation.turnFailed
+    if (!recoverable || (current?.attempts ?? 0) >= RECOVERY_DELAYS_MS.length) {
+      if (current) {
+        this.showReconnect(chatId, conversation, current, 'failed')
+      }
+      for (const item of networkErrors) {
+        this.emit(chatId, conversation, { type: 'item', item })
+      }
+      return false
+    }
+    const recovery = current ?? {
+      turn,
+      attempts: 0,
+      itemId: randomUUID(),
+      status: 'retrying',
+      timer: null
+    }
+    conversation.recovery = recovery
+    // Что оборвалось вместе с ходом — команды, сжатие, — уже не закончится.
+    const { items } = conversation.snapshot
+    const index = items.findIndex(({ id }) => id === turn.item.id)
+    if (index >= 0) {
+      this.settleTurn(chatId, conversation, items.slice(index + 1))
+    }
+    const delay = RECOVERY_DELAYS_MS[recovery.attempts]!
+    recovery.attempts++
+    this.showReconnect(chatId, conversation, recovery, 'retrying')
+    recovery.timer = setTimeout(() => this.retryTurn(chatId, conversation, recovery), delay)
+    return true
+  }
+
+  /** Следующая попытка продолжить ход — как только есть сеть. */
+  private retryTurn(chatId: string, conversation: Conversation, recovery: Recovery): void {
+    recovery.timer = null
+    const { turn } = recovery
+    if (
+      conversation.recovery !== recovery ||
+      conversation.turn !== turn ||
+      conversation.disposed ||
+      this.closing
+    ) {
+      return
+    }
+    if (!this.services.isOnline()) {
+      this.showReconnect(chatId, conversation, recovery, 'offline')
+      recovery.timer = setTimeout(
+        () => this.retryTurn(chatId, conversation, recovery),
+        NETWORK_CHECK_INTERVAL_MS
+      )
+      return
+    }
+    this.showReconnect(chatId, conversation, recovery, 'retrying')
+    // Агент уже отвечал — сообщение у него в разговоре: просим продолжить. Не успел —
+    // отправляем само сообщение.
+    const text = conversation.turnAnswered ? CONTINUE_PROMPT : undefined
+    this.runTurn(chatId, conversation, turn, text)
+  }
+
+  /** Строка о переподключении в ленте — одна на ход, обновляется на месте. */
+  private showReconnect(
+    chatId: string,
+    conversation: Conversation,
+    recovery: Recovery,
+    status: ReconnectStatus
+  ): void {
+    recovery.status = status
+    this.emit(chatId, conversation, {
+      type: 'item',
+      item: {
+        kind: 'reconnect',
+        id: recovery.itemId,
+        status,
+        attempt: recovery.attempts,
+        attempts: RECOVERY_DELAYS_MS.length
+      }
+    })
+  }
+
+  /** Ход начали заново или чат закрыли: продолжать оборвавшийся ход больше не нужно. */
+  private dropRecovery(conversation: Conversation): void {
+    clearTimeout(conversation.recovery?.timer ?? undefined)
+    conversation.recovery = null
+    conversation.networkErrors = []
+    conversation.turnFailed = false
   }
 
   /**
@@ -1155,6 +1383,11 @@ export class ConversationManager {
       if (!conversation?.session) {
         continue
       }
+      // Ход под убранным аккаунтом остановлен, а не оборвался: продолжать его под другим
+      // аккаунтом нельзя — он тратил бы чужие лимиты.
+      if (conversation.turn) {
+        conversation.interruptedTurn = conversation.turn
+      }
       conversation.session.close()
       // Сессия, которой агент сейчас не пользуется, забывается сразу: сообщение, пришедшее
       // до её выхода, не должно уйти в закрытую. Занятая завершит ход сама, как при остановке.
@@ -1187,6 +1420,7 @@ export class ConversationManager {
       conversation.streamTimer = null
     }
     this.clearInterruptTimer(conversation)
+    this.dropRecovery(conversation)
     conversation.session?.close()
     conversation.session = null
   }
