@@ -156,6 +156,8 @@ const api: AtoxApi = {
       ipcRenderer.invoke(IpcChannel.ConversationsRunCommand, chatId, command),
     context: (chatId) => ipcRenderer.invoke(IpcChannel.ConversationsContext, chatId),
     interrupt: (chatId) => ipcRenderer.invoke(IpcChannel.ConversationsInterrupt, chatId),
+    stopTask: (chatId, taskId) =>
+      ipcRenderer.invoke(IpcChannel.ConversationsStopTask, chatId, taskId),
     cancelQueued: (chatId, itemId) =>
       ipcRenderer.invoke(IpcChannel.ConversationsCancelQueued, chatId, itemId),
     sendQueuedNow: (chatId, itemId) =>

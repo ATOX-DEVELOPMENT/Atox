@@ -309,6 +309,15 @@ export class ConversationManager {
     )
   }
 
+  /** Останавливает одну фоновую задачу агента; её строка пропадёт, когда агент подтвердит. */
+  async stopTask(chatId: string, taskId: string): Promise<void> {
+    const { session } = await this.conversation(chatId)
+    if (!session?.stopTask) {
+      throw new Error('The agent cannot stop this task.')
+    }
+    await session.stopTask(taskId)
+  }
+
   /** Убирает сообщение из очереди, пока агент его не взял: например, его отправили по ошибке. */
   async cancelQueued(chatId: string, itemId: string): Promise<void> {
     const conversation = await this.conversation(chatId)

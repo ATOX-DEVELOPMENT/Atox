@@ -608,7 +608,11 @@ class ClaudeSession implements AgentSession {
         // вызов сам, не спросив пользователя.
         canUseTool: (toolName, input, request) => this.canUseTool(toolName, input, request),
         // Без этого обработчика Claude Code отклоняет формы и ссылки MCP-серверов сам.
-        onElicitation: (request, { signal }) => this.elicit(request, signal)
+        onElicitation: (request, { signal }) => this.elicit(request, signal),
+        // В панели у каждой фоновой задачи есть своя кнопка «стоп» (`stopTask`), поэтому «Стоп»
+        // чата обрывает только ход и задачи не трогает. Без кнопки флаг включать нельзя:
+        // зависшую задачу было бы нечем остановить.
+        perTaskStopAffordance: true
       }
     })
     void this.consume()
@@ -712,6 +716,10 @@ class ClaudeSession implements AgentSession {
     this.interrupted = true
     this.requests.cancelAll()
     await this.session.interrupt()
+  }
+
+  async stopTask(taskId: string): Promise<void> {
+    await this.session.stopTask(taskId)
   }
 
   answer(itemId: string, answer: RequestAnswer): void {
@@ -860,7 +868,8 @@ class ClaudeSession implements AgentSession {
               .map(({ task_id, task_type, description }) => ({
                 id: task_id,
                 kind: backgroundTaskKind(task_type),
-                description
+                description,
+                stoppable: true
               }))
           )
         } else if (message.subtype === 'status') {

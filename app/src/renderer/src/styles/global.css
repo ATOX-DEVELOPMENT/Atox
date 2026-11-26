@@ -7807,8 +7807,65 @@ button.usage-indicator[data-warning='true']:hover {
   color: var(--color-text-muted);
 }
 
-.task-list__spinner {
-  margin-top: 3px;
+.task-list__action {
+  display: grid;
+  flex-shrink: 0;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  margin: -3px -2px 0 0;
+}
+
+/* Спиннер и кнопка «стоп» делят одно место: на строке под мышкой или с фокусом — кнопка. */
+.task-list__action > * {
+  grid-area: 1 / 1;
+}
+
+.task-list__stop {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  color: var(--color-text-muted);
+  opacity: 0;
+}
+
+.task-list__stop:hover {
+  color: var(--color-danger);
+  background: var(--color-hover);
+}
+
+.task-list__stop-icon {
+  width: 11px;
+  height: 11px;
+  fill: currentColor;
+}
+
+.task-list__item:hover .task-list__stop,
+.task-list__stop:focus-visible {
+  opacity: 1;
+}
+
+.task-list__item:hover .task-list__spinner:has(+ .task-list__stop),
+.task-list__spinner:has(+ .task-list__stop:focus-visible) {
+  visibility: hidden;
+}
+
+.task-list__error {
+  display: flex;
+  gap: 5px;
+  margin-top: 4px;
+  font-size: var(--font-size-small);
+  line-height: 1.4;
+  color: var(--color-danger);
+}
+
+.task-list__error-icon {
+  flex-shrink: 0;
+  width: 13px;
+  height: 13px;
+  margin-top: 1px;
 }
 
 /* Кнопка фоновых задач в шапке: пока они идут, на ней число. */

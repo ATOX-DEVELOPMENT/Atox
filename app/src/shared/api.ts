@@ -161,6 +161,8 @@ export interface AtoxApi {
     context(chatId: string): Promise<ContextReport>
     /** Останавливает текущий ответ агента; сообщения в очереди уходят ему следом. */
     interrupt(chatId: string): Promise<void>
+    /** Останавливает одну фоновую задачу агента чата; отклоняется, если агент её не остановил. */
+    stopTask(chatId: string, taskId: string): Promise<void>
     /** Убирает сообщение из очереди, пока агент его не взял. */
     cancelQueued(chatId: string, itemId: string): Promise<void>
     sendQueuedNow(chatId: string, itemId: string): Promise<void>
@@ -461,6 +463,7 @@ export const IpcChannel = {
   ConversationsSummaries: 'conversations:summaries',
   ConversationsSend: 'conversations:send',
   ConversationsInterrupt: 'conversations:interrupt',
+  ConversationsStopTask: 'conversations:stop-task',
   ConversationsCancelQueued: 'conversations:cancel-queued',
   ConversationsSendQueuedNow: 'conversations:send-queued-now',
   ConversationsEditQueued: 'conversations:edit-queued',
