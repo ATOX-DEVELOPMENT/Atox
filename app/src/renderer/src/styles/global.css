@@ -475,11 +475,12 @@ ul {
   margin: var(--sidebar-gap);
 }
 
-/* Три таблетки сайдбара — окно, проекты и профиль — выглядят одинаково. */
+/* Три таблетки сайдбара — окно, проекты и профиль — выглядят одинаково, с одним скруглением. */
 .window-pill,
 .sidebar__body,
 .profile-card {
   border: 1px solid var(--color-sidebar-border);
+  border-radius: var(--sidebar-radius);
   background: var(--color-sidebar);
 }
 
@@ -490,7 +491,6 @@ ul {
   flex-shrink: 0;
   height: var(--window-pill-height);
   padding: 0 3px;
-  border-radius: calc(var(--window-pill-height) / 2);
   -webkit-app-region: drag;
 }
 
@@ -514,7 +514,6 @@ ul {
   flex-direction: column;
   min-height: 0;
   padding-top: var(--sidebar-padding);
-  border-radius: var(--sidebar-radius);
   overflow: hidden;
 }
 
@@ -1226,7 +1225,6 @@ ul {
   gap: var(--row-gap);
   flex-shrink: 0;
   padding: var(--profile-card-padding);
-  border-radius: calc(var(--avatar-size) / 2 + var(--profile-card-padding));
 }
 
 .profile-card__user {
