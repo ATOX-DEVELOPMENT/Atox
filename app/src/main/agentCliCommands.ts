@@ -50,10 +50,17 @@ export function detectInstallMethod(agent: AgentId, realPath: string): InstallMe
   return agent === 'claude' ? 'self' : 'unknown'
 }
 
-/** Соседний с программой `npm`: им её и ставили (например, из той же версии node у nvm). */
-export function npmNextTo(executable: string, exists: (path: string) => boolean, windows: boolean) {
+/**
+ * Соседний с программой `npm`: им её и ставили (например, из той же версии node у nvm).
+ * `null` — рядом его нет.
+ */
+export function npmNextTo(
+  executable: string,
+  exists: (path: string) => boolean,
+  windows: boolean
+): string | null {
   const sibling = join(dirname(executable), windows ? 'npm.cmd' : 'npm')
-  return exists(sibling) ? sibling : 'npm'
+  return exists(sibling) ? sibling : null
 }
 
 /** Команда обновления; `null` — способ установки неизвестен. */

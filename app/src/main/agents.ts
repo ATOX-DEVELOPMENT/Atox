@@ -1,9 +1,10 @@
 import { constants } from 'node:fs'
-import { access } from 'node:fs/promises'
+import { access, readFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
-import { delimiter, join } from 'node:path'
+import { delimiter, dirname, extname, join } from 'node:path'
 import { AGENTS, type AgentId } from '../shared/agents'
 import { IS_WINDOWS } from '../shared/platform'
+import { NPM_PACKAGES } from './agentCliCommands'
 import type { ShellEnvironment } from './shellEnvironment'
 
 /**
@@ -105,10 +106,51 @@ async function findAgents(environment: Record<string, string>): Promise<Map<Agen
   for (const agent of AGENTS) {
     const path = await findProgram(agent.program, directories)
     if (path) {
-      found.set(agent.id, path)
+      // На Windows npm кладёт в PATH обёртку `.cmd`: где можно, запускаем саму программу.
+      const program = IS_WINDOWS
+        ? await npmShimProgram(path, NPM_PACKAGES[agent.id], agent.program)
+        : null
+      found.set(agent.id, program ?? path)
     }
   }
   return found
+}
+
+/** Обёртки, которыми npm на Windows выставляет программы пакетов в PATH. */
+const NPM_SHIM_EXTENSIONS: ReadonlySet<string> = new Set(['.cmd', '.bat'])
+const WINDOWS_EXECUTABLE_EXTENSION = '.exe'
+
+/**
+ * Программа пакета, на которую указывает обёртка npm. На Windows npm кладёт в PATH скрипт
+ * `.cmd`, а сам пакет — рядом, в `node_modules`; скрипт запускает только cmd.exe, и SDK
+ * Claude Code его запустить не может. Если пакет несёт готовую программу (`bin` в его
+ * package.json — `.exe`), отдаём её. `null` — это не обёртка npm или в пакете скрипт для node:
+ * тогда запускается сама обёртка.
+ */
+export async function npmShimProgram(
+  shim: string,
+  packageName: string,
+  program: string
+): Promise<string | null> {
+  if (!NPM_SHIM_EXTENSIONS.has(extname(shim).toLowerCase())) {
+    return null
+  }
+  const packageDirectory = join(dirname(shim), 'node_modules', ...packageName.split('/'))
+  try {
+    const { bin } = JSON.parse(await readFile(join(packageDirectory, 'package.json'), 'utf8')) as {
+      bin?: string | Record<string, string>
+    }
+    const entry = typeof bin === 'string' ? bin : bin?.[program]
+    if (!entry || extname(entry).toLowerCase() !== WINDOWS_EXECUTABLE_EXTENSION) {
+      return null
+    }
+    const target = join(packageDirectory, entry)
+    await access(target, constants.F_OK)
+    return target
+  } catch {
+    // Рядом с обёрткой нет пакета или его программы — запускается обёртка.
+    return null
+  }
 }
 
 /**

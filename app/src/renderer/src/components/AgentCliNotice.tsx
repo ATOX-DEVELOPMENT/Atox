@@ -7,8 +7,19 @@ import { ipcErrorMessage } from '../lib/ipcError'
 
 const { atox } = window
 
-/** Версии, о которых пользователь попросил больше не напоминать, пока окно открыто. */
-const dismissedVersions = new Set<string>()
+/**
+ * Что пользователь попросил больше не показывать: по записи на агента. Помнится и после
+ * перезапуска — иначе закрытое уведомление возвращалось бы при каждом открытии Atox.
+ */
+const DISMISSED_KEY = 'atox.agentCli.dismissed.'
+
+function isDismissed(status: AgentCliStatus): boolean {
+  return localStorage.getItem(`${DISMISSED_KEY}${status.agent}`) === dismissKey(status)
+}
+
+function dismiss(status: AgentCliStatus): void {
+  localStorage.setItem(`${DISMISSED_KEY}${status.agent}`, dismissKey(status))
+}
 
 /** Сколько последних строк вывода команды видно в уведомлении над полем ввода. */
 const NOTICE_OUTPUT_LINES = 3
@@ -95,7 +106,7 @@ export function AgentCliNotice({ agent }: AgentCliNoticeProps) {
       </div>
     )
   }
-  if (status.outdated && !dismissedVersions.has(dismissKey(status))) {
+  if (status.outdated && !isDismissed(status)) {
     return (
       <div className="cli-notice" role="status">
         <CircleAlert className="icon" aria-hidden />
@@ -119,7 +130,7 @@ export function AgentCliNotice({ agent }: AgentCliNoticeProps) {
           aria-label="Dismiss"
           title="Dismiss"
           onClick={() => {
-            dismissedVersions.add(dismissKey(status))
+            dismiss(status)
             rerender()
           }}
         >
@@ -131,8 +142,13 @@ export function AgentCliNotice({ agent }: AgentCliNoticeProps) {
   return null
 }
 
-function dismissKey({ agent, version, target }: AgentCliStatus): string {
-  return `${agent}:${version}:${target}`
+/**
+ * На что действует «больше не показывать». Версия ниже нужной Atox — на эту пару версий: вырастет
+ * требование — напомним снова. Просто вышел новый выпуск (у Codex они выходят очень часто) — на
+ * установленную версию целиком: о следующих выпусках не напоминаем, пока агента не обновят.
+ */
+function dismissKey({ version, target, targetBasis }: AgentCliStatus): string {
+  return targetBasis === 'minimum' ? `${version}:${target}` : `${version}`
 }
 
 function tail(output: string): string {

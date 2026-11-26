@@ -206,11 +206,12 @@ export class AgentCliService {
     }
     let version: string | null = null
     try {
-      const { stdout } = await execFileAsync(executable, ['--version'], {
+      const { file, shell } = shellCommand(executable)
+      const { stdout } = await execFileAsync(file, ['--version'], {
         env: await this.shell.get(),
         timeout: VERSION_TIMEOUT_MS,
         windowsHide: true,
-        shell: executable.toLowerCase().endsWith('.cmd')
+        shell
       })
       version = VERSION_PATTERN.exec(stdout)?.[0] ?? null
     } catch (error) {
@@ -261,7 +262,10 @@ export class AgentCliService {
 
   private async updateCommandFor(agent: AgentId, executable: string): Promise<CliCommand | null> {
     const method = detectInstallMethod(agent, await realpath(executable).catch(() => executable))
-    return updateCommand(agent, method, executable, npmNextTo(executable, existsSync, IS_WINDOWS))
+    // npm рядом с программой — тот, которым её ставили; нет такого — npm из PATH.
+    const sibling = npmNextTo(executable, existsSync, IS_WINDOWS)
+    const npm = sibling ?? (await this.npm()) ?? 'npm'
+    return updateCommand(agent, method, executable, npm)
   }
 
   private start(agent: AgentId, kind: AgentCliActionKind, command: CliCommand): void {
@@ -303,8 +307,9 @@ export class AgentCliService {
     show: () => void
   ): Promise<string | null> {
     const environment = await this.shell.get()
+    const { file, shell } = shellCommand(command.file)
     return new Promise((resolve) => {
-      const child = spawn(command.file, command.args, {
+      const child = spawn(file, command.args, {
         env: {
           ...environment,
           // Рядом с программой лежит и node, на котором работает npm.
@@ -314,8 +319,7 @@ export class AgentCliService {
         },
         stdio: ['ignore', 'pipe', 'pipe'],
         windowsHide: true,
-        // Скрипты .cmd на Windows запускаются только через оболочку.
-        shell: command.file.toLowerCase().endsWith('.cmd'),
+        shell,
         // Своя группа процессов: установщик из `curl | bash` останавливается целиком.
         detached: !IS_WINDOWS
       })
@@ -374,6 +378,15 @@ export class AgentCliService {
       .then((statuses) => this.events.onChange(statuses))
       .catch((error) => console.error('Failed to read the agent CLI status', error))
   }
+}
+
+/**
+ * Скрипты `.cmd` и `.bat` на Windows запускает только оболочка, а она делит команду по пробелам:
+ * путь вроде `C:\Program Files\nodejs\npm.cmd` берётся в кавычки.
+ */
+function shellCommand(file: string): { file: string; shell: boolean } {
+  const shell = /\.(cmd|bat)$/i.test(file)
+  return { file: shell ? `"${file}"` : file, shell }
 }
 
 function cliName(agent: AgentId): string {
