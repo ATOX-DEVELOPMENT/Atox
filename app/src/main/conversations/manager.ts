@@ -17,6 +17,7 @@ import {
   type ConversationEvent,
   type ConversationSnapshot,
   type ConversationSummary,
+  type ContextReport,
   type PlanLimit,
   type ReconnectStatus,
   type RequestAnswer,
@@ -442,6 +443,20 @@ export class ConversationManager {
         usage: { context: { used, limit } }
       })
     }
+  }
+
+  /**
+   * Из чего состоит контекст чата — для окна у кольца контекста. В ленту ничего не пишется,
+   * а кольцо получает свежую заполненность.
+   */
+  async context(chatId: string): Promise<ContextReport> {
+    const conversation = await this.conversation(chatId)
+    const context = await this.readContext(chatId, conversation)
+    if (!conversation.disposed) {
+      const { used, limit } = context
+      this.emit(chatId, conversation, { type: 'usage', usage: { context: { used, limit } } })
+    }
+    return context
   }
 
   /** Ответ пользователя на разрешение, вопросы или форму от агента чата. */
