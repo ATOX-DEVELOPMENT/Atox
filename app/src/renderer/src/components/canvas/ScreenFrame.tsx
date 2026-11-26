@@ -149,7 +149,7 @@ export const ScreenFrame = memo(function ScreenFrame({
           src={canvasScreenUrl(canvasId, screen.id, screen.revision, previewVersionId ?? undefined)}
           style={{ width: screen.width, height: screen.height }}
         />
-        {grid.visible && grid.columns !== null && (
+        {grid.visible && grid.option !== null && (
           <div
             className="canvas-screen__grid"
             aria-hidden
@@ -157,7 +157,7 @@ export const ScreenFrame = memo(function ScreenFrame({
               {
                 width: screen.width,
                 height: screen.height,
-                '--grid-cell': `${screen.width / grid.columns}px`
+                '--grid-cell': `${grid.option.cell}px`
               } as CSSProperties
             }
           />

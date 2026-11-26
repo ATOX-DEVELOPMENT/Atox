@@ -16,6 +16,7 @@ import type {
   CanvasShare,
   CanvasView,
   ScreenGrid,
+  ScreenResize,
   ScreenLook,
   ScreenVersion
 } from './canvas'
@@ -374,10 +375,15 @@ export interface AtoxApi {
     rename(canvasId: string, name: string): Promise<void>
     renameScreen(canvasId: string, screenId: string, name: string): Promise<void>
     /**
-     * Сетка поверх экрана (инструмент Grid): видна ли и сколько столбцов. Столбцы должны быть
-     * верны для ширины экрана. Страницу экрана сетка не меняет.
+     * Сетка поверх экрана (инструмент Grid): видна ли и какая клетка. Клетка должна делить
+     * ширину и высоту экрана нацело с чётным числом столбцов. Страницу экрана сетка не меняет.
      */
     setScreenGrid(canvasId: string, screenId: string, grid: ScreenGrid): Promise<void>
+    /**
+     * Новый размер экрана на холсте (панель инструментов): устройство из списка или свой размер,
+     * рамка экрана остаётся. Меняется экран, а не его HTML; сетка берёт ближайшую верную клетку.
+     */
+    resizeScreen(canvasId: string, screenId: string, look: ScreenResize): Promise<void>
     /**
      * Вызывается, когда человек отпустил экран; позицию в процессе перетаскивания держит окно.
      * Позиция уже стоит по линиям сетки: об этом заботится окно.
@@ -542,6 +548,7 @@ export const IpcChannel = {
   CanvasRename: 'canvas:rename',
   CanvasRenameScreen: 'canvas:rename-screen',
   CanvasSetScreenGrid: 'canvas:set-screen-grid',
+  CanvasResizeScreen: 'canvas:resize-screen',
   CanvasMoveScreen: 'canvas:move-screen',
   CanvasRenameGroup: 'canvas:rename-group',
   CanvasMoveGroup: 'canvas:move-group',

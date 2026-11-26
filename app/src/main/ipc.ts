@@ -661,6 +661,11 @@ export function registerIpcHandlers({
       canvas.setScreenGrid(requireId(canvasId), requireId(screenId), grid)
   )
   ipcMain.handle(
+    IpcChannel.CanvasResizeScreen,
+    (_event, canvasId: unknown, screenId: unknown, look: unknown) =>
+      canvas.resizeScreen(requireId(canvasId), requireId(screenId), look)
+  )
+  ipcMain.handle(
     IpcChannel.CanvasMoveScreen,
     (_event, canvasId: unknown, screenId: unknown, x: unknown, y: unknown) =>
       canvas.moveScreen(requireId(canvasId), requireId(screenId), x, y)

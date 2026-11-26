@@ -145,7 +145,7 @@
   --canvas-request-field-height: 64px;
   --canvas-request-field-max-height: 160px;
   --canvas-history-width: 340px;
-  --screen-tools-width: 280px;
+  --screen-tools-width: 300px;
   --canvas-history-radius: 14px;
   --canvas-ghost-width: 230px;
   --canvas-ghost-height: 150px;
@@ -6724,19 +6724,30 @@ button.usage-indicator[data-warning='true']:hover {
       transparent calc(var(--grid-line) * 2)
     );
   background-size: var(--grid-cell) var(--grid-cell);
+  /* Клетки целые, поэтому правый и нижний край — тоже линия сетки: последние квадраты закрыты. */
+  box-shadow: inset calc(var(--grid-line) * -1) calc(var(--grid-line) * -1) 0
+    var(--canvas-screen-grid-dark);
 }
 
-/* Панель рабочего экрана: справа сверху поверх холста. */
+/*
+ * Панель рабочего экрана: справа сверху поверх холста, в пикселях окна (не масштабируется с
+ * холстом). Ширина и высота считаются с полями и рамкой, поэтому панель целиком помещается в поле
+ * холста при любом размере окна; если высоты не хватает, панель прокручивается.
+ */
 .screen-tools {
   position: absolute;
   top: var(--canvas-overlay-inset);
   right: var(--canvas-overlay-inset);
   z-index: 3;
+  box-sizing: border-box;
   display: flex;
   flex-direction: column;
   gap: 10px;
   width: var(--screen-tools-width);
   max-width: calc(100% - var(--canvas-overlay-inset) * 2);
+  max-height: calc(100% - var(--canvas-overlay-inset) * 2);
+  overflow-y: auto;
+  overscroll-behavior: contain;
   padding: 12px;
   border: 1px solid var(--color-menu-border);
   border-radius: var(--canvas-request-radius);
@@ -6848,6 +6859,116 @@ button.usage-indicator[data-warning='true']:hover {
 .screen-tools__hint {
   margin: 0;
   font-size: var(--font-size-small);
+  color: var(--color-text-muted);
+}
+
+.screen-tools__presets {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: 24px;
+  padding: 0 6px 0 8px;
+  border-radius: 6px;
+  font-size: var(--font-size-small);
+  color: var(--color-text-muted);
+  background: var(--color-hover);
+}
+
+.screen-tools__presets:hover {
+  color: var(--color-text);
+  background: var(--color-active);
+}
+
+.screen-tools__size {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.screen-tools__number {
+  box-sizing: border-box;
+  flex: 1;
+  min-width: 0;
+  height: var(--canvas-button-height);
+  padding: 0 8px;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  font: inherit;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text);
+  background: var(--color-surface);
+  -moz-appearance: textfield;
+}
+
+.screen-tools__number::-webkit-inner-spin-button,
+.screen-tools__number::-webkit-outer-spin-button {
+  margin: 0;
+  -webkit-appearance: none;
+}
+
+.screen-tools__number:focus-visible {
+  outline: none;
+  border-color: var(--color-accent);
+}
+
+.screen-tools__number[aria-invalid='true'] {
+  border-color: var(--color-danger);
+}
+
+.screen-tools__times {
+  color: var(--color-text-muted);
+}
+
+.screen-tools__apply {
+  flex-shrink: 0;
+  height: var(--canvas-button-height);
+  padding: 0 10px;
+  border-radius: 8px;
+  font-weight: 500;
+  background: var(--color-hover);
+}
+
+.screen-tools__apply:hover:not(:disabled) {
+  background: var(--color-active);
+}
+
+.screen-tools__apply:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.screen-tools__suggest {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.screen-tools__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.screen-tools__chip {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  height: 24px;
+  padding: 0 8px;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  font-size: var(--font-size-small);
+  font-variant-numeric: tabular-nums;
+  line-height: 22px;
+}
+
+.screen-tools__chip:hover {
+  border-color: var(--color-accent);
+  background: var(--color-hover);
+}
+
+.screen-tools__chip-grid {
   color: var(--color-text-muted);
 }
 
