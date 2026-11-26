@@ -22,6 +22,8 @@ defaults:
 jobs:
   # Версия — major.minor из package.json и номер сборки: 0.1.42. Общая для всех платформ.
   version:
+    # Ручной запуск тоже выпускает релиз только из main, а не из pre-release или другой ветки.
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04
     outputs:
       version: ${{ steps.version.outputs.version }}
