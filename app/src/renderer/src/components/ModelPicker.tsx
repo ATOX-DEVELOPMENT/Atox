@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react'
-import { Gauge } from 'lucide-react'
+import { Gauge, Zap } from 'lucide-react'
 import { AGENTS, findAgent, isAgentId } from '../../../shared/agents'
 import type { AgentCatalog, AgentModel } from '../../../shared/conversation'
 import type { Chat } from '../../../shared/models'
@@ -12,8 +12,11 @@ import { AgentIcon } from './AgentIcon'
 
 const { atox } = window
 
-/** Действия меню: `agent:claude`, `model:opus`, `effort:high`; пустой эффорт — по умолчанию. */
-type PickerAction = `agent:${string}` | `model:${string}` | `effort:${string}`
+/**
+ * Действия меню: `agent:claude`, `model:opus`, `effort:high`, `tier:priority`; пустой эффорт —
+ * по умолчанию, пустой режим — обычный.
+ */
+type PickerAction = `agent:${string}` | `model:${string}` | `effort:${string}` | `tier:${string}`
 
 interface ModelPickerProps {
   chat: Chat
@@ -61,6 +64,8 @@ export function ModelPicker({ chat, openRequest }: ModelPickerProps) {
       await configureChat(current.chat.id, modelConfiguration(current.chat, current.catalog, value))
     } else if (kind === 'effort') {
       await configureChat(current.chat.id, { effort: value || null })
+    } else if (kind === 'tier') {
+      await configureChat(current.chat.id, { serviceTier: value || null })
     }
   }
 
@@ -82,10 +87,17 @@ export function ModelPicker({ chat, openRequest }: ModelPickerProps) {
   }, [openRequest])
 
   const agentName = findAgent(chat.agent)?.name ?? chat.agent
+  const tier = model?.serviceTiers?.find(({ id }) => id === chat.serviceTier)
   const label =
     catalog === undefined
       ? agentName
-      : `${model?.name ?? chat.model ?? agentName}${effort ? ` ${effortLabel(effort)}` : ''}`
+      : [
+          model?.name ?? chat.model ?? agentName,
+          effort && effortLabel(effort, chat.agent),
+          tier?.name
+        ]
+          .filter(Boolean)
+          .join(' ')
 
   return (
     <button
@@ -155,7 +167,7 @@ function buildMenu({ chat, catalog, model, agents }: MenuSource): MenuItem<Picke
 
   if (model && model.efforts.length > 0) {
     const defaultLabel = model.defaultEffort
-      ? `Default (${effortLabel(model.defaultEffort)})`
+      ? `Default (${effortLabel(model.defaultEffort, chat.agent)})`
       : 'Default'
     items.push(
       { type: 'separator' },
@@ -172,12 +184,28 @@ function buildMenu({ chat, catalog, model, agents }: MenuSource): MenuItem<Picke
           { type: 'separator' },
           ...model.efforts.map((level): MenuItem<PickerAction> => ({
             action: `effort:${level}`,
-            label: effortLabel(level),
+            label: effortLabel(level, chat.agent),
+            description: model.effortDescriptions?.[level],
             checked: level === chat.effort
           }))
         ]
       }
     )
   }
+
+  // Режим обслуживания включается и выключается тем же пунктом: выбранный отмечен галочкой.
+  const tiers = model?.serviceTiers ?? []
+  items.push(
+    ...tiers.map((tier): MenuItem<PickerAction> => {
+      const active = tier.id === chat.serviceTier
+      return {
+        action: `tier:${active ? '' : tier.id}`,
+        label: tier.name,
+        description: tier.description,
+        icon: <Zap />,
+        checked: active
+      }
+    })
+  )
   return items
 }

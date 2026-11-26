@@ -1,5 +1,13 @@
 import type { AgentId } from './agents'
 
+/** Режим обслуживания модели, который включается отдельно от эффорта, например быстрый (Fast). */
+export interface ServiceTier {
+  /** Идентификатор, который передаётся агенту. */
+  id: string
+  name: string
+  description: string
+}
+
 /** Модель агента так, как её отдаёт сам агент: список зависит от его версии и подписки. */
 export interface AgentModel {
   /** Идентификатор, который передаётся агенту. */
@@ -9,6 +17,10 @@ export interface AgentModel {
   efforts: string[]
   /** Эффорт, с которым модель работает, если его не выбрали. */
   defaultEffort?: string
+  /** Что делает каждый уровень эффорта, по словам агента; уровня без описания здесь нет. */
+  effortDescriptions?: Record<string, string>
+  /** Режимы обслуживания, которые поддерживает модель; нет — переключать нечего. */
+  serviceTiers?: ServiceTier[]
   /** Прежняя или закреплённая версия модели: в меню она убрана в подменю. */
   secondary?: boolean
 }
@@ -91,10 +103,12 @@ export function isChatCommand(value: unknown): value is ChatCommand {
   return CHAT_COMMANDS.some((command) => command === value)
 }
 
-/** Модель и эффорт, выбранные для чата. */
+/** Модель, эффорт и режим обслуживания, выбранные для чата. */
 export interface ModelSelection {
   model: string
   effort?: string
+  /** Режим обслуживания модели (`ServiceTier.id`); нет — обычный. */
+  serviceTier?: string
 }
 
 /** Что можно поменять в чате; `null` — вернуть значение по умолчанию. Агента — в любой момент. */
@@ -102,6 +116,7 @@ export interface ChatConfiguration {
   agent?: AgentId
   model?: string | null
   effort?: string | null
+  serviceTier?: string | null
   /** Дополнительный аккаунт агента; `null` — основной. */
   account?: string | null
 }

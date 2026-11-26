@@ -180,7 +180,7 @@ export const Composer = memo(function Composer({
       }
     }
     if (model && argument && name === 'effort') {
-      const effort = matchEffort(model, argument)
+      const effort = matchEffort(model, argument, chat.agent)
       if (effort !== undefined) {
         void configureChat(chat.id, { effort })
         return true

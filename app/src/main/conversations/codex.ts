@@ -51,8 +51,10 @@ interface CodexModel {
   displayName: string
   hidden: boolean
   isDefault: boolean
-  supportedReasoningEfforts: { reasoningEffort: string }[]
+  supportedReasoningEfforts: { reasoningEffort: string; description: string }[]
   defaultReasoningEffort: string
+  /** Режимы обслуживания модели, например `{ id: 'priority', name: 'Fast' }`. */
+  serviceTiers?: { id: string; name: string; description: string }[]
 }
 
 interface ThreadResponse {
@@ -473,13 +475,22 @@ function toCatalog(models: CodexModel[]): AgentCatalog {
       id: model.id,
       name: model.displayName,
       efforts: model.supportedReasoningEfforts.map(({ reasoningEffort }) => reasoningEffort),
-      defaultEffort: model.defaultReasoningEffort
+      defaultEffort: model.defaultReasoningEffort,
+      effortDescriptions: Object.fromEntries(
+        model.supportedReasoningEfforts
+          .filter(({ description }) => description)
+          .map(({ reasoningEffort, description }) => [reasoningEffort, description])
+      ),
+      ...(model.serviceTiers?.length && { serviceTiers: model.serviceTiers })
     }))
   }
 }
 
 /** Части сводки рассуждений разделяются в ленте пустой строкой — как в готовом элементе. */
 const SUMMARY_PART_SEPARATOR = '\n\n'
+
+/** Режим обслуживания «обычный» в `serviceTierForTurn`: так Codex отличает его от «не задан». */
+const DEFAULT_SERVICE_TIER = 'default'
 
 /** Сколько раз пробовать остановить ход, который Codex ещё не успел запустить. */
 const INTERRUPT_ATTEMPTS = 20
@@ -543,7 +554,9 @@ class CodexSession implements AgentSession {
             ...images.map((path) => ({ type: 'localImage', path }))
           ],
           ...(this.selection.model && { model: this.selection.model }),
-          ...(this.selection.effort && { effort: this.selection.effort })
+          ...(this.selection.effort && { effort: this.selection.effort }),
+          // Не выбран — «default»: иначе ход унаследовал бы режим, оставшийся у треда.
+          serviceTierForTurn: this.selection.serviceTier ?? DEFAULT_SERVICE_TIER
         })
       )
       .then(({ turn }) => {
@@ -742,7 +755,8 @@ class CodexSession implements AgentSession {
     const params = {
       cwd,
       ...FULL_ACCESS,
-      ...(this.selection.model && { model: this.selection.model })
+      ...(this.selection.model && { model: this.selection.model }),
+      ...(this.selection.serviceTier && { serviceTier: this.selection.serviceTier })
     }
     let response: ThreadResponse | null = null
     if (sessionId) {
@@ -781,7 +795,11 @@ class CodexSession implements AgentSession {
     const modelId = chosen.model ?? catalog?.defaultModel
     const effort =
       chosen.effort ?? catalog?.models.find(({ id }) => id === modelId)?.defaultEffort
-    return { ...(modelId && { model: modelId }), ...(effort && { effort }) }
+    return {
+      ...(modelId && { model: modelId }),
+      ...(effort && { effort }),
+      ...(chosen.serviceTier && { serviceTier: chosen.serviceTier })
+    }
   }
 
   private handleNotification(method: string, params: unknown): void {

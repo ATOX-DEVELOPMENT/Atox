@@ -94,13 +94,16 @@ export function TaskAgentPicker({ value, onChange }: TaskAgentPickerProps) {
       [
         {
           action: DEFAULT,
-          label: model?.defaultEffort ? `Default (${effortLabel(model.defaultEffort)})` : 'Default',
+          label: model?.defaultEffort
+            ? `Default (${effortLabel(model.defaultEffort, value.agent)})`
+            : 'Default',
           checked: value.effort === undefined
         },
         { type: 'separator' },
         ...efforts.map((level) => ({
           action: level,
-          label: effortLabel(level),
+          label: effortLabel(level, value.agent),
+          description: model?.effortDescriptions?.[level],
           checked: level === value.effort
         }))
       ],
@@ -120,9 +123,9 @@ export function TaskAgentPicker({ value, onChange }: TaskAgentPickerProps) {
         : 'Default'
   const effortText =
     value.effort !== undefined
-      ? effortLabel(value.effort)
+      ? effortLabel(value.effort, value.agent)
       : model?.defaultEffort
-        ? `Default (${effortLabel(model.defaultEffort)})`
+        ? `Default (${effortLabel(model.defaultEffort, value.agent)})`
         : 'Default'
 
   return (
