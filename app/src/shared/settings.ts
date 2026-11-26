@@ -1,5 +1,5 @@
 import { DEFAULT_AGENT_ID, type AgentId } from './agents'
-import { BOARD_AGENTS, type TaskAgent } from './board'
+import { BOARD_AGENTS, BOARD_POLL_SECONDS, BOARD_ROUNDS, type TaskAgent } from './board'
 import type { ModelSelection } from './conversation'
 import type { ShortcutOverrides } from './shortcuts'
 import { DEFAULT_PROMPT_TEMPLATES, type PromptTemplate } from './slashCommands'
@@ -105,6 +105,14 @@ export interface Settings {
   boardMaxAgents: number
   /** Агент, модель и эффорт, которые предлагаются задаче с доски по умолчанию. */
   boardAgent: TaskAgent
+  /** Новую задачу по умолчанию проверяет отдельный агент. */
+  boardReview: boolean
+  /** Агент, модель и эффорт, которые предлагаются проверяющему по умолчанию. */
+  boardReviewer: TaskAgent
+  /** Сколько раундов исправлений агент делает над pull request'ом задачи, пока не позовёт человека. */
+  boardMaxRounds: number
+  /** Как часто доска спрашивает GitHub о pull request'ах на проверке, секунды. */
+  boardPollSeconds: number
   /** Свои слеш-команды: «/имя» в поле ввода подставляет текст промпта. */
   promptTemplates: PromptTemplate[]
 }
@@ -168,6 +176,10 @@ export const DEFAULT_SETTINGS: Settings = {
   sidebarButtons: DEFAULT_SIDEBAR_BUTTON_STYLE,
   boardMaxAgents: BOARD_AGENTS.default,
   boardAgent: { agent: DEFAULT_AGENT_ID },
+  boardReview: false,
+  boardReviewer: { agent: DEFAULT_AGENT_ID },
+  boardMaxRounds: BOARD_ROUNDS.default,
+  boardPollSeconds: BOARD_POLL_SECONDS.default,
   promptTemplates: [...DEFAULT_PROMPT_TEMPLATES]
 }
 

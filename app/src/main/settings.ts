@@ -1,5 +1,5 @@
 import { AGENTS, DEFAULT_AGENT_ID, isAgentId } from '../shared/agents'
-import { BOARD_AGENTS, parseTaskAgent } from '../shared/board'
+import { BOARD_AGENTS, BOARD_POLL_SECONDS, BOARD_ROUNDS, parseTaskAgent } from '../shared/board'
 import {
   clampWidth,
   DEFAULT_ACCENT,
@@ -98,8 +98,22 @@ function normalize(settings: Settings): Settings {
       ? Math.min(BOARD_AGENTS.max, Math.max(BOARD_AGENTS.min, settings.boardMaxAgents))
       : BOARD_AGENTS.default,
     boardAgent: parseTaskAgent(settings.boardAgent) ?? DEFAULT_SETTINGS.boardAgent,
+    boardReview: settings.boardReview === true,
+    boardReviewer: parseTaskAgent(settings.boardReviewer) ?? DEFAULT_SETTINGS.boardReviewer,
+    boardMaxRounds: clampInteger(settings.boardMaxRounds, BOARD_ROUNDS),
+    boardPollSeconds: clampInteger(settings.boardPollSeconds, BOARD_POLL_SECONDS),
     promptTemplates: parsePromptTemplates(settings.promptTemplates)
   }
+}
+
+/** Целое число в пределах `bounds`; не число — значение по умолчанию. */
+function clampInteger(
+  value: unknown,
+  bounds: { min: number; max: number; default: number }
+): number {
+  return Number.isInteger(value)
+    ? Math.min(bounds.max, Math.max(bounds.min, value as number))
+    : bounds.default
 }
 
 /**

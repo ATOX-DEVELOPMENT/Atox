@@ -846,13 +846,15 @@ function parseTaskStart(value: unknown): TaskStart | undefined {
   if (typeof value !== 'object' || value === null) {
     return undefined
   }
-  const { agent, message, projectId } = value as Record<string, unknown>
+  const { agent, message, projectId, review } = value as Record<string, unknown>
   const parsed = parseTaskAgent(agent)
+  const reviewer = parseTaskAgent(review)
   if (!parsed) {
     return undefined
   }
   return {
     agent: parsed,
+    ...(reviewer && { review: reviewer }),
     ...(typeof message === 'string' && message.trim() && { message: message.trim() }),
     ...(typeof projectId === 'string' && projectId && { projectId })
   }
