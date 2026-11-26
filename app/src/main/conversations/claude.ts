@@ -883,6 +883,11 @@ class ClaudeSession implements AgentSession {
         this.handleStreamEvent(message.event)
         break
       case 'assistant':
+        // Запрос к API не удался: текст ошибки придёт с концом хода (`result` с `is_error`)
+        // и покажется ошибкой, а не репликой агента. Обрезанный по длине ответ — настоящий.
+        if (message.error && message.error !== 'max_output_tokens') {
+          break
+        }
         this.handleAssistantMessage(
           message.message.id,
           message.message.content,

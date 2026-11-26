@@ -9,7 +9,9 @@ import {
   GripVertical,
   LoaderCircle,
   Pencil,
-  Trash2
+  RotateCw,
+  Trash2,
+  WifiOff
 } from 'lucide-react'
 import type { TimelineItem, TimelineItemKind, UserMessage } from '../../../shared/conversation'
 import { findAgent } from '../../../shared/agents'
@@ -51,7 +53,8 @@ const FOLDED_KINDS: ReadonlySet<TimelineItemKind> = new Set([
   'tool',
   'reasoning',
   'approval',
-  'question'
+  'question',
+  'reconnect'
 ])
 
 /**
@@ -544,6 +547,8 @@ function TimelineEntry({ chatId, item }: { chatId: string; item: TimelineItem })
       return <ContextCard context={item.context} />
     case 'compaction':
       return <CompactionNotice item={item} />
+    case 'reconnect':
+      return <ReconnectNotice item={item} />
     case 'image':
       return <GeneratedImage item={item} />
     case 'agent-switch':
@@ -557,6 +562,25 @@ function TimelineEntry({ chatId, item }: { chatId: string; item: TimelineItem })
     case 'tool':
       return null
   }
+}
+
+/** Ход оборвался, и Atox продолжает его сам: тихая строка вместо сырой ошибки. */
+function ReconnectNotice({ item }: { item: Extract<TimelineItem, { kind: 'reconnect' }> }) {
+  const waiting = item.status === 'offline' || item.status === 'retrying'
+  const Icon = waiting ? LoaderCircle : item.status === 'recovered' ? RotateCw : WifiOff
+  const text = {
+    offline: 'Connection lost. Waiting for the network…',
+    retrying: `Connection lost. Reconnecting (attempt ${item.attempt} of ${item.attempts})…`,
+    recovered: 'Connection lost. Reconnected and continued',
+    failed: 'Connection lost. Couldn’t reconnect',
+    stopped: 'Connection lost'
+  }[item.status]
+  return (
+    <div className="reconnect" data-status={item.status} role="status">
+      <Icon className={waiting ? 'icon activity__spinner' : 'icon'} aria-hidden />
+      <span>{text}</span>
+    </div>
+  )
 }
 
 /** Разделитель в ленте: агент сжимает разговор, всё выше осталось только в сводке. */

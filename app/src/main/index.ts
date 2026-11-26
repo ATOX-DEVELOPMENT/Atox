@@ -1,6 +1,6 @@
 import { tmpdir, userInfo } from 'node:os'
 import { basename, delimiter, join } from 'node:path'
-import { app, BrowserWindow, nativeTheme, protocol, shell as electronShell } from 'electron'
+import { app, BrowserWindow, nativeTheme, net, protocol, shell as electronShell } from 'electron'
 import { AccountService } from './accounts/service'
 import { AgentDetector } from './agents'
 import { WorkingTreeReader } from './changes'
@@ -173,6 +173,7 @@ async function bootstrap(): Promise<void> {
     join(userData, ACCOUNTS_DIRECTORY_NAME)
   )
   const conversations = new ConversationManager({
+    isOnline: () => net.isOnline(),
     store,
     agents,
     drivers,

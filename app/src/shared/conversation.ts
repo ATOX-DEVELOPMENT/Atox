@@ -247,6 +247,20 @@ export type TimelineItem =
       error?: string
     }
   | { kind: 'error'; id: string; message: string }
+  /**
+   * Ход оборвался — пропала сеть или упал процесс агента, — и Atox продолжает его сам:
+   * ждёт сеть, перезапускает сессию и просит агента продолжить. Одна строка на ход,
+   * обновляется на месте.
+   */
+  | {
+      kind: 'reconnect'
+      id: string
+      status: ReconnectStatus
+      /** Какая по счёту попытка продолжить ход. */
+      attempt: number
+      /** Сколько попыток всего. */
+      attempts: number
+    }
   /** Сообщения в чате начал получать другой агент — строка перед первым из них. */
   | { kind: 'agent-switch'; id: string; agent: AgentId }
   | {
@@ -265,6 +279,12 @@ export type CompactionStatus = 'running' | 'done' | 'failed'
 export type TimelineItemKind = TimelineItem['kind']
 
 /** Сообщение пользователя — в ленте или в очереди к агенту. */
+/**
+ * `offline` — сети нет, ждём её; `retrying` — пробуем продолжить; `recovered` — продолжили;
+ * `failed` — попытки кончились; `stopped` — ход остановили, пока ждали повтора.
+ */
+export type ReconnectStatus = 'offline' | 'retrying' | 'recovered' | 'failed' | 'stopped'
+
 export type UserMessage = Extract<TimelineItem, { kind: 'user' }>
 
 /** Чего агент ждёт от пользователя: разрешения на вызов или ответа на вопросы. */
