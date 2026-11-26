@@ -588,6 +588,10 @@ ul {
   box-shadow: var(--shadow-menu);
   font-size: var(--font-size-small);
   white-space: nowrap;
+  /* Длинный текст — например, название PR — обрезается, а не уходит за край окна. */
+  max-width: min(420px, calc(100vw - 12px));
+  overflow: hidden;
+  text-overflow: ellipsis;
   pointer-events: none;
   animation: hover-hint-in 120ms ease-out;
 }
@@ -700,6 +704,39 @@ ul {
 
 .row--chat[data-active='true'] {
   background: var(--color-active);
+}
+
+/* PR ветки чата — у правого края строки, в цветах GitHub; черновик серый. */
+.chat-pull-request {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+  margin-right: 4px;
+  border-radius: var(--radius);
+  color: var(--color-text-muted);
+}
+
+.chat-pull-request .icon {
+  width: 14px;
+  height: 14px;
+}
+
+.chat-pull-request:hover {
+  background: var(--color-active);
+}
+
+.chat-pull-request[data-state='open'] {
+  color: var(--color-git-open);
+}
+
+.chat-pull-request[data-state='merged'] {
+  color: var(--color-git-merged);
+}
+
+.chat-pull-request[data-state='closed'] {
+  color: var(--color-git-closed);
 }
 
 /* Второй чат, открытый рядом, выделен слабее того, что в фокусе. */

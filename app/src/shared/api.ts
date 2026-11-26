@@ -36,6 +36,7 @@ import type { Project, SpacesState, UserProfile } from './models'
 import type { PlanLimitsState } from './planLimits'
 import type { TokenSpendSummary } from './tokenSpend'
 import type {
+  BranchPullRequest,
   GitHubCounts,
   GitHubItems,
   GitHubKind,
@@ -231,6 +232,11 @@ export interface AtoxApi {
       state: ListState,
       cursor: string
     ): Promise<RepositoryResult<Page<GitHubItems[Kind]>>>
+    /**
+     * PR текущей ветки папки чата; `null` — чат в основной ветке, у ветки нет PR или GitHub
+     * недоступен. Ответ кэшируется ненадолго; `fresh` — спросить GitHub заново.
+     */
+    chatPullRequest(chatId: string, fresh?: boolean): Promise<BranchPullRequest | null>
   }
   updates: {
     /** Скачивается ли новая версия или она уже готова к установке; `null` — обновлений нет. */
@@ -458,6 +464,7 @@ export const IpcChannel = {
   ChangesDiscard: 'changes:discard',
   RepositoryGitHub: 'repository:github',
   RepositoryMoreGitHub: 'repository:more-github',
+  RepositoryChatPullRequest: 'repository:chat-pull-request',
   UpdatesState: 'updates:state',
   UpdatesStateChanged: 'updates:state-changed',
   UpdatesInstall: 'updates:install',

@@ -1,23 +1,40 @@
-import { memo, useId, useMemo, useState, type MouseEvent } from 'react'
+import {
+  memo,
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+  type MouseEvent
+} from 'react'
 import {
   Archive,
   ChevronDown,
   Columns2,
   GitFork,
+  GitMerge,
+  GitPullRequest,
+  GitPullRequestClosed,
+  GitPullRequestDraft,
   LayoutDashboard,
   Pencil,
-  Trash2
+  Trash2,
+  type LucideIcon
 } from 'lucide-react'
 import { findAgent } from '../../../shared/agents'
 import type { Chat } from '../../../shared/models'
+import type { PullRequestState } from '../../../shared/repository'
 import { isCommandClick } from '../../../shared/shortcuts'
 import { useCanvasNavigation, useChatCanvases } from '../hooks/CanvasesContext'
 import { useChatActivity } from '../hooks/ChatActivityContext'
 import { useProjectActions } from '../hooks/ProjectsContext'
+import { chatPullRequests } from '../lib/chatPullRequests'
 import { showMenu } from '../lib/menu'
 import { AgentIcon } from './AgentIcon'
 import { ChatCanvasRow } from './canvas/ChatCanvasRow'
 import { ChatStatus } from './ChatStatus'
+import { HoverHint, useHoverHint } from './HoverHint'
 import { InlineRename } from './InlineRename'
 import { useSortableItem } from './SortableList'
 
@@ -255,7 +272,64 @@ function ChatRow({
           {content}
         </button>
       )}
+      {!compact && !renaming && <ChatPullRequest chatId={chat.id} />}
     </div>
+  )
+}
+
+const PULL_REQUEST_LOOK: Record<PullRequestState, { icon: LucideIcon; label: string }> = {
+  open: { icon: GitPullRequest, label: 'Open' },
+  draft: { icon: GitPullRequestDraft, label: 'Draft' },
+  merged: { icon: GitMerge, label: 'Merged' },
+  closed: { icon: GitPullRequestClosed, label: 'Closed' }
+}
+
+/**
+ * PR ветки, в которой работает чат, — значок его состояния у правого края строки; щелчок
+ * открывает PR. Нет PR или чат в основной ветке — нет и значка.
+ */
+function ChatPullRequest({ chatId }: { chatId: string }) {
+  const pullRequest = useSyncExternalStore(chatPullRequests.subscribe, () =>
+    chatPullRequests.get(chatId)
+  )
+  const hint = useHoverHint()
+  useEffect(() => chatPullRequests.watch(chatId), [chatId])
+
+  // Агент закончил ход — он мог создать PR, сменить ветку или смёрджить: спрашиваем заново.
+  const working = useChatActivity(chatId) === 'working'
+  const wasWorking = useRef(working)
+  useEffect(() => {
+    if (wasWorking.current && !working) {
+      void chatPullRequests.refresh(chatId, true)
+    }
+    wasWorking.current = working
+  }, [chatId, working])
+
+  if (!pullRequest) {
+    return null
+  }
+  const { icon: Icon, label } = PULL_REQUEST_LOOK[pullRequest.state]
+  return (
+    <>
+      <button
+        type="button"
+        className="chat-pull-request"
+        data-state={pullRequest.state}
+        aria-label={`${label} pull request #${pullRequest.number}: ${pullRequest.title}`}
+        onClick={() => window.open(pullRequest.url, '_blank', 'noreferrer')}
+        onMouseEnter={(event) => hint.show(event.currentTarget)}
+        onMouseLeave={hint.hide}
+        onFocus={(event) => hint.show(event.currentTarget)}
+        onBlur={hint.hide}
+      >
+        <Icon className="icon" aria-hidden />
+      </button>
+      {hint.anchor && (
+        <HoverHint anchor={hint.anchor} placement="below">
+          {label} · #{pullRequest.number} {pullRequest.title}
+        </HoverHint>
+      )}
+    </>
   )
 }
 

@@ -45,6 +45,7 @@ import { BoardGitHub } from './board/github'
 import { BoardService } from './board/service'
 import { BoardWorktrees } from './board/worktrees'
 import { GitHubAccounts } from './githubAccounts'
+import { ChatPullRequests } from './chatPullRequests'
 import { RepositoryReader } from './repository'
 import { SettingsStore } from './settings'
 import { ShellEnvironment } from './shellEnvironment'
@@ -287,13 +288,15 @@ async function bootstrap(): Promise<void> {
     join(userData, BOARD_FILE_NAME)
   )
   settings.onChange(() => board?.onSettingsChanged())
+  const repository = new RepositoryReader(shell, githubAccounts)
   registerIpcHandlers({
     store,
     settings,
     conversations,
     terminals,
     branches,
-    repository: new RepositoryReader(shell, githubAccounts),
+    repository,
+    chatPullRequests: new ChatPullRequests(shell, repository),
     githubAccounts,
     board,
     workingTree: new WorkingTreeReader(shell),
