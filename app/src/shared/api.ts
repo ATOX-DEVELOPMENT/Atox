@@ -12,6 +12,7 @@ import type {
 import type {
   CanvasExportFormat,
   CanvasExportResult,
+  CanvasGrid,
   CanvasState,
   CanvasShare,
   CanvasView,
@@ -382,6 +383,8 @@ export interface AtoxApi {
     ungroup(canvasId: string, groupId: string): Promise<void>
     /** Запоминает сдвиг и масштаб холста; окно зовёт редко (после паузы), не на каждый кадр. */
     setView(canvasId: string, view: CanvasView): Promise<void>
+    /** Сетка холста чата (вкладка Tools): пишется у всех его страниц. */
+    setGrid(canvasId: string, grid: CanvasGrid): Promise<void>
     /** Убирает в архив весь холст чата (все страницы вместе) или возвращает его. */
     archive(canvasId: string, archived: boolean): Promise<void>
     /**
@@ -529,6 +532,7 @@ export const IpcChannel = {
   CanvasShare: 'canvas:share',
   CanvasStopSharing: 'canvas:stop-sharing',
   CanvasSetView: 'canvas:set-view',
+  CanvasSetGrid: 'canvas:set-grid',
   CanvasArchive: 'canvas:archive',
   CanvasRemove: 'canvas:remove',
   CanvasRemoveScreen: 'canvas:remove-screen',

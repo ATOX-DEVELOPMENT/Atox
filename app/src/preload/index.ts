@@ -330,6 +330,7 @@ const api: AtoxApi = {
     stopSharing: (canvasId) => ipcRenderer.invoke(IpcChannel.CanvasStopSharing, canvasId),
     ungroup: (canvasId, groupId) => ipcRenderer.invoke(IpcChannel.CanvasUngroup, canvasId, groupId),
     setView: (canvasId, view) => ipcRenderer.invoke(IpcChannel.CanvasSetView, canvasId, view),
+    setGrid: (canvasId, grid) => ipcRenderer.invoke(IpcChannel.CanvasSetGrid, canvasId, grid),
     archive: (canvasId, archived) => ipcRenderer.invoke(IpcChannel.CanvasArchive, canvasId, archived),
     remove: (canvasId) => ipcRenderer.invoke(IpcChannel.CanvasRemove, canvasId),
     removeCanvas: (chatId) => ipcRenderer.invoke(IpcChannel.CanvasRemoveCanvas, chatId),

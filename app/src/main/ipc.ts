@@ -700,6 +700,9 @@ export function registerIpcHandlers({
   ipcMain.handle(IpcChannel.CanvasSetView, (_event, canvasId: unknown, view: unknown) =>
     canvas.setView(requireId(canvasId), view)
   )
+  ipcMain.handle(IpcChannel.CanvasSetGrid, (_event, canvasId: unknown, grid: unknown) =>
+    canvas.setGrid(requireId(canvasId), grid)
+  )
   ipcMain.handle(IpcChannel.CanvasArchive, (_event, canvasId: unknown, archived: unknown) => {
     if (typeof archived !== 'boolean') {
       throw new Error('Invalid archive flag')

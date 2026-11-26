@@ -5,6 +5,7 @@ import { app } from 'electron'
 import {
   CANVAS_GROUPS_MAX,
   CANVAS_LINKS_MAX,
+  DEFAULT_CANVAS_GRID,
   DEFAULT_SCREEN_DEVICE,
   LINK_ON_MAX_LENGTH,
   SCREEN_DEVICES,
@@ -63,6 +64,7 @@ import {
   CANVAS_FILE_VERSION,
   normalizeCanvases,
   normalizeView,
+  parseGrid,
   publicCanvas,
   type CanvasFile,
   type StoredCanvas,
@@ -361,6 +363,22 @@ export class CanvasService implements ScreenDocumentSource {
       throw new CanvasError('Invalid canvas view.')
     }
     canvas.view = normalized
+    this.changed()
+  }
+
+  /**
+   * Сетка холста из вкладки Tools: одна на холст чата, поэтому записывается у всех его страниц.
+   * Экраны не двигаются: новая клетка действует на следующие переносы и раскладки.
+   */
+  setGrid(canvasId: string, grid: unknown): void {
+    const { chatId } = this.getCanvas(canvasId)
+    const parsed = parseGrid(grid)
+    if (!parsed) {
+      throw new CanvasError('Invalid canvas grid.')
+    }
+    for (const page of this.pagesOf(chatId)) {
+      page.grid = { ...parsed }
+    }
     this.changed()
   }
 
@@ -677,7 +695,7 @@ export class CanvasService implements ScreenDocumentSource {
         name,
         ...newLook,
         file,
-        ...placeNewScreen(canvas.screens, newLook.width),
+        ...placeNewScreen(canvas.screens, newLook.width, canvas.grid.size),
         revision: 0,
         missing: false,
         buildError: null,
@@ -1091,7 +1109,7 @@ export class CanvasService implements ScreenDocumentSource {
     const rest = canvas.screens
       .filter((screen) => !placed.has(screen))
       .toSorted((a, b) => a.y - b.y || a.x - b.x)
-    const places = arrangeRows(rest.length > 0 ? [...named, rest] : named)
+    const places = arrangeRows(rest.length > 0 ? [...named, rest] : named, canvas.grid.size)
     for (const [screen, { x, y }] of places) {
       screen.x = x
       screen.y = y
@@ -1287,6 +1305,8 @@ export class CanvasService implements ScreenDocumentSource {
       share: this.chatShareOf(chat.id),
       archived: false,
       view: null,
+      // Сетка одна на холст чата: новая страница берёт её у остальных.
+      grid: { ...(this.pagesOf(chat.id)[0]?.grid ?? DEFAULT_CANVAS_GRID) },
       createdAt: now,
       updatedAt: now
     }
