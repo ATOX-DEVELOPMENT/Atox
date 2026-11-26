@@ -510,6 +510,8 @@ class CodexSession implements AgentSession {
   private readonly requestSignals = new Map<number | string, AbortController>()
   /** Модель и эффорт разговора — известны, когда тред открыт. */
   private selection: Partial<ModelSelection> = {}
+  /** У модели разговора есть режимы обслуживания: только тогда их можно передавать Codex. */
+  private supportsServiceTiers = false
   /**
    * Сколько токенов тред написал до текущего хода: счётчик хода — разница с итогом треда.
    * Codex сообщает лишь итог треда и последний запрос, а запросов за ход бывает много.
@@ -556,7 +558,9 @@ class CodexSession implements AgentSession {
           ...(this.selection.model && { model: this.selection.model }),
           ...(this.selection.effort && { effort: this.selection.effort }),
           // Не выбран — «default»: иначе ход унаследовал бы режим, оставшийся у треда.
-          serviceTierForTurn: this.selection.serviceTier ?? DEFAULT_SERVICE_TIER
+          ...(this.supportsServiceTiers && {
+            serviceTierForTurn: this.selection.serviceTier ?? DEFAULT_SERVICE_TIER
+          })
         })
       )
       .then(({ turn }) => {
@@ -785,20 +789,23 @@ class CodexSession implements AgentSession {
    */
   private async resolveSelection(): Promise<Partial<ModelSelection>> {
     const chosen = this.options.selection ?? {}
-    if (chosen.model && chosen.effort) {
-      return chosen
-    }
+    // Список нужен всегда: по нему видно, умеет ли модель режимы обслуживания (Fast).
     const catalog = await this.rpc
       .request<{ data: CodexModel[] }>('model/list', {})
       .then(({ data }) => toCatalog(data))
       .catch(() => null)
     const modelId = chosen.model ?? catalog?.defaultModel
-    const effort =
-      chosen.effort ?? catalog?.models.find(({ id }) => id === modelId)?.defaultEffort
+    const model = catalog?.models.find(({ id }) => id === modelId)
+    const effort = chosen.effort ?? model?.defaultEffort
+    // Без списка моделей судить не по чему: выбор пользователя передаётся как есть.
+    this.supportsServiceTiers = catalog
+      ? Boolean(model?.serviceTiers?.length)
+      : Boolean(chosen.serviceTier)
+    const serviceTier = this.supportsServiceTiers ? chosen.serviceTier : undefined
     return {
       ...(modelId && { model: modelId }),
       ...(effort && { effort }),
-      ...(chosen.serviceTier && { serviceTier: chosen.serviceTier })
+      ...(serviceTier && { serviceTier })
     }
   }
 
