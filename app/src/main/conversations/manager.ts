@@ -529,7 +529,7 @@ export class ConversationManager {
       // Ответ прерван выходом: он кончается сейчас, а не когда лента сохранялась в последний раз
       // — во время долгой команды агент ничего не присылает, и сохранять было нечего.
       if (conversation.turn || conversation.unprompted) {
-        this.settleLastTurn(chatId, conversation)
+        this.settleLastTurn(chatId, conversation, true)
         this.persist(chatId, conversation, { immediately: true })
       }
     }
@@ -798,6 +798,8 @@ export class ConversationManager {
     if (!turn) {
       return
     }
+    // Ход закончился потому, что его остановили, — а не сам.
+    const stopped = conversation.interruptedTurn === turn
     conversation.turn = null
     conversation.interruptedTurn = null
     this.clearInterruptTimer(conversation)
@@ -806,10 +808,7 @@ export class ConversationManager {
     const item = items[index]
     if (item?.kind === 'user') {
       this.settleTurn(chatId, conversation, items.slice(index + 1))
-      this.emit(chatId, conversation, {
-        type: 'item',
-        item: { ...item, finishedAt: Date.now() }
-      })
+      this.emit(chatId, conversation, { type: 'item', item: finishedTurn(item, stopped) })
     }
     this.persist(chatId, conversation, { immediately: true })
     this.restartIfIdle(conversation)
@@ -843,13 +842,13 @@ export class ConversationManager {
     session: AgentSession
   ): void {
     session.interrupt().then(
-      () => this.finishUnprompted(chatId, conversation),
+      () => this.finishUnprompted(chatId, conversation, { stopped: true }),
       (error) => {
         console.error('Failed to interrupt the agent', error)
         if (conversation.session === session) {
           conversation.session = null
           session.close()
-          this.finishUnprompted(chatId, conversation)
+          this.finishUnprompted(chatId, conversation, { stopped: true })
         }
       }
     )
@@ -859,12 +858,16 @@ export class ConversationManager {
    * Агент закончил работу, начатую без сообщения. Она относится к последнему сообщению в
    * ленте: его ответ теперь кончается здесь, и время работы над ним считается до этого места.
    */
-  private finishUnprompted(chatId: string, conversation: Conversation): void {
+  private finishUnprompted(
+    chatId: string,
+    conversation: Conversation,
+    { stopped = false }: { stopped?: boolean } = {}
+  ): void {
     if (!conversation.unprompted) {
       return
     }
     conversation.unprompted = false
-    this.settleLastTurn(chatId, conversation)
+    this.settleLastTurn(chatId, conversation, stopped)
     this.persist(chatId, conversation, { immediately: true })
     this.updateRunning(chatId, conversation)
     this.restartIfIdle(conversation)
@@ -872,13 +875,13 @@ export class ConversationManager {
   }
 
   /** Ответ на последнее сообщение ленты кончается сейчас: его время работы считается до этого места. */
-  private settleLastTurn(chatId: string, conversation: Conversation): void {
+  private settleLastTurn(chatId: string, conversation: Conversation, stopped: boolean): void {
     const { items } = conversation.snapshot
     const index = items.findLastIndex(({ kind }) => kind === 'user')
     const item = items[index]
     if (item?.kind === 'user') {
       this.settleTurn(chatId, conversation, items.slice(index + 1))
-      this.emit(chatId, conversation, { type: 'item', item: { ...item, finishedAt: Date.now() } })
+      this.emit(chatId, conversation, { type: 'item', item: finishedTurn(item, stopped) })
     }
   }
 
@@ -1328,6 +1331,18 @@ function chatDirectory({ project, chat }: { project: Project; chat: Chat }): str
  * и после них агент может не прислать конец хода: чат остался бы занятым навсегда.
  */
 const WORK_KINDS: ReadonlySet<TimelineItem['kind']> = new Set(['assistant', 'reasoning', 'tool'])
+
+/**
+ * Сообщение, ответ на которое закончился сейчас. Метка остановки — только у ответа, который
+ * остановили: агент мог продолжить сам после прежней остановки и закончить уже штатно.
+ */
+function finishedTurn(
+  item: Extract<TimelineItem, { kind: 'user' }>,
+  stopped: boolean
+): Extract<TimelineItem, { kind: 'user' }> {
+  const { stopped: _previous, ...rest } = item
+  return { ...rest, finishedAt: Date.now(), ...(stopped && { stopped: true }) }
+}
 
 function isBusy(conversation: Conversation): boolean {
   return (
