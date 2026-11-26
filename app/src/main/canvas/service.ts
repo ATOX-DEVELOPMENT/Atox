@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import { mkdir, open, readFile, realpath, rename, stat } from 'node:fs/promises'
+import { access, mkdir, open, readFile, realpath, rename, stat } from 'node:fs/promises'
 import { basename, dirname, isAbsolute, join } from 'node:path'
 import { app } from 'electron'
 import {
@@ -8,11 +8,15 @@ import {
   DEFAULT_CANVAS_GRID,
   DEFAULT_SCREEN_DEVICE,
   LINK_ON_MAX_LENGTH,
+  SCREEN_SIZE,
   SCREEN_DEVICES,
+  STANDALONE_CANVAS_PREFIX,
   SCREEN_HISTORY_LIMIT,
   canvasScreenUrl,
   isCanvasExportFormat,
   isScreenDeviceId,
+  isScreenFrame,
+  isStandaloneCanvas,
   screenFrameOf,
   screenSourceKind,
   type CanvasExportFormat,
@@ -22,8 +26,10 @@ import {
   type CanvasState,
   type ScreenDevice,
   type ScreenDeviceId,
+  type ScreenFrame,
   type ScreenVersion
 } from '../../shared/canvas'
+import type { Project } from '../../shared/models'
 import { CANVAS_KIT_ENTRY } from '../../shared/canvasRuntime'
 import type { ConversationManager } from '../conversations/manager'
 import { JsonFileWriter, readVersionedJson } from '../jsonFile'
@@ -52,6 +58,7 @@ import {
   formatCanvasMessage,
   formatFixMessage,
   isInsideFolder,
+  isScreenDimension,
   isScreenFileName,
   orderForExport,
   parseName,
@@ -199,6 +206,23 @@ export interface AgentCanvasView {
 /** Сколько экранов снимается для ссылки одновременно: каждый — скрытое окно. */
 const SHARE_RENDER_CONCURRENCY = 3
 
+/** Холст без чата: проект и ключ, которым собраны его страницы. */
+interface CanvasOwner {
+  project: Project
+  chatId: string
+}
+
+/** Имя первой страницы холста без чата, если человек его не дал. */
+const DEFAULT_PAGE_NAME = 'Page 1'
+
+/** Пустой экран: устройство, размер и рамка своего размера. */
+interface BlankLook {
+  device: ScreenDevice
+  width: number
+  height: number
+  frame?: ScreenFrame
+}
+
 interface ScreenLocation {
   canvas: StoredCanvas
   screen: StoredScreen
@@ -282,19 +306,130 @@ export class CanvasService implements ScreenDocumentSource {
 
   /** Новая пустая страница в холсте чата: в конце, с именем «Page N». Возвращает её id. */
   addPage(chatId: string): string {
-    const location = this.services.store.findChat(chatId)
-    if (!location) {
-      throw new CanvasError('The chat was not found.')
-    }
     const pages = this.pagesOf(chatId)
+    const owner = this.ownerOf(chatId, pages[0])
     const taken = new Set(pages.map(({ name }) => name.toLowerCase()))
     let number = pages.length + 1
     while (taken.has(`page ${number}`)) {
       number += 1
     }
-    const canvas = this.addCanvas(location, `Page ${number}`)
+    const canvas = this.addCanvas(owner, `Page ${number}`)
     this.changed()
     return canvas.id
+  }
+
+  /**
+   * Холст без чата: человек создаёт его сам из списка холстов. С `look` на первой странице сразу
+   * стоит пустой экран этого размера. Возвращает id первой страницы.
+   */
+  async createStandalone(projectId: string, name: unknown, look?: unknown): Promise<string> {
+    const project = this.services.store.findProject(projectId)
+    if (!project) {
+      throw new CanvasError('The project was not found.')
+    }
+    const pageName = parseName(name, 'canvas')
+    const screenLook = look === undefined ? undefined : parseScreenLook(look)
+    const canvas = this.addCanvas(
+      { project, chatId: `${STANDALONE_CANVAS_PREFIX}${randomUUID()}` },
+      pageName
+    )
+    this.changed()
+    if (screenLook) {
+      try {
+        await this.placeBlankScreen(canvas, project, screenLook)
+      } catch (error) {
+        // Без экрана холст не нужен: человек увидит ошибку и создаст его заново.
+        await this.remove(canvas.id)
+        throw error
+      }
+    }
+    return canvas.id
+  }
+
+  /**
+   * Пустой экран выбранного размера на странице: в проекте появляется пустой HTML-файл
+   * (`.atox/canvas/…`), и экран следит за ним, как за любым другим. Агент потом заменяет файл
+   * своим, не трогая размер. Возвращает id экрана.
+   */
+  async addBlankScreen(canvasId: string, look: unknown): Promise<string> {
+    const canvas = this.getCanvas(canvasId)
+    const project = this.services.store.findProject(canvas.projectId)
+    if (!project) {
+      throw new CanvasError('The project of this canvas was not found.')
+    }
+    return this.placeBlankScreen(canvas, project, parseScreenLook(look))
+  }
+
+  private async placeBlankScreen(
+    canvas: StoredCanvas,
+    project: Project,
+    look: BlankLook
+  ): Promise<string> {
+    const taken = new Set(canvas.screens.map(({ name }) => name.toLowerCase()))
+    let number = canvas.screens.length + 1
+    while (taken.has(`screen ${number}`)) {
+      number += 1
+    }
+    const name = `Screen ${number}`
+    const file = await writeBlankScreenFile(project.path, `${canvas.name}-${name}`, look)
+    if (!this.canvases.includes(canvas)) {
+      throw new CanvasError('The canvas was deleted.')
+    }
+    const screen: StoredScreen = {
+      id: randomUUID(),
+      name,
+      device: look.device,
+      width: look.width,
+      height: look.height,
+      ...(look.frame && { frame: look.frame }),
+      file,
+      ...placeNewScreen(canvas.screens, look.width, canvas.grid.size),
+      revision: 0,
+      missing: false,
+      buildError: null,
+      updatedAt: Date.now(),
+      versions: []
+    }
+    canvas.screens.push(screen)
+    canvas.updatedAt = Date.now()
+    this.changed()
+    const key = screenKey(canvas.id, screen.id)
+    if (!canvas.archived) {
+      this.watcher.watch(key, [file])
+      await this.queueCheck(key)
+    }
+    return screen.id
+  }
+
+  /**
+   * Привязывает холст без чата (все его страницы) к чату того же проекта: теперь агент этого чата
+   * рисует на нём, и туда уходят просьбы. У чата не должно быть своего холста — их не сливаем.
+   */
+  linkChat(canvasId: string, chatId: string): void {
+    const canvas = this.getCanvas(canvasId)
+    if (!isStandaloneCanvas(canvas)) {
+      throw new CanvasError('This canvas is already linked to a chat.')
+    }
+    const location = this.services.store.findChat(chatId)
+    if (!location) {
+      throw new CanvasError('The chat was not found.')
+    }
+    if (location.project.id !== canvas.projectId) {
+      throw new CanvasError('Link the canvas to a chat of its own project.')
+    }
+    if (this.pagesOf(chatId).length > 0) {
+      throw new CanvasError('This chat already has a canvas.')
+    }
+    if (this.sharing.has(canvas.chatId)) {
+      throw new CanvasError('Wait until the canvas is shared, then link it.')
+    }
+    const key = canvas.chatId
+    const now = Date.now()
+    for (const page of this.pagesOf(key)) {
+      page.chatId = chatId
+      page.updatedAt = now
+    }
+    this.changed()
   }
 
   /** Имена страниц чата разные: по имени агент находит страницу. */
@@ -688,6 +823,10 @@ export class CanvasService implements ScreenDocumentSource {
         this.forgetOutput(screenKey(canvas.id, screen.id))
       }
       Object.assign(screen, look, { file })
+      if (look) {
+        // Агент выбрал устройство или свой размер: рамка, которую выбирал человек, уходит.
+        delete screen.frame
+      }
     } else {
       const newLook = look ?? deviceLook(DEFAULT_SCREEN_DEVICE)
       screen = {
@@ -1291,28 +1430,30 @@ export class CanvasService implements ScreenDocumentSource {
     )
   }
 
-  private addCanvas({ project, chat }: ChatLocation, name?: string): StoredCanvas {
+  private addCanvas(owner: ChatLocation | CanvasOwner, name?: string): StoredCanvas {
     const now = Date.now()
+    const { project } = owner
+    const chatId = 'chat' in owner ? owner.chat.id : owner.chatId
     const canvas: StoredCanvas = {
       id: randomUUID(),
-      name: name ?? canvasNameFromTitle(chat.title),
-      chatId: chat.id,
+      name: name ?? ('chat' in owner ? canvasNameFromTitle(owner.chat.title) : DEFAULT_PAGE_NAME),
+      chatId,
       projectId: project.id,
       screens: [],
       links: [],
       groups: [],
       // Новая страница получает ссылку холста; в снимок она попадёт при следующем обновлении.
-      share: this.chatShareOf(chat.id),
+      share: this.chatShareOf(chatId),
       archived: false,
       view: null,
       // Сетка одна на холст чата: новая страница берёт её у остальных.
-      grid: { ...(this.pagesOf(chat.id)[0]?.grid ?? DEFAULT_CANVAS_GRID) },
+      grid: { ...(this.pagesOf(chatId)[0]?.grid ?? DEFAULT_CANVAS_GRID) },
       createdAt: now,
       updatedAt: now
     }
     // Холст чата в архиве целиком или нет: страница, которую добавили к холсту в архиве,
     // возвращает его.
-    const archivedPage = this.pagesOf(chat.id).find((page) => page.archived)
+    const archivedPage = this.pagesOf(chatId).find((page) => page.archived)
     if (archivedPage) {
       this.archive(archivedPage.id, false)
     }
@@ -1325,11 +1466,32 @@ export class CanvasService implements ScreenDocumentSource {
     if (this.services.store.findChat(canvas.chatId)) {
       return canvas.chatId
     }
+    if (isStandaloneCanvas(canvas)) {
+      throw new CanvasError(
+        'This canvas has no chat yet. Link it to a chat or start an agent from the canvas.'
+      )
+    }
     throw new CanvasError(
       this.services.store.findArchivedChat(canvas.chatId)
         ? 'The chat of this canvas is archived. Restore the chat to send requests.'
         : 'The chat of this canvas was deleted, so there is no agent to send this to.'
     )
+  }
+
+  /**
+   * Кому принадлежит новая страница холста: чату, а у холста без чата — его ключу и проекту
+   * его страниц.
+   */
+  private ownerOf(chatId: string, page: StoredCanvas | undefined): ChatLocation | CanvasOwner {
+    const location = this.services.store.findChat(chatId)
+    if (location) {
+      return location
+    }
+    const project = page && this.services.store.findProject(page.projectId)
+    if (page && project && isStandaloneCanvas(page)) {
+      return { project, chatId }
+    }
+    throw new CanvasError('The chat was not found.')
   }
 
   private activeCanvasesOf(chatId: string): StoredCanvas[] {
@@ -1616,7 +1778,7 @@ function sharedCanvas(
         id: screen.id,
         name: screen.name,
         device: screen.device,
-        frame: screenFrameOf(screen.device),
+        frame: screenFrameOf(screen),
         width: screen.width,
         height: screen.height,
         x: screen.x,
@@ -1730,4 +1892,85 @@ async function writeFileAtomically(file: string, content: string): Promise<void>
     await handle.close()
   }
   await rename(temporary, file)
+}
+
+/** Размер пустого экрана из окна: устройство из списка или свой размер с рамкой. */
+function parseScreenLook(value: unknown): BlankLook {
+  const look = typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : {}
+  const device = look['device']
+  if (isScreenDeviceId(device)) {
+    return deviceLook(device)
+  }
+  if (device !== 'custom') {
+    throw new CanvasError('Choose a device or a custom size for the screen.')
+  }
+  const { width, height, frame } = look
+  if (!isScreenDimension(width) || !isScreenDimension(height)) {
+    throw new CanvasError(
+      `The width and height must be whole numbers from ${SCREEN_SIZE.min} to ${SCREEN_SIZE.max}.`
+    )
+  }
+  return {
+    device: 'custom',
+    width,
+    height,
+    ...(isScreenFrame(frame) && frame !== 'none' && { frame })
+  }
+}
+
+/** Пустая страница экрана: белый лист нужного размера, который агент потом заменит своим файлом. */
+function blankScreenHtml(look: BlankLook): string {
+  return `<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=${look.width}" />
+    <title>Blank screen</title>
+    <style>html, body { margin: 0; height: 100%; background: #fff; }</style>
+  </head>
+  <body></body>
+</html>
+`
+}
+
+/**
+ * Пишет пустой экран в папку `.atox/canvas` проекта (там же агент держит свои экраны) под
+ * свободным именем: чужие файлы не перезаписываются. Возвращает настоящий путь файла.
+ */
+async function writeBlankScreenFile(
+  projectPath: string,
+  title: string,
+  look: BlankLook
+): Promise<string> {
+  const folder = join(projectPath, '.atox', 'canvas')
+  try {
+    await mkdir(folder, { recursive: true })
+  } catch (error) {
+    console.error('Failed to create the canvas folder', error)
+    throw new CanvasError(`Could not create ${folder}.`)
+  }
+  const slug =
+    title
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+      .slice(0, 48) || 'screen'
+  for (let attempt = 1; attempt < 1000; attempt += 1) {
+    const file = join(folder, attempt === 1 ? `${slug}.html` : `${slug}-${attempt}.html`)
+    const exists = await access(file).then(
+      () => true,
+      () => false
+    )
+    if (exists) {
+      continue
+    }
+    try {
+      await writeFileAtomically(file, blankScreenHtml(look))
+    } catch (error) {
+      console.error('Failed to write a blank canvas screen', error)
+      throw new CanvasError(`Could not write ${file}.`)
+    }
+    return realpath(file)
+  }
+  throw new CanvasError(`Could not find a free file name in ${folder}.`)
 }

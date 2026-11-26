@@ -630,6 +630,17 @@ export function registerIpcHandlers({
   ipcMain.handle(IpcChannel.CanvasAddPage, (_event, chatId: unknown) =>
     canvas.addPage(requireId(chatId))
   )
+  ipcMain.handle(
+    IpcChannel.CanvasCreateStandalone,
+    (_event, projectId: unknown, name: unknown, look: unknown) =>
+      canvas.createStandalone(requireId(projectId), name, look ?? undefined)
+  )
+  ipcMain.handle(IpcChannel.CanvasAddBlankScreen, (_event, canvasId: unknown, look: unknown) =>
+    canvas.addBlankScreen(requireId(canvasId), look)
+  )
+  ipcMain.handle(IpcChannel.CanvasLinkChat, (_event, canvasId: unknown, chatId: unknown) =>
+    canvas.linkChat(requireId(canvasId), requireId(chatId))
+  )
   ipcMain.handle(IpcChannel.CanvasReorderPages, (_event, chatId: unknown, pageIds: unknown) => {
     if (!Array.isArray(pageIds) || !pageIds.every((id) => typeof id === 'string')) {
       throw new Error('Invalid page list')

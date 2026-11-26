@@ -92,7 +92,10 @@ If your first message says you are a worker, do the task, then run \`atox report
 
 /** Устройства холста с размерами — из того же списка, что проверяет команда. */
 const CANVAS_DEVICES = Object.entries(SCREEN_DEVICES)
-  .map(([id, { name, width, height }]) => `- \`${id}\`: ${name}, ${width}x${height}`)
+  .map(
+    ([id, { name, width, height, category }]) =>
+      `- \`${id}\`: ${name}, ${width}x${height} (${category})`
+  )
   .join('\n')
 
 const CANVAS_SKILL = `---
@@ -181,7 +184,11 @@ The user, not you, names and arranges screens. If they renamed a screen, use the
 \`--device\` (default \`${DEFAULT_SCREEN_DEVICE}\`), sizes in CSS pixels:
 ${CANVAS_DEVICES}
 
-\`--size WxH\` sets a custom size without a device frame (each side ${SCREEN_SIZE.min} to ${SCREEN_SIZE.max}).
+\`--size WxH\` sets a custom size without a device frame (each side ${SCREEN_SIZE.min} to ${SCREEN_SIZE.max}). Prefer a device from the list when one matches: it has the right frame (phone, tablet, browser or window).
+
+## Blank screens from the user
+
+The user can create a canvas without a chat, or add a blank screen to a page, and choose its size (a device above, or a custom size with a frame). Such a screen points to an empty \`.html\` file in \`.atox/canvas/\`. When the user asks you to design it, write your \`.tsx\` file and run \`atox canvas screen set "<that screen's name>" <your file>\` without \`--device\` and \`--size\`: the screen keeps the size and frame the user chose. A canvas the user created without a chat becomes this chat's canvas when the user links it or starts an agent from it; then \`atox canvas\` shows it like any other.
 
 ## Design rules
 

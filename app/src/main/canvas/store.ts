@@ -10,6 +10,7 @@ import {
   SCREEN_HISTORY_LIMIT,
   isCanvasGridSize,
   isScreenDeviceId,
+  isScreenFrame,
   type Canvas,
   type CanvasGrid,
   type CanvasGroup,
@@ -259,6 +260,7 @@ function normalizeScreen(raw: unknown, now: number): StoredScreen | null {
     return null
   }
   const size = normalizeSize(value['device'], value['width'], value['height'])
+  const frame = value['frame']
   const versions = (Array.isArray(value['versions']) ? value['versions'] : [])
     .map(normalizeVersion)
     .filter((version) => version !== null)
@@ -269,6 +271,7 @@ function normalizeScreen(raw: unknown, now: number): StoredScreen | null {
     id: value['id'],
     name,
     ...size,
+    ...(size.device === 'custom' && isScreenFrame(frame) && frame !== 'none' && { frame }),
     file,
     x: finite(value['x']),
     y: finite(value['y']),

@@ -1,7 +1,8 @@
 /**
  * Холст чата: у чата он один, а в нём несколько страниц (как страницы в Figma): на каждой свои
  * экраны, группы и линии. Запись `Canvas` ниже — одна такая страница; страницы чата — это все его
- * записи `Canvas`. Страница — это место, где агент показывает экраны — приложение на телефоне, сайт,
+ * записи `Canvas`. Холст можно создать и без чата: тогда человек сам ставит пустые экраны, а чат
+ * привязывает позже. Страница — это место, где агент показывает экраны — приложение на телефоне, сайт,
  * программу для компьютера. Холст привязан к чату и к его проекту. Экраны рисует только агент
  * (HTML-файлом в проекте, командой `atox canvas`); человек двигает их, называет и увеличивает.
  * Клик по экрану открывает окно «Fix»: текст и скриншот экрана уходят в чат холста.
@@ -10,29 +11,89 @@
 /** Рамка, в которую окно рисует экран. */
 export type ScreenFrame = 'phone' | 'tablet' | 'window' | 'browser' | 'none'
 
+/** Раздел, в котором устройство стоит в окне выбора размера. */
+export type DeviceCategory = 'desktop' | 'phone' | 'tablet' | 'document'
+
 export interface DevicePreset {
   name: string
   /** Размер экрана в CSS-пикселях: так его видит HTML. */
   width: number
   height: number
   frame: ScreenFrame
+  category: DeviceCategory
 }
 
-/** Устройства, которые агент называет в `atox canvas screen set --device`. */
+/**
+ * Устройства, которые агент называет в `atox canvas screen set --device`, а человек выбирает,
+ * создавая холст или пустой экран. Id уже записаны в холстах: их нельзя менять, только добавлять.
+ */
 export const SCREEN_DEVICES = {
-  iphone: { name: 'iPhone', width: 390, height: 844, frame: 'phone' },
-  android: { name: 'Android', width: 412, height: 915, frame: 'phone' },
-  tablet: { name: 'Tablet', width: 820, height: 1180, frame: 'tablet' },
-  desktop: { name: 'Desktop app', width: 1100, height: 700, frame: 'window' },
-  web: { name: 'Website', width: 1280, height: 800, frame: 'browser' },
+  iphone: { name: 'iPhone', width: 390, height: 844, frame: 'phone', category: 'phone' },
+  'iphone-se': { name: 'iPhone SE', width: 375, height: 667, frame: 'phone', category: 'phone' },
+  'iphone-16': {
+    name: 'iPhone 15/16',
+    width: 393,
+    height: 852,
+    frame: 'phone',
+    category: 'phone'
+  },
+  'iphone-pro-max': {
+    name: 'iPhone Pro Max',
+    width: 430,
+    height: 932,
+    frame: 'phone',
+    category: 'phone'
+  },
+  'android-compact': {
+    name: 'Android compact',
+    width: 360,
+    height: 800,
+    frame: 'phone',
+    category: 'phone'
+  },
+  android: { name: 'Android', width: 412, height: 915, frame: 'phone', category: 'phone' },
+  'ipad-mini': { name: 'iPad mini', width: 744, height: 1133, frame: 'tablet', category: 'tablet' },
+  tablet: { name: 'Tablet', width: 820, height: 1180, frame: 'tablet', category: 'tablet' },
+  'ipad-pro': { name: 'iPad Pro', width: 1024, height: 1366, frame: 'tablet', category: 'tablet' },
+  desktop: { name: 'Desktop app', width: 1100, height: 700, frame: 'window', category: 'desktop' },
+  web: { name: 'Website', width: 1280, height: 800, frame: 'browser', category: 'desktop' },
+  'web-1366': {
+    name: 'Laptop HD',
+    width: 1366,
+    height: 768,
+    frame: 'browser',
+    category: 'desktop'
+  },
+  'web-1440': {
+    name: 'MacBook Air',
+    width: 1440,
+    height: 900,
+    frame: 'browser',
+    category: 'desktop'
+  },
+  'web-1536': {
+    name: 'Laptop 1536',
+    width: 1536,
+    height: 864,
+    frame: 'browser',
+    category: 'desktop'
+  },
+  'web-1920': {
+    name: 'Full HD',
+    width: 1920,
+    height: 1080,
+    frame: 'browser',
+    category: 'desktop'
+  },
+  'web-2560': { name: 'QHD', width: 2560, height: 1440, frame: 'browser', category: 'desktop' },
   // Для презентаций и документов: без рамки, чтобы экран был ровно страницей.
-  slide: { name: 'Slide', width: 1920, height: 1080, frame: 'none' },
-  a4: { name: 'A4 page', width: 794, height: 1123, frame: 'none' }
+  slide: { name: 'Slide', width: 1920, height: 1080, frame: 'none', category: 'document' },
+  a4: { name: 'A4 page', width: 794, height: 1123, frame: 'none', category: 'document' }
 } as const satisfies Record<string, DevicePreset>
 
 export type ScreenDeviceId = keyof typeof SCREEN_DEVICES
 
-/** Устройство экрана: из списка или свой размер без рамки. */
+/** Устройство экрана: из списка или свой размер. */
 export type ScreenDevice = ScreenDeviceId | 'custom'
 
 export const DEFAULT_SCREEN_DEVICE: ScreenDeviceId = 'iphone'
@@ -41,12 +102,51 @@ export function isScreenDeviceId(value: unknown): value is ScreenDeviceId {
   return typeof value === 'string' && Object.hasOwn(SCREEN_DEVICES, value)
 }
 
+/** Устройства раздела в порядке списка. */
+export function devicesOf(category: DeviceCategory): ScreenDeviceId[] {
+  return (Object.keys(SCREEN_DEVICES) as ScreenDeviceId[]).filter(
+    (id) => SCREEN_DEVICES[id].category === category
+  )
+}
+
 /** Свой размер экрана в пикселях: меньше не видно, больше тянет память. */
 export const SCREEN_SIZE = { min: 120, max: 4000 } as const
 
-/** Рамка экрана по его устройству: у своего размера (`custom`) её нет. */
-export function screenFrameOf(device: ScreenDevice): ScreenFrame {
-  return device === 'custom' ? 'none' : SCREEN_DEVICES[device].frame
+export function isScreenFrame(value: unknown): value is ScreenFrame {
+  return (
+    value === 'phone' ||
+    value === 'tablet' ||
+    value === 'window' ||
+    value === 'browser' ||
+    value === 'none'
+  )
+}
+
+/**
+ * Рамка экрана: у устройства из списка — его рамка, у своего размера — та, что выбрал человек
+ * (`frame`), а без неё (так ставит агент через `--size`) рамки нет.
+ */
+export function screenFrameOf(screen: Pick<CanvasScreen, 'device' | 'frame'>): ScreenFrame {
+  return screen.device === 'custom' ? (screen.frame ?? 'none') : SCREEN_DEVICES[screen.device].frame
+}
+
+/**
+ * Размер нового пустого экрана, который выбирает человек: устройство из списка или свой размер
+ * с рамкой на выбор.
+ */
+export type ScreenLook =
+  | { device: ScreenDeviceId }
+  | { device: 'custom'; width: number; height: number; frame: ScreenFrame }
+
+/**
+ * Холст без чата: вместо id чата у него свой ключ с этой приставкой. По ключу страницы такого
+ * холста собираются вместе так же, как страницы холста чата.
+ */
+export const STANDALONE_CANVAS_PREFIX = 'standalone:'
+
+/** У холста нет чата: его создал человек, и агента к нему ещё не позвали. */
+export function isStandaloneCanvas(canvas: Pick<Canvas, 'chatId'>): boolean {
+  return canvas.chatId.startsWith(STANDALONE_CANVAS_PREFIX)
 }
 
 /**
@@ -130,6 +230,8 @@ export interface CanvasScreen {
   device: ScreenDevice
   width: number
   height: number
+  /** Рамка экрана своего размера (`custom`); у устройства из списка не задаётся. */
+  frame?: ScreenFrame
   /**
    * Абсолютный путь к файлу экрана в проекте: HTML или React-компонент. Приложение следит за
    * файлом и всем, что он импортирует, и обновляет экран.
@@ -241,7 +343,10 @@ export interface Canvas {
   id: string
   /** Имя страницы: у страниц одного чата разные, по имени агент находит страницу. */
   name: string
-  /** Чат холста: в нём агент рисует экраны и в него уходят правки человека. */
+  /**
+   * Чат холста: в нём агент рисует экраны и в него уходят правки человека. У холста без чата
+   * здесь его собственный ключ (`STANDALONE_CANVAS_PREFIX`, см. `isStandaloneCanvas`).
+   */
   chatId: string
   projectId: string
   screens: CanvasScreen[]

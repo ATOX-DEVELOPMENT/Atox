@@ -10,12 +10,14 @@ import { useProjectsContext } from '../../hooks/ProjectsContext'
 import { canvasOwner, chatLabel } from '../../lib/canvasOwner'
 import { showCanvasMenu, showExportMenu, showShareMenu } from '../../lib/canvasMenu'
 import { AgentBar } from './AgentBar'
-import { CanvasEmpty } from './CanvasEmpty'
+import { CanvasEmpty, type CanvasChatState } from './CanvasEmpty'
 import { CanvasHeader } from './CanvasHeader'
 import { CanvasStage, type CanvasStageHandle } from './CanvasStage'
 import { HistoryDrawer } from './HistoryDrawer'
 import { PagesPanel } from './PagesPanel'
 import { ToolsDrawer } from './ToolsDrawer'
+import { ScreenSizeDialog } from './ScreenSizeDialog'
+import { useStandaloneCanvas } from './useStandaloneCanvas'
 import { ViewState } from './viewState'
 
 interface CanvasPageProps {
@@ -49,6 +51,8 @@ export function CanvasPage({ canvasId, onClose }: CanvasPageProps) {
   const [preview, setPreview] = useState<{ screenId: string; versionId: string } | null>(null)
   const [exporting, setExporting] = useState(false)
   const [linkCopied, setLinkCopied] = useState(false)
+  const [addingScreen, setAddingScreen] = useState(false)
+  const standalone = useStandaloneCanvas()
 
   useEffect(() => () => viewState.cancel(), [viewState])
 
@@ -80,6 +84,10 @@ export function CanvasPage({ canvasId, onClose }: CanvasPageProps) {
 
   // Esc, который уже обработало поле (переименование, «Fix»), страницу не закрывает.
   useEffect(() => {
+    if (addingScreen) {
+      // Окно пустого экрана закрывается своим Esc, страница остаётся.
+      return undefined
+    }
     const closeOnEscape = (event: KeyboardEvent) => {
       if (event.key === 'Escape' && !event.defaultPrevented) {
         onClose()
@@ -87,7 +95,7 @@ export function CanvasPage({ canvasId, onClose }: CanvasPageProps) {
     }
     window.addEventListener('keydown', closeOnEscape)
     return () => window.removeEventListener('keydown', closeOnEscape)
-  }, [onClose])
+  }, [onClose, addingScreen])
 
   const selectScreen = useCallback((screenId: string | null) => {
     setSelectedScreenId(screenId)
@@ -109,6 +117,11 @@ export function CanvasPage({ canvasId, onClose }: CanvasPageProps) {
   const owner = canvasOwner(projects, canvas)
   const chatTitle = chatLabel(owner)
   const openChat = () => owner.chat && navigation.openChat(owner.chat.id)
+  const chatState: CanvasChatState = owner.chat
+    ? { kind: 'linked', title: owner.chat.title }
+    : owner.standalone
+      ? { kind: 'none' }
+      : { kind: 'deleted' }
   const hasScreens = canvas.screens.length > 0
   // Экран истории — выбранный последним, а если его уже нет — первый.
   const historyScreen = canvas.screens.find(({ id }) => id === historyScreenId) ?? canvas.screens[0]
@@ -138,6 +151,7 @@ export function CanvasPage({ canvasId, onClose }: CanvasPageProps) {
           setHistoryOpen(false)
           setPreview(null)
         }}
+        onAddScreen={() => setAddingScreen(true)}
         onFit={() => stageRef.current?.fit()}
         onResetZoom={() => stageRef.current?.resetZoom()}
         exporting={exporting}
@@ -189,6 +203,7 @@ export function CanvasPage({ canvasId, onClose }: CanvasPageProps) {
             withOpen: false,
             chatAvailable: Boolean(owner.chat),
             navigation,
+            standalone,
             onRename: () => setRenaming(true)
           })
         }
@@ -213,8 +228,11 @@ export function CanvasPage({ canvasId, onClose }: CanvasPageProps) {
         ) : (
           <CanvasEmpty
             canvasId={canvas.id}
-            chatTitle={owner.chat ? chatTitle : null}
+            chat={chatState}
             onOpenChat={openChat}
+            onAddScreen={() => setAddingScreen(true)}
+            onStartAgent={() => void standalone.startAgent(canvas)}
+            onLinkChat={(event) => void standalone.linkChat(canvas, event.currentTarget)}
           />
         )}
         {toolsOpen && hasScreens && <ToolsDrawer canvasId={canvas.id} grid={canvas.grid} />}
@@ -236,6 +254,16 @@ export function CanvasPage({ canvasId, onClose }: CanvasPageProps) {
           />
         )}
       </div>
+      {addingScreen && (
+        <ScreenSizeDialog
+          mode="screen"
+          onSubmit={async ({ look }) => {
+            await window.atox.canvas.addBlankScreen(canvas.id, look)
+            setAddingScreen(false)
+          }}
+          onClose={() => setAddingScreen(false)}
+        />
+      )}
     </section>
   )
 }
