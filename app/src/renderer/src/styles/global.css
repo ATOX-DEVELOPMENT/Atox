@@ -4386,6 +4386,22 @@ ul {
   font-variant-numeric: tabular-nums;
 }
 
+/* Кольцо, которое открывает разбор контекста: как кнопки рядом — пилюля с подсветкой. */
+button.usage-indicator {
+  height: var(--composer-button-size);
+  padding: 0 8px;
+  border-radius: 999px;
+}
+
+button.usage-indicator:hover {
+  background: var(--color-hover);
+  color: var(--color-text);
+}
+
+button.usage-indicator[data-warning='true']:hover {
+  color: var(--color-danger);
+}
+
 .usage-indicator__ring {
   width: 16px;
   height: 16px;
