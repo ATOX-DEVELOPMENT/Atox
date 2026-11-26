@@ -452,7 +452,14 @@ function MenuPanel({
             onClick={() => !disabled && onItemClick(index)}
           >
             {hasLeading && <LeadingVisual item={item} />}
-            <span className="menu__label">{item.label}</span>
+            {!isSubmenu && item.description ? (
+              <span className="menu__text">
+                <span className="menu__label">{item.label}</span>
+                <span className="menu__description">{item.description}</span>
+              </span>
+            ) : (
+              <span className="menu__label">{item.label}</span>
+            )}
             {!isSubmenu && item.accelerator && (
               <span className="menu__accelerator">{formatAccelerator(item.accelerator)}</span>
             )}
