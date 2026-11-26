@@ -216,13 +216,14 @@ export class ConversationManager {
 
   /**
    * `titleFrom` — текст, по которому назвать чат вместо самого сообщения: у задания помощнику
-   * первая строка — служебная и у всех помощников одинаковая.
+   * первая строка — служебная и у всех помощников одинаковая. `now` — сообщение встаёт первым
+   * в очереди, а текущий ответ агента прерывается: агент берётся за него сразу (`atox send --now`).
    */
   async send(
     chatId: string,
     text: string,
     { images = [], files = [] }: MessageAttachments = {},
-    { titleFrom = text }: { titleFrom?: string } = {}
+    { titleFrom = text, now = false }: { titleFrom?: string; now?: boolean } = {}
   ): Promise<void> {
     const message = text.trim()
     if (!message && images.length === 0 && files.length === 0) {
@@ -250,18 +251,27 @@ export class ConversationManager {
     ) {
       this.services.onProjectsChanged()
     }
-    conversation.queue.push({
+    const queued: QueuedMessage = {
       item,
       text: withAttachedFiles(message, files),
       images,
       agent
-    })
+    }
+    if (now) {
+      conversation.queue.unshift(queued)
+    } else {
+      conversation.queue.push(queued)
+    }
     // Свободный агент возьмётся за сообщение сразу, и в очереди его не увидят. Восстановленная
     // очередь уходит первой: её сообщения отправили раньше.
     if (conversation.turn || conversation.queuePaused) {
       this.emitQueue(chatId, conversation)
     }
     conversation.queuePaused = false
+    if (now && (conversation.turn || conversation.unprompted)) {
+      // Прерванный ход заканчивается и сам берёт следующее сообщение — это.
+      await this.interrupt(chatId)
+    }
     this.pump(chatId, conversation)
   }
 
@@ -490,6 +500,20 @@ export class ConversationManager {
       const summary = summarizeConversation(chatId, snapshot)
       return summary ? [summary] : []
     })
+  }
+
+  /**
+   * Агент сейчас отвечает или работает сам — его ход можно прервать. В отличие от `isRunning`,
+   * сообщения в очереди не считаются: их агент возьмёт, только когда освободится.
+   */
+  isWorking(chatId: string): boolean {
+    const conversation = this.loaded.get(chatId)
+    return Boolean(conversation && (conversation.turn !== null || conversation.unprompted))
+  }
+
+  /** Сколько сообщений ждёт в очереди чата. */
+  queuedCount(chatId: string): number {
+    return this.loaded.get(chatId)?.queue.length ?? 0
   }
 
   isRunning(chatId: string): boolean {

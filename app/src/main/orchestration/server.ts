@@ -240,9 +240,21 @@ export class OrchestrationServer {
       }
     },
 
-    send: async (caller, { to, message }) => {
+    send: async (caller, { to, message, now }) => {
       if (!message?.trim()) {
         throw new CommandError('The message is empty.')
+      }
+      if (now === true) {
+        if (to === PARENT_ADDRESS) {
+          throw new CommandError(
+            'Only a parent agent can interrupt: send to "parent" without --now.'
+          )
+        }
+        const worker = this.ownWorker(caller, String(to), 'interrupt')
+        const interrupted = this.services.conversations.isWorking(worker.id)
+        await this.deliver(worker, formatMessage(caller.chat, message), { now: true })
+        this.reportedChatIds.delete(worker.id)
+        return { chatId: worker.id, interrupted }
       }
       const target = this.resolveRecipient(caller.chat, to)
       await this.deliver(target, formatMessage(caller.chat, message))
@@ -251,6 +263,20 @@ export class OrchestrationServer {
         this.reportedChatIds.delete(target.id)
       }
       return { chatId: target.id }
+    },
+
+    interrupt: async (caller, { chatId }) => {
+      if (typeof chatId !== 'string' || !chatId) {
+        throw new CommandError('Specify the chat id of the worker to interrupt.')
+      }
+      const worker = this.ownWorker(caller, chatId, 'interrupt')
+      const { conversations } = this.services
+      const interrupted = conversations.isWorking(worker.id)
+      const queued = conversations.queuedCount(worker.id)
+      if (interrupted) {
+        await conversations.interrupt(worker.id)
+      }
+      return { interrupted, queued }
     },
 
     report: async (caller, { summary }) => {
@@ -284,18 +310,7 @@ export class OrchestrationServer {
         throw new CommandError('Specify the chat ids of the workers to remove.')
       }
       // Сначала проверяются все чаты: команда либо удаляет всех названных помощников, либо никого.
-      const workers = ids.map((id) => {
-        const worker = this.services.store.findChat(id)?.chat
-        if (!worker) {
-          throw new CommandError(`Chat ${id} not found.`)
-        }
-        if (workerParentId(worker) !== caller.chat.id) {
-          throw new CommandError(
-            `Chat ${id} is not your worker. You can only remove your own workers.`
-          )
-        }
-        return worker
-      })
+      const workers = ids.map((id) => this.ownWorker(caller, id, 'remove'))
       for (const worker of workers) {
         this.services.store.removeChat(worker.id)
         await this.services.conversations.remove(worker.id)
@@ -496,6 +511,20 @@ export class OrchestrationServer {
     return project.chats.filter((other) => workerParentId(other) === chat.id)
   }
 
+  /** Помощник вызывающего агента: удалять и прерывать можно только своих. */
+  private ownWorker(caller: ChatLocation, id: string, action: 'remove' | 'interrupt'): Chat {
+    const worker = this.services.store.findChat(id)?.chat
+    if (!worker) {
+      throw new CommandError(`Chat ${id} not found.`)
+    }
+    if (workerParentId(worker) !== caller.chat.id) {
+      throw new CommandError(
+        `Chat ${id} is not your worker. You can only ${action} your own workers.`
+      )
+    }
+    return worker
+  }
+
   /** Писать можно только своему агенту-родителю или своим помощникам. */
   private resolveRecipient(sender: Chat, to: string): Chat {
     const toParent = to === PARENT_ADDRESS
@@ -529,9 +558,9 @@ export class OrchestrationServer {
    * Ставит текст в очередь агенту чата: он получит его, как только закончит текущую работу.
    * Команда отвечает, только когда сообщение принято, — иначе ошибкой.
    */
-  private async deliver(chat: Chat, text: string): Promise<void> {
+  private async deliver(chat: Chat, text: string, { now = false } = {}): Promise<void> {
     try {
-      await this.services.conversations.send(chat.id, text)
+      await this.services.conversations.send(chat.id, text, {}, { now })
     } catch (error) {
       console.error('Failed to deliver an agent message', error)
       throw new CommandError(

@@ -30,7 +30,12 @@ Delegate work to another agent in a new Atox chat in the same folder.
                                            user's model for new chats.
                                            Pass "-" as the task to read it from stdin.
   atox workers                             List your workers
-  atox send <chat-id|${PARENT_ADDRESS}> <message>     Message one of your workers, or your parent agent
+  atox send <chat-id|${PARENT_ADDRESS}> <message>     Message one of your workers, or your parent
+                                           agent; it is read when the current turn ends
+  atox send --now <chat-id> <message>      Interrupt the worker's current turn and give it the
+                                           message right away (also --interrupt)
+  atox interrupt <chat-id>                 Stop the worker's current turn; its chat and context
+                                           stay, and your next atox send continues it
   atox remove <chat-id> [<chat-id>...]     Stop workers and remove their chats
   atox report <summary>                    Worker: report the result to the parent agent
 
@@ -147,12 +152,46 @@ async function main(args: string[]): Promise<string> {
         : 'You have no workers.'
     }
     case 'send': {
+      // Флаг — только перед адресатом: в тексте сообщения «--now» остаётся текстом.
+      let now = false
+      while (rest[0] === '--now' || rest[0] === '--interrupt') {
+        now = true
+        rest.shift()
+      }
       const [to, ...messageWords] = rest
       if (!to) {
-        throw new UsageError(`Specify the recipient: a worker chat id or "${PARENT_ADDRESS}".`)
+        throw new UsageError(
+          now
+            ? 'Specify the worker chat id (see atox workers).'
+            : `Specify the recipient: a worker chat id or "${PARENT_ADDRESS}".`
+        )
       }
-      await call('send', { to, message: await readText(messageWords, 'message') })
-      return 'Message sent. The agent gets it as soon as it can take input.'
+      const message = await readText(messageWords, 'message')
+      if (!now) {
+        await call('send', { to, message })
+        return 'Message sent. The agent gets it as soon as it can take input.'
+      }
+      const { interrupted } = await call('send', { to, message, now: true })
+      return interrupted
+        ? 'Interrupted the worker\'s turn. It starts on your message right away.'
+        : 'The worker was not working, so nothing was interrupted. ' +
+            'It starts on your message right away.'
+    }
+    case 'interrupt': {
+      const [chatId, ...extra] = rest
+      if (!chatId || extra.length > 0) {
+        throw new UsageError('Specify one worker chat id to interrupt (see atox workers).')
+      }
+      const { interrupted, queued } = await call('interrupt', { chatId })
+      if (!interrupted) {
+        return `Worker ${chatId} is not working, so there was nothing to interrupt.`
+      }
+      const messages = queued === 1 ? '1 queued message' : `${queued} queued messages`
+      const next =
+        queued > 0
+          ? ` It has ${messages} and starts on the next one now.`
+          : ' Its chat and context stay; send it a message with atox send to continue.'
+      return `Interrupted worker ${chatId}.${next}`
     }
     case 'remove': {
       if (rest.length === 0) {
