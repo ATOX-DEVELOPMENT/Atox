@@ -15,6 +15,7 @@ import { CanvasHeader } from './CanvasHeader'
 import { CanvasStage, type CanvasStageHandle } from './CanvasStage'
 import { HistoryDrawer } from './HistoryDrawer'
 import { PagesPanel } from './PagesPanel'
+import { ToolsDrawer } from './ToolsDrawer'
 import { ViewState } from './viewState'
 
 interface CanvasPageProps {
@@ -27,7 +28,7 @@ const LINK_COPIED_MS = 2000
 
 /**
  * Страница холста: шапка, поле с экранами открытой страницы, список страниц поверх него слева
- * и история версий справа.
+ * и справа история версий или вкладка Tools (сетка).
  */
 export function CanvasPage({ canvasId, onClose }: CanvasPageProps) {
   const canvas = useCanvas(canvasId)
@@ -41,7 +42,9 @@ export function CanvasPage({ canvasId, onClose }: CanvasPageProps) {
   const stageRef = useRef<CanvasStageHandle>(null)
   const [renaming, setRenaming] = useState(false)
   const [selectedScreenId, setSelectedScreenId] = useState<string | null>(null)
+  // История и Tools стоят справа на одном месте: открыта одна из них.
   const [historyOpen, setHistoryOpen] = useState(false)
+  const [toolsOpen, setToolsOpen] = useState(false)
   const [historyScreenId, setHistoryScreenId] = useState<string | null>(null)
   const [preview, setPreview] = useState<{ screenId: string; versionId: string } | null>(null)
   const [exporting, setExporting] = useState(false)
@@ -126,6 +129,13 @@ export function CanvasPage({ canvasId, onClose }: CanvasPageProps) {
         onToggleHistory={() => {
           // Закрытая история возвращает экранам текущие версии.
           setHistoryOpen((open) => !open)
+          setToolsOpen(false)
+          setPreview(null)
+        }}
+        toolsOpen={toolsOpen && hasScreens}
+        onToggleTools={() => {
+          setToolsOpen((open) => !open)
+          setHistoryOpen(false)
           setPreview(null)
         }}
         onFit={() => stageRef.current?.fit()}
@@ -207,6 +217,7 @@ export function CanvasPage({ canvasId, onClose }: CanvasPageProps) {
             onOpenChat={openChat}
           />
         )}
+        {toolsOpen && hasScreens && <ToolsDrawer canvasId={canvas.id} grid={canvas.grid} />}
         {historyOpen && historyScreen && (
           <HistoryDrawer
             // У каждого экрана свой список: другой экран загружается с чистого листа.

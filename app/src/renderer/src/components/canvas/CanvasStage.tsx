@@ -10,7 +10,7 @@ import {
   type ReactNode,
   type Ref
 } from 'react'
-import { CANVAS_GRID, snapToGrid } from '../../../../shared/canvas'
+import { snapToGrid } from '../../../../shared/canvas'
 import type { Canvas, CanvasScreen, CanvasView } from '../../../../shared/canvas'
 import {
   fitView,
@@ -106,7 +106,10 @@ export function CanvasStage({
   const settleTimerRef = useRef<number | undefined>(undefined)
   // Масштаб, в котором слой холста нарисован сейчас.
   const rasterZoomRef = useRef<number | null>(null)
-  const { id: canvasId, screens, groups } = canvas
+  const { id: canvasId, screens, groups, grid } = canvas
+  // Сетка читается в обработчиках жестов и в applyView: оттуда нужен её текущий вид.
+  const gridRef = useRef(grid)
+  gridRef.current = grid
 
   const positionOf = useCallback(
     (screen: CanvasScreen): Point => {
@@ -125,10 +128,10 @@ export function CanvasStage({
   const groupRects = useMemo(
     () =>
       groups.flatMap((group) => {
-        const rect = groupBounds(group, bounds)
+        const rect = groupBounds(group, bounds, grid.size)
         return rect ? [{ group, rect }] : []
       }),
-    [groups, bounds]
+    [groups, bounds, grid.size]
   )
   const groupRectsRef = useRef(groupRects)
   groupRectsRef.current = groupRects
@@ -304,8 +307,8 @@ export function CanvasStage({
     world.style.transform = `translate(${view.x}px, ${view.y}px) scale(${view.zoom})`
     world.style.setProperty('--z', String(view.zoom))
     // Точки стоят на линиях сетки, по которым встают экраны и группы; на малом масштабе
-    // каждая вторая, четвёртая…
-    let step = CANVAS_GRID * view.zoom
+    // каждая вторая, четвёртая… Скрытая сетка не рисуется вовсе (атрибут data-grid в CSS).
+    let step = gridRef.current.size * view.zoom
     while (step < MIN_DOT_STEP) {
       step *= 2
     }
@@ -441,13 +444,16 @@ export function CanvasStage({
           .filter(({ id }) => ids.has(id))
           .map((screen) => [screen.id, positionOfRef.current(screen)])
       )
-      // Угол, который встаёт по сетке: у экрана — его собственный, у группы — угол её рамки
-      // (поля рамки кратны клетке, поэтому рамка и экраны стоят по сетке вместе).
+      // Угол, который встаёт по сетке: у экрана — его собственный, у группы — левый верхний угол
+      // её экранов (поля рамки кратны клетке, поэтому рамка и экраны стоят по сетке вместе).
+      // Без прилипания экраны идут за мышью свободно.
       const corner = {
         x: Math.min(...[...origins.values()].map(({ x }) => x)),
         y: Math.min(...[...origins.values()].map(({ y }) => y))
       }
-      const snapped = (offset: number, from: number) => snapToGrid(from + offset) - from
+      const { size, snap } = gridRef.current
+      const snapped = (offset: number, from: number) =>
+        snap ? snapToGrid(from + offset, size) - from : offset
       let current: Point | null = null
       let frame: number | null = null
       const onMove = (move: PointerEvent) => {
@@ -552,7 +558,13 @@ export function CanvasStage({
   )
 
   return (
-    <div ref={stageRef} className="canvas-stage" data-panning={panning} onPointerDown={startPan}>
+    <div
+      ref={stageRef}
+      className="canvas-stage"
+      data-panning={panning}
+      data-grid={grid.visible ? 'visible' : 'hidden'}
+      onPointerDown={startPan}
+    >
       <div ref={worldRef} className="canvas-stage__world">
         {groupRects.map(({ group, rect }) => (
           <GroupFrame

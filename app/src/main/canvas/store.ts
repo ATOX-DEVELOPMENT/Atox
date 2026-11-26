@@ -4,11 +4,14 @@ import {
   CANVAS_LINKS_MAX,
   CANVAS_NAME_MAX_LENGTH,
   CANVAS_ZOOM,
+  DEFAULT_CANVAS_GRID,
   LINK_ON_MAX_LENGTH,
   SCREEN_DEVICES,
   SCREEN_HISTORY_LIMIT,
+  isCanvasGridSize,
   isScreenDeviceId,
   type Canvas,
+  type CanvasGrid,
   type CanvasGroup,
   type CanvasLink,
   type CanvasScreen,
@@ -74,7 +77,7 @@ export function publicCanvas({ screens, share, ...canvas }: StoredCanvas): Canva
  * Страницы из файла, который мог поправить человек: неверные записи отбрасываются или
  * чинятся, а не роняют приложение. Страницы удалённых проектов не загружаются. Холст чата
  * в архиве целиком или нет: есть страница вне архива — остальные возвращаются из него, ничего
- * не теряется. Ссылка холста одна на чат: её получают все его страницы.
+ * не теряется. Ссылка и сетка холста одни на чат: их получают все его страницы (от первой).
  */
 export function normalizeCanvases(
   data: Partial<CanvasFile> | undefined,
@@ -93,14 +96,19 @@ export function normalizeCanvases(
   }
   const active = new Set(canvases.filter(({ archived }) => !archived).map(({ chatId }) => chatId))
   const shares = new Map<string, StoredShare>()
+  const grids = new Map<string, CanvasGrid>()
   for (const canvas of canvases) {
     if (canvas.share && !shares.has(canvas.chatId)) {
       shares.set(canvas.chatId, canvas.share)
+    }
+    if (!grids.has(canvas.chatId)) {
+      grids.set(canvas.chatId, canvas.grid)
     }
   }
   for (const canvas of canvases) {
     canvas.archived = !active.has(canvas.chatId)
     canvas.share = shares.get(canvas.chatId) ?? null
+    canvas.grid = { ...(grids.get(canvas.chatId) ?? canvas.grid) }
   }
   return canvases
 }
@@ -134,6 +142,7 @@ function normalizeCanvas(raw: unknown, now: number): StoredCanvas | null {
     share: normalizeShare(value['share'], now),
     archived: value['archived'] === true,
     view: normalizeView(value['view']),
+    grid: normalizeGrid(value['grid']),
     createdAt: timestamp(value['createdAt'], now),
     updatedAt: timestamp(value['updatedAt'], now)
   }
@@ -324,6 +333,24 @@ export function normalizeView(raw: unknown): CanvasView | null {
     y: y as number,
     zoom: Math.min(CANVAS_ZOOM.max, Math.max(CANVAS_ZOOM.min, zoom as number))
   }
+}
+
+/** Сетка из файла: чего нет или что неверно, берётся по умолчанию (холсты до вкладки Tools). */
+export function normalizeGrid(raw: unknown): CanvasGrid {
+  const { visible, size, snap } = record(raw)
+  return {
+    visible: typeof visible === 'boolean' ? visible : DEFAULT_CANVAS_GRID.visible,
+    size: isCanvasGridSize(size) ? size : DEFAULT_CANVAS_GRID.size,
+    snap: typeof snap === 'boolean' ? snap : DEFAULT_CANVAS_GRID.snap
+  }
+}
+
+/** Сетка от окна: все поля на месте и верны, иначе `null`. */
+export function parseGrid(raw: unknown): CanvasGrid | null {
+  const { visible, size, snap } = record(raw)
+  return typeof visible === 'boolean' && typeof snap === 'boolean' && isCanvasGridSize(size)
+    ? { visible, size, snap }
+    : null
 }
 
 function normalizedName(value: unknown): string | null {

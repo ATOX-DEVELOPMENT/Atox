@@ -1,6 +1,6 @@
 import {
   CANVAS_ZOOM,
-  GROUP_PADDING,
+  groupPadding,
   screenFrameOf,
   type CanvasGroup,
   type CanvasScreen,
@@ -79,20 +79,22 @@ export function screenBounds(screen: CanvasScreen, position: Point = screen): Re
 }
 
 /**
- * Рамка группы: общий прямоугольник её экранов с полями (`GROUP_PADDING`, сверху больше — под
- * заголовок). `null` — ни один экран группы не найден.
+ * Рамка группы: общий прямоугольник её экранов с полями (`groupPadding` для клетки `grid`, сверху
+ * больше — под заголовок). `null` — ни один экран группы не найден.
  */
 export function groupBounds(
   group: CanvasGroup,
-  screenBounds: ReadonlyMap<string, Rect>
+  screenBounds: ReadonlyMap<string, Rect>,
+  grid?: number
 ): Rect | null {
   const content = unionRect(group.screens.flatMap((id) => screenBounds.get(id) ?? []))
+  const padding = groupPadding(grid)
   return (
     content && {
-      x: content.x - GROUP_PADDING.side,
-      y: content.y - GROUP_PADDING.top,
-      width: content.width + GROUP_PADDING.side * 2,
-      height: content.height + GROUP_PADDING.top + GROUP_PADDING.bottom
+      x: content.x - padding.side,
+      y: content.y - padding.top,
+      width: content.width + padding.side * 2,
+      height: content.height + padding.top + padding.bottom
     }
   )
 }

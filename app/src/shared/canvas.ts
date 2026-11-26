@@ -49,17 +49,48 @@ export function screenFrameOf(device: ScreenDevice): ScreenFrame {
   return device === 'custom' ? 'none' : SCREEN_DEVICES[device].frame
 }
 
-/** Клетка сетки холста, в пикселях холста: экраны и группы встают только по её линиям. */
+/**
+ * Клетка сетки холста по умолчанию, в пикселях холста. Человек меняет её во вкладке Tools
+ * (`CanvasGrid`); агент раскладывает экраны по клетке холста.
+ */
 export const CANVAS_GRID = 40
 
+/** Границы клетки сетки: мельче точки сливаются, крупнее сетка перестаёт помогать. */
+export const CANVAS_GRID_SIZE = { min: 4, max: 160 } as const
+
+/** Готовые размеры клетки во вкладке Tools. */
+export const CANVAS_GRID_PRESETS = [8, 16, 24, 32, 40] as const
+
+/**
+ * Сетка холста: видны ли точки, шаг клетки и встают ли экраны по линиям. Показ и прилипание
+ * независимы: можно прилипать к скрытой сетке и видеть сетку без прилипания. Одна на холст чата:
+ * записана у всех его страниц, как ссылка.
+ */
+export interface CanvasGrid {
+  visible: boolean
+  size: number
+  snap: boolean
+}
+
+export const DEFAULT_CANVAS_GRID: CanvasGrid = { visible: true, size: CANVAS_GRID, snap: true }
+
+export function isCanvasGridSize(value: unknown): value is number {
+  return (
+    typeof value === 'number' &&
+    Number.isInteger(value) &&
+    value >= CANVAS_GRID_SIZE.min &&
+    value <= CANVAS_GRID_SIZE.max
+  )
+}
+
 /** Ближайшая линия сетки. */
-export function snapToGrid(value: number): number {
-  return Math.round(value / CANVAS_GRID) * CANVAS_GRID
+export function snapToGrid(value: number, size: number = CANVAS_GRID): number {
+  return Math.round(value / size) * size
 }
 
 /** Ближайшая линия сетки не левее `value`: так экран встаёт после соседа, не наезжая на него. */
-export function snapUpToGrid(value: number): number {
-  return Math.ceil(value / CANVAS_GRID) * CANVAS_GRID
+export function snapUpToGrid(value: number, size: number = CANVAS_GRID): number {
+  return Math.ceil(value / size) * size
 }
 
 /** Расстояние между рамками экранов на холсте: кратно клетке сетки. */
@@ -163,15 +194,31 @@ export interface CanvasGroup {
 export const CANVAS_GROUPS_MAX = 60
 
 /**
- * Поля рамки группы вокруг её экранов, в пикселях холста; кратны клетке сетки, чтобы рамка стояла
- * по сетке вместе со своими экранами. Сверху место под название группы и подписи экранов: они
- * стоят на месте и растут вместе с холстом.
+ * Поля рамки группы вокруг её экранов при клетке по умолчанию, в пикселях холста. Сверху место
+ * под название группы и подписи экранов: они стоят на месте и растут вместе с холстом.
  */
 export const GROUP_PADDING = {
   top: CANVAS_GRID * 6,
   side: CANVAS_GRID * 2,
   bottom: CANVAS_GRID * 2
 } as const
+
+/**
+ * Поля рамки группы при клетке `size`: не меньше `GROUP_PADDING` и кратны клетке, чтобы рамка
+ * стояла по сетке вместе со своими экранами при любом шаге.
+ */
+export function groupPadding(size: number = CANVAS_GRID): {
+  top: number
+  side: number
+  bottom: number
+} {
+  const fit = (base: number) => Math.ceil(base / size) * size
+  return {
+    top: fit(GROUP_PADDING.top),
+    side: fit(GROUP_PADDING.side),
+    bottom: fit(GROUP_PADDING.bottom)
+  }
+}
 
 /** Сдвиг и масштаб холста: окно возвращает человека туда, где он остановился. */
 export interface CanvasView {
@@ -207,6 +254,8 @@ export interface Canvas {
   share: CanvasShare | null
   /** Сохранённый вид; нет — окно вписывает все экраны само. */
   view: CanvasView | null
+  /** Сетка холста чата: одна на все его страницы. */
+  grid: CanvasGrid
   createdAt: number
   updatedAt: number
 }

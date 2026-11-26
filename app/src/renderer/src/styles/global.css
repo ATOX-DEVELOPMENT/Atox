@@ -6324,6 +6324,11 @@ button.usage-indicator[data-warning='true']:hover {
   cursor: grabbing;
 }
 
+/* Сетка выключена во вкладке Tools: точек нет, прилипание настраивается отдельно. */
+.canvas-stage[data-grid='hidden'] {
+  background-image: none;
+}
+
 .canvas-stage__world {
   --z: 1;
   position: absolute;
@@ -7062,6 +7067,80 @@ button.usage-indicator[data-warning='true']:hover {
   margin: 16px;
   font-size: 13px;
   color: var(--color-text-muted);
+}
+
+/* Вкладка Tools: стоит на месте истории и выглядит так же. */
+.tools-drawer__section {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 0 16px 16px;
+}
+
+.tools-drawer__section-title {
+  margin: 4px 0;
+  font-size: var(--font-size-small);
+  font-weight: 600;
+  color: var(--color-text-muted);
+}
+
+.tools-drawer__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 0;
+  font-size: 13px;
+}
+
+.tools-drawer__row--stacked {
+  flex-direction: column;
+  align-items: stretch;
+}
+
+.tools-drawer__label {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.tools-drawer__description {
+  font-size: var(--font-size-small);
+  color: var(--color-text-muted);
+}
+
+.tools-drawer__size {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.tools-drawer__size .segmented__item {
+  justify-content: center;
+  min-width: 32px;
+}
+
+.tools-drawer__number {
+  width: 64px;
+  height: calc(var(--repository-control-height) - 4px);
+  padding: 0 6px;
+  font: inherit;
+  font-size: 13px;
+  color: var(--color-text);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: calc(var(--radius) - 2px);
+  outline: none;
+  user-select: text;
+}
+
+.tools-drawer__number:focus-visible {
+  border-color: var(--color-accent-text);
+}
+
+.tools-drawer__number[aria-invalid='true'] {
+  border-color: var(--color-danger);
 }
 
 .version {

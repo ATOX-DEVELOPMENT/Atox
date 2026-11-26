@@ -3,6 +3,7 @@ import {
   Check,
   Download,
   Ellipsis,
+  Grid3x3,
   History,
   LayoutDashboard,
   LoaderCircle,
@@ -22,6 +23,8 @@ interface CanvasHeaderProps {
   onRenamingChange(renaming: boolean): void
   historyOpen: boolean
   onToggleHistory(): void
+  toolsOpen: boolean
+  onToggleTools(): void
   onFit(): void
   onResetZoom(): void
   /** Выгрузка экранов идёт: кнопка занята. */
@@ -43,6 +46,8 @@ export function CanvasHeader({
   onRenamingChange,
   historyOpen,
   onToggleHistory,
+  toolsOpen,
+  onToggleTools,
   onFit,
   onResetZoom,
   exporting,
@@ -144,6 +149,17 @@ export function CanvasHeader({
               onClick={onToggleHistory}
             >
               <History className="icon" />
+            </button>
+            <button
+              type="button"
+              className="workspace-toolbar__button"
+              data-active={toolsOpen}
+              aria-pressed={toolsOpen}
+              aria-label="Tools"
+              title="Tools: grid and snapping"
+              onClick={onToggleTools}
+            >
+              <Grid3x3 className="icon" />
             </button>
           </>
         )}

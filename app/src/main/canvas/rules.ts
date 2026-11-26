@@ -1,5 +1,6 @@
 import { isAbsolute, relative, sep } from 'node:path'
 import {
+  CANVAS_GRID,
   CANVAS_NAME_MAX_LENGTH,
   CANVAS_PROTOCOL,
   SCREEN_DEVICES,
@@ -39,12 +40,14 @@ export interface ScreenPlacement {
 }
 
 /**
- * Где встанет новый экран: правее самого правого, по верхнему краю его ряда, по линиям сетки.
- * Если так он вышел бы за `CANVAS_ROW_WIDTH`, — в новый ряд под всеми экранами, от левого края.
+ * Где встанет новый экран: правее самого правого, по верхнему краю его ряда, по линиям сетки
+ * с клеткой `grid` (сетка холста). Если так он вышел бы за `CANVAS_ROW_WIDTH`, — в новый ряд
+ * под всеми экранами, от левого края.
  */
 export function placeNewScreen(
   screens: readonly Pick<CanvasScreen, 'x' | 'y' | 'width' | 'height'>[],
-  width: number
+  width: number,
+  grid: number = CANVAS_GRID
 ): ScreenPlacement {
   if (screens.length === 0) {
     return { x: 0, y: 0 }
@@ -52,13 +55,16 @@ export function placeNewScreen(
   const rightmost = screens.reduce((best, screen) =>
     screen.x + screen.width > best.x + best.width ? screen : best
   )
-  const x = snapUpToGrid(rightmost.x + rightmost.width + SCREEN_GAP)
+  const x = snapUpToGrid(rightmost.x + rightmost.width + SCREEN_GAP, grid)
   if (x + width <= CANVAS_ROW_WIDTH) {
     return { x, y: rightmost.y }
   }
   return {
     x: Math.min(...screens.map((screen) => screen.x)),
-    y: snapUpToGrid(Math.max(...screens.map((screen) => screen.y + screen.height)) + SCREEN_GAP)
+    y: snapUpToGrid(
+      Math.max(...screens.map((screen) => screen.y + screen.height)) + SCREEN_GAP,
+      grid
+    )
   }
 }
 
@@ -70,10 +76,11 @@ export const ARRANGE_ROW_GAP = 520
 
 /**
  * Раскладка рядами: экраны ряда идут слева направо с обычным зазором, по верхнему краю; ряды —
- * сверху вниз; всё по линиям сетки. Возвращает левый верхний угол каждого экрана.
+ * сверху вниз; всё по линиям сетки с клеткой `grid`. Возвращает левый верхний угол каждого экрана.
  */
 export function arrangeRows<Screen extends Pick<CanvasScreen, 'width' | 'height'>>(
-  rows: readonly (readonly Screen[])[]
+  rows: readonly (readonly Screen[])[],
+  grid: number = CANVAS_GRID
 ): Map<Screen, ScreenPlacement> {
   const places = new Map<Screen, ScreenPlacement>()
   let y = 0
@@ -81,9 +88,9 @@ export function arrangeRows<Screen extends Pick<CanvasScreen, 'width' | 'height'
     let x = 0
     for (const screen of row) {
       places.set(screen, { x, y })
-      x = snapUpToGrid(x + screen.width + SCREEN_GAP)
+      x = snapUpToGrid(x + screen.width + SCREEN_GAP, grid)
     }
-    y = snapUpToGrid(y + Math.max(0, ...row.map(({ height }) => height)) + ARRANGE_ROW_GAP)
+    y = snapUpToGrid(y + Math.max(0, ...row.map(({ height }) => height)) + ARRANGE_ROW_GAP, grid)
   }
   return places
 }
