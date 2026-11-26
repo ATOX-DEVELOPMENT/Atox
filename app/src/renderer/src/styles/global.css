@@ -4554,6 +4554,14 @@ button.usage-indicator[data-warning='true']:hover {
   gap: 16px;
 }
 
+/* Агенты рядом, карточки одной ширины и высоты; в узком окне — друг под другом. */
+.usage-page__agents {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 16px;
+  align-items: stretch;
+}
+
 .usage-agent {
   display: flex;
   flex-direction: column;
@@ -4568,6 +4576,8 @@ button.usage-indicator[data-warning='true']:hover {
   display: flex;
   align-items: center;
   gap: 8px;
+  /* Высота кнопки аккаунта: у карточки без неё лимиты начинаются на той же линии. */
+  min-height: 24px;
 }
 
 .usage-agent__icon {
@@ -4581,18 +4591,40 @@ button.usage-indicator[data-warning='true']:hover {
   font-weight: 600;
 }
 
-.usage-agent__account {
-  margin: 0 0 8px;
-  font-size: var(--font-size-small);
-  font-weight: 500;
+/* Выбор аккаунта в шапке карточки — справа от имени агента. */
+.usage-agent__account-picker {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  max-width: 60%;
+  margin-left: auto;
+  padding: 3px 8px 3px 4px;
+  border-radius: 999px;
   color: var(--color-text-muted);
+  font-size: var(--font-size-small);
 }
 
-.usage-agent__limits + .usage-agent__limits {
-  margin-top: 16px;
+.usage-agent__account-picker:hover {
+  background: var(--color-hover);
+  color: var(--color-text);
+}
+
+.usage-agent__account-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.usage-agent__account-chevron {
+  flex-shrink: 0;
+  width: 14px;
+  height: 14px;
 }
 
 .usage-agent__tokens {
+  /* Траты токенов внизу карточки: у соседней лимитов может быть больше, а низ — вровень. */
+  margin-top: auto;
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 12px;
