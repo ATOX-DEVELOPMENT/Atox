@@ -10,7 +10,7 @@ import {
   type ReactNode,
   type Ref
 } from 'react'
-import { snapToGrid } from '../../../../shared/canvas'
+import { CANVAS_GRID, snapToGrid } from '../../../../shared/canvas'
 import type { Canvas, CanvasScreen, CanvasView } from '../../../../shared/canvas'
 import {
   fitView,
@@ -41,6 +41,8 @@ const WHEEL_ZOOM_DELTA_LIMIT = 40
 const WHEEL_LINE_HEIGHT = 16
 /** Пауза, после которой вид сохраняется: не на каждом кадре жеста. */
 const VIEW_SAVE_DELAY = 600
+/** Второй клик по тому же экрану не позже этого — двойной: экран становится рабочим, мс. */
+const DOUBLE_CLICK_MS = 400
 /** Сколько длится перелёт к экрану после клика, мс. */
 const FOCUS_DURATION = 380
 /** Ближе друг к другу точки сетки на экране не рисуются: на малом масштабе их берут через одну. */
@@ -63,6 +65,10 @@ interface CanvasStageProps {
   onSelectScreen(screenId: string | null): void
   /** Клик по экрану: холст подвёл к нему вид. */
   onFocusScreen(screenId: string): void
+  /** Рабочий экран: у него открыта панель инструментов. */
+  workingScreenId: string | null
+  /** Двойной клик по экрану делает его рабочим; `null` — клик по пустому месту выходит из режима. */
+  onWorkScreen(screenId: string | null): void
   /** Версия из истории, которую показывает один из экранов. */
   preview: { screenId: string; versionId: string } | null
   chatTitle: string
@@ -81,7 +87,8 @@ interface Drag {
 /**
  * Бесконечный холст с экранами: колесо и трекпад двигают его, щипок и ⌘/Ctrl с колесом
  * масштабируют вокруг курсора, протяжка по пустому месту двигает, протяжка экрана переносит
- * экран, клик по экрану открывает «Fix». Сдвиг и масштаб пишутся прямо в transform, без
+ * экран, клик по экрану подводит к нему вид, двойной клик делает его рабочим (панель
+ * инструментов), «Fix» — в меню экрана. Сдвиг и масштаб пишутся прямо в transform, без
  * перерисовки React.
  */
 export function CanvasStage({
@@ -90,6 +97,8 @@ export function CanvasStage({
   selectedScreenId,
   onSelectScreen,
   onFocusScreen,
+  workingScreenId,
+  onWorkScreen,
   preview,
   chatTitle,
   children,
@@ -106,10 +115,7 @@ export function CanvasStage({
   const settleTimerRef = useRef<number | undefined>(undefined)
   // Масштаб, в котором слой холста нарисован сейчас.
   const rasterZoomRef = useRef<number | null>(null)
-  const { id: canvasId, screens, groups, grid } = canvas
-  // Сетка читается в обработчиках жестов и в applyView: оттуда нужен её текущий вид.
-  const gridRef = useRef(grid)
-  gridRef.current = grid
+  const { id: canvasId, screens, groups } = canvas
 
   const positionOf = useCallback(
     (screen: CanvasScreen): Point => {
@@ -128,10 +134,10 @@ export function CanvasStage({
   const groupRects = useMemo(
     () =>
       groups.flatMap((group) => {
-        const rect = groupBounds(group, bounds, grid.size)
+        const rect = groupBounds(group, bounds)
         return rect ? [{ group, rect }] : []
       }),
-    [groups, bounds, grid.size]
+    [groups, bounds]
   )
   const groupRectsRef = useRef(groupRects)
   groupRectsRef.current = groupRects
@@ -307,8 +313,8 @@ export function CanvasStage({
     world.style.transform = `translate(${view.x}px, ${view.y}px) scale(${view.zoom})`
     world.style.setProperty('--z', String(view.zoom))
     // Точки стоят на линиях сетки, по которым встают экраны и группы; на малом масштабе
-    // каждая вторая, четвёртая… Скрытая сетка не рисуется вовсе (атрибут data-grid в CSS).
-    let step = gridRef.current.size * view.zoom
+    // каждая вторая, четвёртая…
+    let step = CANVAS_GRID * view.zoom
     while (step < MIN_DOT_STEP) {
       step *= 2
     }
@@ -407,6 +413,7 @@ export function CanvasStage({
       setPanning(false)
       if (!moved) {
         onSelectScreen(null)
+        onWorkScreen(null)
       }
     }
     stage.addEventListener('pointermove', onMove)
@@ -444,16 +451,13 @@ export function CanvasStage({
           .filter(({ id }) => ids.has(id))
           .map((screen) => [screen.id, positionOfRef.current(screen)])
       )
-      // Угол, который встаёт по сетке: у экрана — его собственный, у группы — левый верхний угол
-      // её экранов (поля рамки кратны клетке, поэтому рамка и экраны стоят по сетке вместе).
-      // Без прилипания экраны идут за мышью свободно.
+      // Угол, который встаёт по сетке: у экрана — его собственный, у группы — угол её рамки
+      // (поля рамки кратны клетке, поэтому рамка и экраны стоят по сетке вместе).
       const corner = {
         x: Math.min(...[...origins.values()].map(({ x }) => x)),
         y: Math.min(...[...origins.values()].map(({ y }) => y))
       }
-      const { size, snap } = gridRef.current
-      const snapped = (offset: number, from: number) =>
-        snap ? snapToGrid(from + offset, size) - from : offset
+      const snapped = (offset: number, from: number) => snapToGrid(from + offset) - from
       let current: Point | null = null
       let frame: number | null = null
       const onMove = (move: PointerEvent) => {
@@ -516,6 +520,9 @@ export function CanvasStage({
     [viewState]
   )
 
+  // Двойной клик считается здесь, а не событием dblclick: кликом считается только нажатие без
+  // протяжки, поэтому быстрый перенос экрана не открывает его инструменты.
+  const lastClickRef = useRef<{ screenId: string; at: number } | null>(null)
   const handleScreenPointerDown = useCallback(
     (screenId: string, event: ReactPointerEvent<HTMLElement>) => {
       const origin = screensRef.current.find(({ id }) => id === screenId)
@@ -527,10 +534,20 @@ export function CanvasStage({
         event,
         new Set([screenId]),
         (dx, dy) => window.atox.canvas.moveScreen(canvasId, screenId, from.x + dx, from.y + dy),
-        () => focusScreen(screenId)
+        () => {
+          const now = performance.now()
+          const last = lastClickRef.current
+          if (last?.screenId === screenId && now - last.at <= DOUBLE_CLICK_MS) {
+            lastClickRef.current = null
+            onWorkScreen(screenId)
+            return
+          }
+          lastClickRef.current = { screenId, at: now }
+          focusScreen(screenId)
+        }
       )
     },
-    [canvasId, startMove, focusScreen]
+    [canvasId, startMove, focusScreen, onWorkScreen]
   )
 
   const groupsRef = useRef(groups)
@@ -558,13 +575,7 @@ export function CanvasStage({
   )
 
   return (
-    <div
-      ref={stageRef}
-      className="canvas-stage"
-      data-panning={panning}
-      data-grid={grid.visible ? 'visible' : 'hidden'}
-      onPointerDown={startPan}
-    >
+    <div ref={stageRef} className="canvas-stage" data-panning={panning} onPointerDown={startPan}>
       <div ref={worldRef} className="canvas-stage__world">
         {groupRects.map(({ group, rect }) => (
           <GroupFrame
@@ -586,11 +597,13 @@ export function CanvasStage({
             screen={screen}
             position={positionOf(screen)}
             selected={screen.id === selectedScreenId}
+            working={screen.id === workingScreenId}
             dragging={drag?.ids.has(screen.id) ?? false}
             previewVersionId={preview?.screenId === screen.id ? preview.versionId : null}
             onPointerDown={handleScreenPointerDown}
             onFocus={focusScreen}
             onFix={onSelectScreen}
+            onWork={onWorkScreen}
           />
         ))}
         <CanvasLinks links={canvas.links} screens={screens} bounds={bounds} />

@@ -656,6 +656,11 @@ export function registerIpcHandlers({
       canvas.renameScreen(requireId(canvasId), requireId(screenId), name)
   )
   ipcMain.handle(
+    IpcChannel.CanvasSetScreenGrid,
+    (_event, canvasId: unknown, screenId: unknown, grid: unknown) =>
+      canvas.setScreenGrid(requireId(canvasId), requireId(screenId), grid)
+  )
+  ipcMain.handle(
     IpcChannel.CanvasMoveScreen,
     (_event, canvasId: unknown, screenId: unknown, x: unknown, y: unknown) =>
       canvas.moveScreen(requireId(canvasId), requireId(screenId), x, y)
@@ -710,9 +715,6 @@ export function registerIpcHandlers({
   })
   ipcMain.handle(IpcChannel.CanvasSetView, (_event, canvasId: unknown, view: unknown) =>
     canvas.setView(requireId(canvasId), view)
-  )
-  ipcMain.handle(IpcChannel.CanvasSetGrid, (_event, canvasId: unknown, grid: unknown) =>
-    canvas.setGrid(requireId(canvasId), grid)
   )
   ipcMain.handle(IpcChannel.CanvasArchive, (_event, canvasId: unknown, archived: unknown) => {
     if (typeof archived !== 'boolean') {
