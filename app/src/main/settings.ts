@@ -95,7 +95,7 @@ function normalize(settings: Settings): Settings {
       ? settings.sidebarButtons
       : DEFAULT_SIDEBAR_BUTTON_STYLE,
     boardMaxAgents: Number.isInteger(settings.boardMaxAgents)
-      ? Math.min(BOARD_AGENTS.max, Math.max(BOARD_AGENTS.min, settings.boardMaxAgents))
+      ? Math.min(BOARD_AGENTS.max, Math.max(BOARD_AGENTS.min, settings.boardMaxAgents as number))
       : BOARD_AGENTS.default,
     boardAgent: parseTaskAgent(settings.boardAgent) ?? DEFAULT_SETTINGS.boardAgent,
     boardReview: settings.boardReview === true,

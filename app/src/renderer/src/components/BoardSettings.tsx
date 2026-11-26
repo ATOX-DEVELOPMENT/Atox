@@ -5,6 +5,9 @@ import { TaskAgentPicker } from './TaskAgentPicker'
 
 const { atox } = window
 
+/** «Без предела» в счётчике агентов — шаг после самого большого предела. */
+const UNLIMITED_AGENTS_STEP = BOARD_AGENTS.max + 1
+
 interface StepperProps {
   label: string
   value: number
@@ -74,15 +77,22 @@ export function BoardSettings() {
             <span className="settings__label">
               <span>Agents at once</span>
               <span className="settings__description">
-                Queued tasks wait until one of the running agents finishes.
+                {boardMaxAgents === null
+                  ? 'No limit: every queued task gets an agent right away.'
+                  : 'Queued tasks wait until one of the running agents finishes.'}
               </span>
             </span>
             <Stepper
               label="Agents at once"
-              value={boardMaxAgents}
+              value={boardMaxAgents ?? UNLIMITED_AGENTS_STEP}
               min={BOARD_AGENTS.min}
-              max={BOARD_AGENTS.max}
-              onChange={(value) => void atox.settings.update({ boardMaxAgents: value })}
+              max={UNLIMITED_AGENTS_STEP}
+              format={(value) => (value === UNLIMITED_AGENTS_STEP ? 'Unlimited' : String(value))}
+              onChange={(value) =>
+                void atox.settings.update({
+                  boardMaxAgents: value === UNLIMITED_AGENTS_STEP ? null : value
+                })
+              }
             />
           </div>
         </div>

@@ -53,8 +53,12 @@ export function isBoardColumn(value: unknown): value is BoardColumn {
  */
 export const DONE_VISIBLE_MS = 24 * 60 * 60_000
 
-/** Сколько агентов доски работают одновременно: каждый тратит лимит подписки. */
-export const BOARD_AGENTS = { min: 1, max: 8, default: 2 } as const
+/**
+ * Сколько агентов доски работают одновременно. По умолчанию без предела — сколько задач
+ * поставили, столько агентов и работает; предел можно поставить в настройках доски: после
+ * `max` следующий шаг — снова «без предела».
+ */
+export const BOARD_AGENTS = { min: 1, max: 20, default: null } as const
 
 /** Сколько раундов исправлений агент делает над одним pull request'ом, пока не позовёт человека. */
 export const BOARD_ROUNDS = { min: 1, max: 10, default: 3 } as const

@@ -408,9 +408,9 @@ export class BoardService {
     return this.cards.size !== before
   }
 
-  /** Отдаёт агентам задачи из очереди, пока работающих меньше предела. */
+  /** Отдаёт агентам задачи из очереди, пока работающих меньше предела; без предела — все. */
   private startQueued(): void {
-    const limit = this.services.settings.get().boardMaxAgents
+    const limit = this.agentLimit()
     const working = this.workingCount()
     // Задачи репозиториев, убранных с доски, агентам не уходят.
     const shown = new Set(this.repositories.map(({ fullName }) => fullName))
@@ -429,6 +429,11 @@ export class BoardService {
         }
       }
     }
+  }
+
+  /** Сколько агентов доски могут работать сразу; без предела в настройках — сколько угодно. */
+  private agentLimit(): number {
+    return this.services.settings.get().boardMaxAgents ?? Infinity
   }
 
   /** Сколько агентов доски занято: работают над задачами, проверяют, исправляют или готовятся. */
@@ -765,12 +770,12 @@ export class BoardService {
     force = false
   ): Promise<void> {
     const { store, conversations, settings } = this.services
-    const { boardMaxRounds, boardMaxAgents } = settings.get()
+    const { boardMaxRounds } = settings.get()
     if (flow.round >= boardMaxRounds) {
       this.stop(card, `Still not clean after ${boardMaxRounds} rounds of fixes: ${FIX_PROBLEMS[kind]}.`)
       return
     }
-    if (!force && this.workingCount() >= boardMaxAgents) {
+    if (!force && this.workingCount() >= this.agentLimit()) {
       this.wait(card, 'Waiting for a free agent', true)
       return
     }
@@ -802,12 +807,12 @@ export class BoardService {
     issue: GitHubIssue,
     status: PullRequestStatus
   ): Promise<void> {
-    const { store, conversations, settings, agents, github } = this.services
+    const { store, conversations, agents, github } = this.services
     const reviewer = card.reviewer
     if (!reviewer) {
       return
     }
-    if (this.workingCount() >= settings.get().boardMaxAgents) {
+    if (this.workingCount() >= this.agentLimit()) {
       this.wait(card, 'Waiting for a free agent', true)
       return
     }

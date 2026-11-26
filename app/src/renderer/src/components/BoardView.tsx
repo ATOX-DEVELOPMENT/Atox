@@ -234,8 +234,10 @@ export function BoardView({ onOpenChat, onClose }: BoardViewProps) {
         </div>
         <div className="board__actions">
           {hasRepositories && (
-            <span className="board__agents" title="Change the limit in Settings → GitHub">
-              {working} of {boardMaxAgents} agents working
+            <span className="board__agents" title="Change the limit in Settings → Board">
+              {boardMaxAgents === null
+                ? `${working} ${working === 1 ? 'agent' : 'agents'} working`
+                : `${working} of ${boardMaxAgents} agents working`}
             </span>
           )}
           {hasRepositories && (
