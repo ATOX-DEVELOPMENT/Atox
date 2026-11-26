@@ -327,6 +327,8 @@ const api: AtoxApi = {
       ipcRenderer.invoke(IpcChannel.CanvasRenameScreen, canvasId, screenId, name),
     setScreenGrid: (canvasId, screenId, grid) =>
       ipcRenderer.invoke(IpcChannel.CanvasSetScreenGrid, canvasId, screenId, grid),
+    resizeScreen: (canvasId, screenId, look) =>
+      ipcRenderer.invoke(IpcChannel.CanvasResizeScreen, canvasId, screenId, look),
     moveScreen: (canvasId, screenId, x, y) =>
       ipcRenderer.invoke(IpcChannel.CanvasMoveScreen, canvasId, screenId, x, y),
     renameGroup: (canvasId, groupId, name) =>
