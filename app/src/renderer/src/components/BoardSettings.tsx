@@ -8,7 +8,15 @@ const { atox } = window
 /** Раздел настроек доски: какой агент берёт задачи и сколько агентов работают сразу. */
 export function BoardSettings() {
   const { boardMaxAgents, boardAgent } = useSettings()
-  const setMaxAgents = (value: number) => void atox.settings.update({ boardMaxAgents: value })
+  const setMaxAgents = (value: number | null) =>
+    void atox.settings.update({ boardMaxAgents: value })
+  // Без предела — последний шаг после `max`: «−» возвращает к `max`, «+» после `max` снимает предел.
+  const fewer = () =>
+    setMaxAgents(boardMaxAgents === null ? BOARD_AGENTS.max : boardMaxAgents - 1)
+  const more = () =>
+    setMaxAgents(
+      boardMaxAgents === null || boardMaxAgents >= BOARD_AGENTS.max ? null : boardMaxAgents + 1
+    )
 
   return (
     <div className="settings__group">
@@ -31,7 +39,9 @@ export function BoardSettings() {
             <span className="settings__label">
               <span>Agents at once</span>
               <span className="settings__description">
-                Queued tasks wait until one of the running agents finishes.
+                {boardMaxAgents === null
+                  ? 'No limit: every queued task gets an agent right away.'
+                  : 'Queued tasks wait until one of the running agents finishes.'}
               </span>
             </span>
             <div className="stepper" role="group" aria-label="Agents at once">
@@ -39,20 +49,20 @@ export function BoardSettings() {
                 type="button"
                 className="stepper__button"
                 aria-label="Fewer agents"
-                disabled={boardMaxAgents <= BOARD_AGENTS.min}
-                onClick={() => setMaxAgents(boardMaxAgents - 1)}
+                disabled={boardMaxAgents !== null && boardMaxAgents <= BOARD_AGENTS.min}
+                onClick={fewer}
               >
                 <Minus className="stepper__icon" />
               </button>
               <span className="stepper__value" aria-live="polite">
-                {boardMaxAgents}
+                {boardMaxAgents ?? 'Unlimited'}
               </span>
               <button
                 type="button"
                 className="stepper__button"
                 aria-label="More agents"
-                disabled={boardMaxAgents >= BOARD_AGENTS.max}
-                onClick={() => setMaxAgents(boardMaxAgents + 1)}
+                disabled={boardMaxAgents === null}
+                onClick={more}
               >
                 <Plus className="stepper__icon" />
               </button>
