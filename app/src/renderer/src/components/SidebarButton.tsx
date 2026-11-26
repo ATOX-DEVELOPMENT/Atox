@@ -1,13 +1,6 @@
 import type { LucideIcon } from 'lucide-react'
-import { useState } from 'react'
-import { createPortal } from 'react-dom'
 import { useSettings } from '../hooks/SettingsContext'
-
-/** Где показать подсказку: над кнопкой, по её центру. */
-interface HintPosition {
-  x: number
-  y: number
-}
+import { HoverHint, useHoverHint } from './HoverHint'
 
 interface SidebarButtonProps {
   icon: LucideIcon
@@ -31,11 +24,7 @@ export function SidebarButton({
   const { sidebarButtons } = useSettings()
   const withLabel = sidebarButtons === 'list'
   const hint = count === undefined ? label : `${label} (${count})`
-  const [hintAt, setHintAt] = useState<HintPosition | null>(null)
-  const showHint = (button: HTMLElement) => {
-    const rect = button.getBoundingClientRect()
-    setHintAt({ x: rect.left + rect.width / 2, y: rect.top })
-  }
+  const hoverHint = useHoverHint()
 
   return (
     <button
@@ -47,28 +36,20 @@ export function SidebarButton({
       aria-label={withLabel ? undefined : hint}
       disabled={disabled}
       onClick={() => {
-        setHintAt(null)
+        hoverHint.hide()
         onClick()
       }}
-      onMouseEnter={withLabel ? undefined : (event) => showHint(event.currentTarget)}
-      onMouseLeave={() => setHintAt(null)}
+      onMouseEnter={withLabel ? undefined : (event) => hoverHint.show(event.currentTarget)}
+      onMouseLeave={hoverHint.hide}
     >
       <Icon className="icon" />
       {withLabel && <span className="sidebar-button__label">{label}</span>}
       {withLabel && count !== undefined && <span className="sidebar-button__count">{count}</span>}
-      {/* Сайдбар обрезает всё, что выходит за его края, — подсказка рисуется поверх окна. */}
-      {!withLabel &&
-        hintAt &&
-        createPortal(
-          <span
-            className="sidebar-hint"
-            role="tooltip"
-            style={{ left: hintAt.x, top: hintAt.y }}
-          >
-            {hint}
-          </span>,
-          document.body
-        )}
+      {!withLabel && hoverHint.anchor && (
+        <HoverHint anchor={hoverHint.anchor} placement="above">
+          {hint}
+        </HoverHint>
+      )}
     </button>
   )
 }
