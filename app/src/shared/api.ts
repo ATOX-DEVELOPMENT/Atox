@@ -12,10 +12,10 @@ import type {
 import type {
   CanvasExportFormat,
   CanvasExportResult,
-  CanvasGrid,
   CanvasState,
   CanvasShare,
   CanvasView,
+  ScreenGrid,
   ScreenLook,
   ScreenVersion
 } from './canvas'
@@ -374,6 +374,11 @@ export interface AtoxApi {
     rename(canvasId: string, name: string): Promise<void>
     renameScreen(canvasId: string, screenId: string, name: string): Promise<void>
     /**
+     * Сетка поверх экрана (инструмент Grid): видна ли и сколько столбцов. Столбцы должны быть
+     * верны для ширины экрана. Страницу экрана сетка не меняет.
+     */
+    setScreenGrid(canvasId: string, screenId: string, grid: ScreenGrid): Promise<void>
+    /**
      * Вызывается, когда человек отпустил экран; позицию в процессе перетаскивания держит окно.
      * Позиция уже стоит по линиям сетки: об этом заботится окно.
      */
@@ -393,8 +398,6 @@ export interface AtoxApi {
     ungroup(canvasId: string, groupId: string): Promise<void>
     /** Запоминает сдвиг и масштаб холста; окно зовёт редко (после паузы), не на каждый кадр. */
     setView(canvasId: string, view: CanvasView): Promise<void>
-    /** Сетка холста чата (вкладка Tools): пишется у всех его страниц. */
-    setGrid(canvasId: string, grid: CanvasGrid): Promise<void>
     /** Убирает в архив весь холст чата (все страницы вместе) или возвращает его. */
     archive(canvasId: string, archived: boolean): Promise<void>
     /**
@@ -538,6 +541,7 @@ export const IpcChannel = {
   CanvasRemoveCanvas: 'canvas:remove-canvas',
   CanvasRename: 'canvas:rename',
   CanvasRenameScreen: 'canvas:rename-screen',
+  CanvasSetScreenGrid: 'canvas:set-screen-grid',
   CanvasMoveScreen: 'canvas:move-screen',
   CanvasRenameGroup: 'canvas:rename-group',
   CanvasMoveGroup: 'canvas:move-group',
@@ -545,7 +549,6 @@ export const IpcChannel = {
   CanvasShare: 'canvas:share',
   CanvasStopSharing: 'canvas:stop-sharing',
   CanvasSetView: 'canvas:set-view',
-  CanvasSetGrid: 'canvas:set-grid',
   CanvasArchive: 'canvas:archive',
   CanvasRemove: 'canvas:remove',
   CanvasRemoveScreen: 'canvas:remove-screen',

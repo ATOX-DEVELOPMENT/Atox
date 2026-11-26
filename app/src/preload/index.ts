@@ -325,6 +325,8 @@ const api: AtoxApi = {
     rename: (canvasId, name) => ipcRenderer.invoke(IpcChannel.CanvasRename, canvasId, name),
     renameScreen: (canvasId, screenId, name) =>
       ipcRenderer.invoke(IpcChannel.CanvasRenameScreen, canvasId, screenId, name),
+    setScreenGrid: (canvasId, screenId, grid) =>
+      ipcRenderer.invoke(IpcChannel.CanvasSetScreenGrid, canvasId, screenId, grid),
     moveScreen: (canvasId, screenId, x, y) =>
       ipcRenderer.invoke(IpcChannel.CanvasMoveScreen, canvasId, screenId, x, y),
     renameGroup: (canvasId, groupId, name) =>
@@ -335,7 +337,6 @@ const api: AtoxApi = {
     stopSharing: (canvasId) => ipcRenderer.invoke(IpcChannel.CanvasStopSharing, canvasId),
     ungroup: (canvasId, groupId) => ipcRenderer.invoke(IpcChannel.CanvasUngroup, canvasId, groupId),
     setView: (canvasId, view) => ipcRenderer.invoke(IpcChannel.CanvasSetView, canvasId, view),
-    setGrid: (canvasId, grid) => ipcRenderer.invoke(IpcChannel.CanvasSetGrid, canvasId, grid),
     archive: (canvasId, archived) => ipcRenderer.invoke(IpcChannel.CanvasArchive, canvasId, archived),
     remove: (canvasId) => ipcRenderer.invoke(IpcChannel.CanvasRemove, canvasId),
     removeCanvas: (chatId) => ipcRenderer.invoke(IpcChannel.CanvasRemoveCanvas, chatId),

@@ -15,8 +15,8 @@ import { CanvasHeader } from './CanvasHeader'
 import { CanvasStage, type CanvasStageHandle } from './CanvasStage'
 import { HistoryDrawer } from './HistoryDrawer'
 import { PagesPanel } from './PagesPanel'
-import { ToolsDrawer } from './ToolsDrawer'
 import { ScreenSizeDialog } from './ScreenSizeDialog'
+import { ScreenToolsPanel } from './ScreenToolsPanel'
 import { useStandaloneCanvas } from './useStandaloneCanvas'
 import { ViewState } from './viewState'
 
@@ -30,7 +30,7 @@ const LINK_COPIED_MS = 2000
 
 /**
  * Страница холста: шапка, поле с экранами открытой страницы, список страниц поверх него слева
- * и справа история версий или вкладка Tools (сетка).
+ * и история версий справа.
  */
 export function CanvasPage({ canvasId, onClose }: CanvasPageProps) {
   const canvas = useCanvas(canvasId)
@@ -44,9 +44,10 @@ export function CanvasPage({ canvasId, onClose }: CanvasPageProps) {
   const stageRef = useRef<CanvasStageHandle>(null)
   const [renaming, setRenaming] = useState(false)
   const [selectedScreenId, setSelectedScreenId] = useState<string | null>(null)
-  // История и Tools стоят справа на одном месте: открыта одна из них.
+  // Рабочий экран: выбран двойным кликом, у него открыта панель инструментов.
+  const [workingScreenId, setWorkingScreenId] = useState<string | null>(null)
+  const workingScreen = canvas?.screens.find(({ id }) => id === workingScreenId) ?? null
   const [historyOpen, setHistoryOpen] = useState(false)
-  const [toolsOpen, setToolsOpen] = useState(false)
   const [historyScreenId, setHistoryScreenId] = useState<string | null>(null)
   const [preview, setPreview] = useState<{ screenId: string; versionId: string } | null>(null)
   const [exporting, setExporting] = useState(false)
@@ -82,20 +83,27 @@ export function CanvasPage({ canvasId, onClose }: CanvasPageProps) {
     }
   }, [canvas, store, navigation, onClose])
 
-  // Esc, который уже обработало поле (переименование, «Fix»), страницу не закрывает.
+  // Esc, который уже обработало поле (переименование, «Fix»), страницу не закрывает. Рабочий
+  // экран Esc сначала отпускает, и только следующий Esc закрывает страницу.
+  const working = workingScreen !== null
   useEffect(() => {
     if (addingScreen) {
       // Окно пустого экрана закрывается своим Esc, страница остаётся.
       return undefined
     }
     const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === 'Escape' && !event.defaultPrevented) {
+      if (event.key !== 'Escape' || event.defaultPrevented) {
+        return
+      }
+      if (working) {
+        setWorkingScreenId(null)
+      } else {
         onClose()
       }
     }
     window.addEventListener('keydown', closeOnEscape)
     return () => window.removeEventListener('keydown', closeOnEscape)
-  }, [onClose, addingScreen])
+  }, [onClose, addingScreen, working])
 
   const selectScreen = useCallback((screenId: string | null) => {
     setSelectedScreenId(screenId)
@@ -142,13 +150,6 @@ export function CanvasPage({ canvasId, onClose }: CanvasPageProps) {
         onToggleHistory={() => {
           // Закрытая история возвращает экранам текущие версии.
           setHistoryOpen((open) => !open)
-          setToolsOpen(false)
-          setPreview(null)
-        }}
-        toolsOpen={toolsOpen && hasScreens}
-        onToggleTools={() => {
-          setToolsOpen((open) => !open)
-          setHistoryOpen(false)
           setPreview(null)
         }}
         onAddScreen={() => setAddingScreen(true)}
@@ -218,9 +219,20 @@ export function CanvasPage({ canvasId, onClose }: CanvasPageProps) {
             selectedScreenId={selectedScreenId}
             onSelectScreen={selectScreen}
             onFocusScreen={focusScreen}
+            workingScreenId={workingScreen?.id ?? null}
+            onWorkScreen={setWorkingScreenId}
             preview={shownPreview}
             chatTitle={chatTitle}
           >
+            {workingScreen && (
+              <ScreenToolsPanel
+                // У каждого экрана своя панель: ошибка прошлого экрана не переносится.
+                key={workingScreen.id}
+                canvasId={canvas.id}
+                screen={workingScreen}
+                onClose={() => setWorkingScreenId(null)}
+              />
+            )}
             {owner.chat && (
               <AgentBar chatId={owner.chat.id} chatTitle={chatTitle} onOpenChat={openChat} />
             )}
@@ -235,7 +247,6 @@ export function CanvasPage({ canvasId, onClose }: CanvasPageProps) {
             onLinkChat={(event) => void standalone.linkChat(canvas, event.currentTarget)}
           />
         )}
-        {toolsOpen && hasScreens && <ToolsDrawer canvasId={canvas.id} grid={canvas.grid} />}
         {historyOpen && historyScreen && (
           <HistoryDrawer
             // У каждого экрана свой список: другой экран загружается с чистого листа.

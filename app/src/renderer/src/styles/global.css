@@ -145,6 +145,7 @@
   --canvas-request-field-height: 64px;
   --canvas-request-field-max-height: 160px;
   --canvas-history-width: 340px;
+  --screen-tools-width: 280px;
   --canvas-history-radius: 14px;
   --canvas-ghost-width: 230px;
   --canvas-ghost-height: 150px;
@@ -171,6 +172,9 @@
   --canvas-group-border: light-dark(rgba(50, 40, 100, 0.14), rgba(255, 255, 255, 0.1));
   --canvas-screen-shadow-color: light-dark(rgba(40, 30, 90, 0.16), rgba(0, 0, 0, 0.5));
   --canvas-screen-background: #ffffff;
+  /* Линии сетки экрана двойные — тёмная и светлая рядом, поэтому видны на любой странице. */
+  --canvas-screen-grid-dark: rgba(20, 20, 40, 0.22);
+  --canvas-screen-grid-light: rgba(255, 255, 255, 0.3);
   --canvas-device-bezel: #101114;
   --canvas-chrome-background: #f4f4f8;
   --canvas-chrome-border: #e8e8ef;
@@ -6324,11 +6328,6 @@ button.usage-indicator[data-warning='true']:hover {
   cursor: grabbing;
 }
 
-/* Сетка выключена во вкладке Tools: точек нет, прилипание настраивается отдельно. */
-.canvas-stage[data-grid='hidden'] {
-  background-image: none;
-}
-
 .canvas-stage__world {
   --z: 1;
   position: absolute;
@@ -6675,6 +6674,187 @@ button.usage-indicator[data-warning='true']:hover {
   border: calc(var(--canvas-ring-width) / var(--z)) solid var(--color-accent);
   border-radius: calc(var(--frame-radius) + var(--canvas-ring-gap) / var(--z));
   pointer-events: none;
+}
+
+/* Рабочий экран (двойной клик): рамка толще и с ореолом, экран поверх соседей. */
+.canvas-screen[data-working='true'] {
+  z-index: 1;
+}
+
+.canvas-screen[data-working='true'] .canvas-screen__ring {
+  border-width: calc(var(--canvas-ring-width) * 1.5 / var(--z));
+  box-shadow: 0 0 0 calc(6px / var(--z)) color-mix(in srgb, var(--color-accent) 22%, transparent);
+}
+
+/*
+ * Сетка экрана: квадратные клетки поверх iframe, ровно по его месту в рамке устройства. Линия
+ * в пиксель окна при любом масштабе, но не толще восьмой части клетки — мелкая сетка на малом
+ * масштабе не заливает экран. Это слой холста: в страницу, выгрузку и ссылку он не попадает.
+ */
+.canvas-screen__grid {
+  --grid-line: min(calc(1px / var(--z)), calc(var(--grid-cell) / 8));
+  position: absolute;
+  top: var(--frame-top);
+  left: var(--frame-side);
+  border-radius: var(--screen-radius, 0);
+  pointer-events: none;
+  background-image:
+    linear-gradient(
+      to right,
+      var(--canvas-screen-grid-dark) var(--grid-line),
+      transparent var(--grid-line)
+    ),
+    linear-gradient(
+      to bottom,
+      var(--canvas-screen-grid-dark) var(--grid-line),
+      transparent var(--grid-line)
+    ),
+    linear-gradient(
+      to right,
+      transparent var(--grid-line),
+      var(--canvas-screen-grid-light) var(--grid-line),
+      var(--canvas-screen-grid-light) calc(var(--grid-line) * 2),
+      transparent calc(var(--grid-line) * 2)
+    ),
+    linear-gradient(
+      to bottom,
+      transparent var(--grid-line),
+      var(--canvas-screen-grid-light) var(--grid-line),
+      var(--canvas-screen-grid-light) calc(var(--grid-line) * 2),
+      transparent calc(var(--grid-line) * 2)
+    );
+  background-size: var(--grid-cell) var(--grid-cell);
+}
+
+/* Панель рабочего экрана: справа сверху поверх холста. */
+.screen-tools {
+  position: absolute;
+  top: var(--canvas-overlay-inset);
+  right: var(--canvas-overlay-inset);
+  z-index: 3;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: var(--screen-tools-width);
+  max-width: calc(100% - var(--canvas-overlay-inset) * 2);
+  padding: 12px;
+  border: 1px solid var(--color-menu-border);
+  border-radius: var(--canvas-request-radius);
+  font-size: 13px;
+  background: var(--color-menu);
+  box-shadow: var(--shadow-menu);
+  cursor: default;
+}
+
+.screen-tools__header {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.screen-tools__heading {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.screen-tools__title {
+  overflow: hidden;
+  font-size: 13px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.screen-tools__subtitle {
+  font-size: var(--font-size-small);
+  color: var(--color-text-muted);
+}
+
+.screen-tools__close {
+  flex-shrink: 0;
+  margin: -4px -4px 0 0;
+}
+
+.screen-tools__section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 10px;
+  border-top: 1px solid var(--color-menu-border);
+}
+
+.screen-tools__row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+}
+
+.screen-tools__icon {
+  color: var(--color-text-muted);
+}
+
+.screen-tools__label {
+  flex: 1;
+  font-weight: 500;
+}
+
+.screen-tools__stepper {
+  display: flex;
+  gap: 4px;
+}
+
+.screen-tools__step,
+.screen-tools__columns {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: var(--canvas-button-height);
+  border-radius: 8px;
+  background: var(--color-hover);
+}
+
+.screen-tools__step {
+  flex-shrink: 0;
+  width: var(--canvas-button-height);
+}
+
+.screen-tools__columns {
+  flex: 1;
+  gap: 6px;
+  min-width: 0;
+  padding: 0 10px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.screen-tools__columns span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.screen-tools__step:hover:not(:disabled),
+.screen-tools__columns:hover {
+  background: var(--color-active);
+}
+
+.screen-tools__step:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.screen-tools__hint {
+  margin: 0;
+  font-size: var(--font-size-small);
+  color: var(--color-text-muted);
+}
+
+.screen-tools__error {
+  margin: 0;
+  font-size: var(--font-size-small);
+  color: var(--color-danger);
 }
 
 /* Плашка поверх холста: работа агента. */
@@ -7067,80 +7247,6 @@ button.usage-indicator[data-warning='true']:hover {
   margin: 16px;
   font-size: 13px;
   color: var(--color-text-muted);
-}
-
-/* Вкладка Tools: стоит на месте истории и выглядит так же. */
-.tools-drawer__section {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  padding: 0 16px 16px;
-}
-
-.tools-drawer__section-title {
-  margin: 4px 0;
-  font-size: var(--font-size-small);
-  font-weight: 600;
-  color: var(--color-text-muted);
-}
-
-.tools-drawer__row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 8px 0;
-  font-size: 13px;
-}
-
-.tools-drawer__row--stacked {
-  flex-direction: column;
-  align-items: stretch;
-}
-
-.tools-drawer__label {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
-}
-
-.tools-drawer__description {
-  font-size: var(--font-size-small);
-  color: var(--color-text-muted);
-}
-
-.tools-drawer__size {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.tools-drawer__size .segmented__item {
-  justify-content: center;
-  min-width: 32px;
-}
-
-.tools-drawer__number {
-  width: 64px;
-  height: calc(var(--repository-control-height) - 4px);
-  padding: 0 6px;
-  font: inherit;
-  font-size: 13px;
-  color: var(--color-text);
-  background: var(--color-surface);
-  border: 1px solid var(--color-border);
-  border-radius: calc(var(--radius) - 2px);
-  outline: none;
-  user-select: text;
-}
-
-.tools-drawer__number:focus-visible {
-  border-color: var(--color-accent-text);
-}
-
-.tools-drawer__number[aria-invalid='true'] {
-  border-color: var(--color-danger);
 }
 
 .version {
