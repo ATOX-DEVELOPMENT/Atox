@@ -184,6 +184,9 @@ const api: AtoxApi = {
       ipcRenderer.invoke(IpcChannel.FilesSavePastedImage, await image.arrayBuffer(), image.type),
     open: (path, baseDirectory) => ipcRenderer.invoke(IpcChannel.FilesOpen, path, baseDirectory)
   },
+  links: {
+    preview: (url, chatId) => ipcRenderer.invoke(IpcChannel.LinksPreview, url, chatId)
+  },
   images: {
     read: (path) => ipcRenderer.invoke(IpcChannel.ImagesRead, path),
     saveAs: (path) => ipcRenderer.invoke(IpcChannel.ImagesSaveAs, path)

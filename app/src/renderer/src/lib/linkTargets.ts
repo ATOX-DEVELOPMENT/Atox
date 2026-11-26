@@ -4,6 +4,9 @@ import { EXTERNAL_LINK_PROTOCOLS } from '../../../shared/links'
 /** Папка проекта чата: от неё считаются относительные пути в ссылках из ответов агента. */
 export const LinkBaseDirectoryContext = createContext<string | undefined>(undefined)
 
+/** Чат, в ответе которого ссылка: карточки GitHub смотрим под его учётной записью gh. */
+export const LinkChatContext = createContext<string | undefined>(undefined)
+
 /** Куда ведёт ссылка из ответа агента. */
 export type LinkTarget =
   /** Сайт или почта: открывает внешнее приложение. */

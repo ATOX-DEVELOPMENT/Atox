@@ -13,23 +13,18 @@ import {
   ChevronDown,
   Columns2,
   GitFork,
-  GitMerge,
-  GitPullRequest,
-  GitPullRequestClosed,
-  GitPullRequestDraft,
   LayoutDashboard,
   Pencil,
-  Trash2,
-  type LucideIcon
+  Trash2
 } from 'lucide-react'
 import { findAgent } from '../../../shared/agents'
 import type { Chat } from '../../../shared/models'
-import type { PullRequestState } from '../../../shared/repository'
 import { isCommandClick } from '../../../shared/shortcuts'
 import { useCanvasNavigation, useChatCanvases } from '../hooks/CanvasesContext'
 import { useChatActivity } from '../hooks/ChatActivityContext'
 import { useProjectActions } from '../hooks/ProjectsContext'
 import { chatPullRequests } from '../lib/chatPullRequests'
+import { PULL_REQUEST_LOOK } from '../lib/githubStates'
 import { showMenu } from '../lib/menu'
 import { AgentIcon } from './AgentIcon'
 import { ChatCanvasRow } from './canvas/ChatCanvasRow'
@@ -275,13 +270,6 @@ function ChatRow({
       {!compact && !renaming && <ChatPullRequest chatId={chat.id} />}
     </div>
   )
-}
-
-const PULL_REQUEST_LOOK: Record<PullRequestState, { icon: LucideIcon; label: string }> = {
-  open: { icon: GitPullRequest, label: 'Open' },
-  draft: { icon: GitPullRequestDraft, label: 'Draft' },
-  merged: { icon: GitMerge, label: 'Merged' },
-  closed: { icon: GitPullRequestClosed, label: 'Closed' }
 }
 
 /**

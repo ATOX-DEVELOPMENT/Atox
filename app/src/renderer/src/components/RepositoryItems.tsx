@@ -1,58 +1,10 @@
 import type { MouseEvent } from 'react'
-import {
-  CircleCheck,
-  CircleDashed,
-  CircleDot,
-  CircleSlash,
-  CircleX,
-  ExternalLink,
-  GitMerge,
-  GitPullRequest,
-  GitPullRequestClosed,
-  GitPullRequestDraft,
-  Hash,
-  Link,
-  MessageSquare,
-  type LucideIcon
-} from 'lucide-react'
-import type {
-  CheckStatus,
-  Issue,
-  IssueState,
-  PullRequest,
-  PullRequestState,
-  ReviewDecision
-} from '../../../shared/repository'
+import { ExternalLink, Hash, Link, MessageSquare } from 'lucide-react'
+import type { Issue, PullRequest } from '../../../shared/repository'
 import { githubAvatarUrl } from '../lib/github'
+import { CHECKS_LOOK, ISSUE_LOOK, PULL_REQUEST_LOOK, REVIEW_LABEL } from '../lib/githubStates'
 import { showMenu, type MenuItem } from '../lib/menu'
 import { RepositoryRow } from './RepositoryRow'
-
-type RowTone = 'open' | 'merged' | 'closed' | 'muted'
-
-const PULL_REQUEST_LOOK: Record<PullRequestState, { icon: LucideIcon; tone: RowTone }> = {
-  open: { icon: GitPullRequest, tone: 'open' },
-  draft: { icon: GitPullRequestDraft, tone: 'muted' },
-  merged: { icon: GitMerge, tone: 'merged' },
-  closed: { icon: GitPullRequestClosed, tone: 'closed' }
-}
-
-const ISSUE_LOOK: Record<IssueState, { icon: LucideIcon; tone: RowTone }> = {
-  open: { icon: CircleDot, tone: 'open' },
-  completed: { icon: CircleCheck, tone: 'merged' },
-  'not-planned': { icon: CircleSlash, tone: 'muted' }
-}
-
-const CHECKS_LOOK: Record<NonNullable<CheckStatus>, { icon: LucideIcon; label: string }> = {
-  success: { icon: CircleCheck, label: 'Checks passed' },
-  failure: { icon: CircleX, label: 'Checks failed' },
-  pending: { icon: CircleDashed, label: 'Checks running' }
-}
-
-const REVIEW_LABEL: Record<NonNullable<ReviewDecision>, string> = {
-  approved: 'Approved',
-  'changes-requested': 'Changes requested',
-  'review-required': 'Review required'
-}
 
 /** Пункты контекстного меню строк. */
 type ItemAction = 'open' | 'copy-link' | 'copy-id'
