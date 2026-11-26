@@ -315,6 +315,11 @@ const api: AtoxApi = {
     },
     create: (chatId) => ipcRenderer.invoke(IpcChannel.CanvasCreate, chatId),
     addPage: (chatId) => ipcRenderer.invoke(IpcChannel.CanvasAddPage, chatId),
+    createStandalone: (projectId, name, look) =>
+      ipcRenderer.invoke(IpcChannel.CanvasCreateStandalone, projectId, name, look),
+    addBlankScreen: (canvasId, look) =>
+      ipcRenderer.invoke(IpcChannel.CanvasAddBlankScreen, canvasId, look),
+    linkChat: (canvasId, chatId) => ipcRenderer.invoke(IpcChannel.CanvasLinkChat, canvasId, chatId),
     reorderPages: (chatId, pageIds) =>
       ipcRenderer.invoke(IpcChannel.CanvasReorderPages, chatId, pageIds),
     rename: (canvasId, name) => ipcRenderer.invoke(IpcChannel.CanvasRename, canvasId, name),

@@ -16,6 +16,7 @@ import type {
   CanvasState,
   CanvasShare,
   CanvasView,
+  ScreenLook,
   ScreenVersion
 } from './canvas'
 import type { ChangesResult, FileDiff } from './changes'
@@ -356,8 +357,17 @@ export interface AtoxApi {
      * id его первой страницы.
      */
     create(chatId: string): Promise<string>
-    /** Добавляет в холст чата пустую страницу и возвращает её id. */
+    /** Добавляет в холст чата (или холст без чата, по его ключу) пустую страницу; её id. */
     addPage(chatId: string): Promise<string>
+    /**
+     * Создаёт холст без чата в проекте и возвращает id его первой страницы. С `look` на ней сразу
+     * стоит пустой экран этого размера.
+     */
+    createStandalone(projectId: string, name: string, look?: ScreenLook): Promise<string>
+    /** Ставит на страницу пустой экран выбранного размера и возвращает его id. */
+    addBlankScreen(canvasId: string, look: ScreenLook): Promise<string>
+    /** Привязывает холст без чата (все его страницы) к чату того же проекта, у которого холста нет. */
+    linkChat(canvasId: string, chatId: string): Promise<void>
     /** Задаёт порядок страниц холста чата: `pageIds` — все его страницы. */
     reorderPages(chatId: string, pageIds: string[]): Promise<void>
     /** Переименовывает страницу; имена страниц одного холста разные. */
@@ -521,6 +531,9 @@ export const IpcChannel = {
   CanvasChanged: 'canvas:changed',
   CanvasCreate: 'canvas:create',
   CanvasAddPage: 'canvas:add-page',
+  CanvasCreateStandalone: 'canvas:create-standalone',
+  CanvasAddBlankScreen: 'canvas:add-blank-screen',
+  CanvasLinkChat: 'canvas:link-chat',
   CanvasReorderPages: 'canvas:reorder-pages',
   CanvasRemoveCanvas: 'canvas:remove-canvas',
   CanvasRename: 'canvas:rename',

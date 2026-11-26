@@ -7,6 +7,7 @@ import {
   History,
   LayoutDashboard,
   LoaderCircle,
+  Plus,
   Scan,
   Share2
 } from 'lucide-react'
@@ -25,6 +26,8 @@ interface CanvasHeaderProps {
   onToggleHistory(): void
   toolsOpen: boolean
   onToggleTools(): void
+  /** Окно выбора размера нового пустого экрана. */
+  onAddScreen(): void
   onFit(): void
   onResetZoom(): void
   /** Выгрузка экранов идёт: кнопка занята. */
@@ -48,6 +51,7 @@ export function CanvasHeader({
   onToggleHistory,
   toolsOpen,
   onToggleTools,
+  onAddScreen,
   onFit,
   onResetZoom,
   exporting,
@@ -88,6 +92,15 @@ export function CanvasHeader({
       {canvas.archived && <span className="canvas-header__badge">Archived</span>}
 
       <div className="canvas-header__actions">
+        <button
+          type="button"
+          className="workspace-toolbar__button"
+          aria-label="Add blank screen"
+          title="Add a blank screen of any size"
+          onClick={onAddScreen}
+        >
+          <Plus className="icon" />
+        </button>
         {hasScreens && (
           <>
             <ZoomButton viewState={viewState} onClick={onResetZoom} />
