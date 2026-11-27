@@ -422,6 +422,10 @@ export function registerIpcHandlers({
       conversations.answerRequest(chatId, String(itemId), parseRequestAnswer(answer))
   )
 
+  ipcMain.handle(IpcChannel.ConversationsSignIn, (_event, chatId: string) =>
+    conversations.signIn(chatId)
+  )
+
   ipcMain.handle(IpcChannel.TerminalsAttach, (_event, projectId: string, size: unknown) =>
     terminals.attach(projectId, store.getProject(projectId).path, parseTerminalSize(size))
   )
@@ -630,6 +634,17 @@ export function registerIpcHandlers({
   ipcMain.handle(IpcChannel.CanvasAddPage, (_event, chatId: unknown) =>
     canvas.addPage(requireId(chatId))
   )
+  ipcMain.handle(
+    IpcChannel.CanvasCreateStandalone,
+    (_event, projectId: unknown, name: unknown, look: unknown) =>
+      canvas.createStandalone(requireId(projectId), name, look ?? undefined)
+  )
+  ipcMain.handle(IpcChannel.CanvasAddBlankScreen, (_event, canvasId: unknown, look: unknown) =>
+    canvas.addBlankScreen(requireId(canvasId), look)
+  )
+  ipcMain.handle(IpcChannel.CanvasLinkChat, (_event, canvasId: unknown, chatId: unknown) =>
+    canvas.linkChat(requireId(canvasId), requireId(chatId))
+  )
   ipcMain.handle(IpcChannel.CanvasReorderPages, (_event, chatId: unknown, pageIds: unknown) => {
     if (!Array.isArray(pageIds) || !pageIds.every((id) => typeof id === 'string')) {
       throw new Error('Invalid page list')
@@ -643,6 +658,16 @@ export function registerIpcHandlers({
     IpcChannel.CanvasRenameScreen,
     (_event, canvasId: unknown, screenId: unknown, name: unknown) =>
       canvas.renameScreen(requireId(canvasId), requireId(screenId), name)
+  )
+  ipcMain.handle(
+    IpcChannel.CanvasSetScreenGrid,
+    (_event, canvasId: unknown, screenId: unknown, grid: unknown) =>
+      canvas.setScreenGrid(requireId(canvasId), requireId(screenId), grid)
+  )
+  ipcMain.handle(
+    IpcChannel.CanvasResizeScreen,
+    (_event, canvasId: unknown, screenId: unknown, look: unknown) =>
+      canvas.resizeScreen(requireId(canvasId), requireId(screenId), look)
   )
   ipcMain.handle(
     IpcChannel.CanvasMoveScreen,

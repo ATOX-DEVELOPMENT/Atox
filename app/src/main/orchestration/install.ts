@@ -92,7 +92,10 @@ If your first message says you are a worker, do the task, then run \`atox report
 
 /** Устройства холста с размерами — из того же списка, что проверяет команда. */
 const CANVAS_DEVICES = Object.entries(SCREEN_DEVICES)
-  .map(([id, { name, width, height }]) => `- \`${id}\`: ${name}, ${width}x${height}`)
+  .map(
+    ([id, { name, width, height, category }]) =>
+      `- \`${id}\`: ${name}, ${width}x${height} (${category})`
+  )
   .join('\n')
 
 const CANVAS_SKILL = `---
@@ -115,11 +118,14 @@ Quick reference (details and props are in \`kit.md\`):
 ## Commands
 
 \`\`\`sh
-atox canvas                                                    # this chat's canvas: pages and their screens with device, size, file and build status
+atox canvas                                                    # this chat's canvas: pages and their screens with device, size, grid, file and build status
 atox canvas new "Pitch deck"                                   # one more page of the canvas (see "Several pages")
 atox canvas screen set Login .atox/canvas/login.tsx --device iphone
 atox canvas screen set "Admin dashboard" .atox/canvas/admin.tsx --device web
 atox canvas screen set Widget .atox/canvas/widget.tsx --size 360x640
+atox canvas screen set Widget --size 384x640                   # resize an existing screen; the file stays
+atox canvas screen grid Login                                  # the user's grid over the screen and all valid cells
+atox canvas screen grid Login --cell 24 --on                   # pick a grid by cell (or --columns 16) and show it; --off hides it
 atox canvas screen preview Login                               # PNG of the screen as the user sees it, plus problems
 atox canvas screen remove Login                                # removes the screen; the files stay
 atox canvas arrange "Login,Code,Sign up" "Feed,Post"          # rows of screens, left to right; rows top to bottom
@@ -141,6 +147,16 @@ atox canvas export png                                         # a folder of PNG
 5. \`set\` and \`preview\` also report problems in plain text: "Build failed" (file:line and the error), "Errors in the running screen" (exceptions and console errors), and "Layout problems" such as "Content is 1240 px tall but the screen is 844 px: it is cut off." Fix them in the code. When the build fails, the canvas keeps the last version that built; \`atox canvas\` shows the build error of each screen.
 
 Edit files with your editor tool, not with \`sed -i\` (on macOS it differs from GNU sed and fails). A command that printed an error changed nothing: do not assume the canvas shows the new version.
+
+## Screen tools and the grid
+
+The user double-clicks a screen on the canvas (or picks "Screen tools" in its context menu) to make it the working screen: a tools panel opens at the top right of the canvas, Escape closes it. In the panel the user changes the screen's size (width × height or a preset; this resizes the screen on the canvas, not your code) and turns on a Grid.
+
+- The grid is the user's alignment overlay. It is drawn by the canvas over the screen and is never part of the page: not in your file, not in previews, exports, share links or thumbnails. Never draw it yourself.
+- It always splits the screen into whole, equal squares: the cell size divides both the width and the height exactly, and the number of columns is even, so there are no cut rows or columns. For 1280x1200 the valid grids are 16 × 15 cells of 80px, 32 × 30 of 40px, 64 × 60 of 20px, 80 × 75 of 16px and smaller. Some sizes have no such grid (390x844, odd widths like 375); the panel and \`atox canvas screen grid\` then suggest the nearest sizes that have one.
+- \`atox canvas\` shows each screen's grid ("grid on: 32 × 30 cells · 40px", "grid off: …" or "grid: none"). When the grid is on, the user wants the design aligned to it: make widths, heights, paddings, gaps and offsets of blocks multiples of the cell (with a 40px cell: 40, 80, 120 px; half a cell for small gaps at most), and start and end blocks on cell lines. When it is off, design as usual.
+- \`atox canvas screen grid <name>\` prints the grid and every valid \`--cell\`/\`--columns\`; \`--cell <px>\` or \`--columns <N>\` picks one and shows it, \`--on\`/\`--off\` shows or hides it. An invalid value is rejected with the list of valid ones. Change the grid or the size only when the user asks or agrees: these are the user's tools.
+- \`atox canvas screen set <name> --size WxH\` (or \`--device <id>\`) resizes an existing screen without changing its file. After a resize the grid moves to the nearest valid cell.
 
 ## Arranging screens
 
@@ -181,7 +197,11 @@ The user, not you, names and arranges screens. If they renamed a screen, use the
 \`--device\` (default \`${DEFAULT_SCREEN_DEVICE}\`), sizes in CSS pixels:
 ${CANVAS_DEVICES}
 
-\`--size WxH\` sets a custom size without a device frame (each side ${SCREEN_SIZE.min} to ${SCREEN_SIZE.max}).
+\`--size WxH\` sets a custom size without a device frame (each side ${SCREEN_SIZE.min} to ${SCREEN_SIZE.max}). Prefer a device from the list when one matches: it has the right frame (phone, tablet, browser or window).
+
+## Blank screens from the user
+
+The user can create a canvas without a chat, or add a blank screen to a page, and choose its size (a device above, or a custom size with a frame). Such a screen points to an empty \`.html\` file in \`.atox/canvas/\`. When the user asks you to design it, write your \`.tsx\` file and run \`atox canvas screen set "<that screen's name>" <your file>\` without \`--device\` and \`--size\`: the screen keeps the size and frame the user chose. A canvas the user created without a chat becomes this chat's canvas when the user links it or starts an agent from it; then \`atox canvas\` shows it like any other.
 
 ## Design rules
 

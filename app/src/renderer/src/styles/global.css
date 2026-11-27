@@ -145,6 +145,7 @@
   --canvas-request-field-height: 64px;
   --canvas-request-field-max-height: 160px;
   --canvas-history-width: 340px;
+  --screen-tools-width: 300px;
   --canvas-history-radius: 14px;
   --canvas-ghost-width: 230px;
   --canvas-ghost-height: 150px;
@@ -171,6 +172,9 @@
   --canvas-group-border: light-dark(rgba(50, 40, 100, 0.14), rgba(255, 255, 255, 0.1));
   --canvas-screen-shadow-color: light-dark(rgba(40, 30, 90, 0.16), rgba(0, 0, 0, 0.5));
   --canvas-screen-background: #ffffff;
+  /* Линии сетки экрана двойные — тёмная и светлая рядом, поэтому видны на любой странице. */
+  --canvas-screen-grid-dark: rgba(20, 20, 40, 0.22);
+  --canvas-screen-grid-light: rgba(255, 255, 255, 0.3);
   --canvas-device-bezel: #101114;
   --canvas-chrome-background: #f4f4f8;
   --canvas-chrome-border: #e8e8ef;
@@ -3503,6 +3507,19 @@ ul {
   margin-top: 3px;
 }
 
+.message__body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+
+.message__actions {
+  display: flex;
+  gap: 8px;
+  white-space: normal;
+}
+
 /* Сжатие разговора: разделитель, выше которого агент помнит только сводку */
 
 /* Ход оборвался и продолжается сам: приглушённая строка, без тревоги, пока есть попытки. */
@@ -6672,6 +6689,308 @@ button.usage-indicator[data-warning='true']:hover {
   pointer-events: none;
 }
 
+/* Рабочий экран (двойной клик): рамка толще и с ореолом, экран поверх соседей. */
+.canvas-screen[data-working='true'] {
+  z-index: 1;
+}
+
+.canvas-screen[data-working='true'] .canvas-screen__ring {
+  border-width: calc(var(--canvas-ring-width) * 1.5 / var(--z));
+  box-shadow: 0 0 0 calc(6px / var(--z)) color-mix(in srgb, var(--color-accent) 22%, transparent);
+}
+
+/*
+ * Сетка экрана: квадратные клетки поверх iframe, ровно по его месту в рамке устройства. Линия
+ * в пиксель окна при любом масштабе, но не толще восьмой части клетки — мелкая сетка на малом
+ * масштабе не заливает экран. Это слой холста: в страницу, выгрузку и ссылку он не попадает.
+ */
+.canvas-screen__grid {
+  --grid-line: min(calc(1px / var(--z)), calc(var(--grid-cell) / 8));
+  position: absolute;
+  top: var(--frame-top);
+  left: var(--frame-side);
+  border-radius: var(--screen-radius, 0);
+  pointer-events: none;
+  background-image:
+    linear-gradient(
+      to right,
+      var(--canvas-screen-grid-dark) var(--grid-line),
+      transparent var(--grid-line)
+    ),
+    linear-gradient(
+      to bottom,
+      var(--canvas-screen-grid-dark) var(--grid-line),
+      transparent var(--grid-line)
+    ),
+    linear-gradient(
+      to right,
+      transparent var(--grid-line),
+      var(--canvas-screen-grid-light) var(--grid-line),
+      var(--canvas-screen-grid-light) calc(var(--grid-line) * 2),
+      transparent calc(var(--grid-line) * 2)
+    ),
+    linear-gradient(
+      to bottom,
+      transparent var(--grid-line),
+      var(--canvas-screen-grid-light) var(--grid-line),
+      var(--canvas-screen-grid-light) calc(var(--grid-line) * 2),
+      transparent calc(var(--grid-line) * 2)
+    );
+  background-size: var(--grid-cell) var(--grid-cell);
+  /* Клетки целые, поэтому правый и нижний край — тоже линия сетки: последние квадраты закрыты. */
+  box-shadow: inset calc(var(--grid-line) * -1) calc(var(--grid-line) * -1) 0
+    var(--canvas-screen-grid-dark);
+}
+
+/*
+ * Панель рабочего экрана: справа сверху поверх холста, в пикселях окна (не масштабируется с
+ * холстом). Ширина и высота считаются с полями и рамкой, поэтому панель целиком помещается в поле
+ * холста при любом размере окна; если высоты не хватает, панель прокручивается.
+ */
+.screen-tools {
+  position: absolute;
+  top: var(--canvas-overlay-inset);
+  right: var(--canvas-overlay-inset);
+  z-index: 3;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: var(--screen-tools-width);
+  max-width: calc(100% - var(--canvas-overlay-inset) * 2);
+  max-height: calc(100% - var(--canvas-overlay-inset) * 2);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 12px;
+  border: 1px solid var(--color-menu-border);
+  border-radius: var(--canvas-request-radius);
+  font-size: 13px;
+  background: var(--color-menu);
+  box-shadow: var(--shadow-menu);
+  cursor: default;
+}
+
+.screen-tools__header {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.screen-tools__heading {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.screen-tools__title {
+  overflow: hidden;
+  font-size: 13px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.screen-tools__subtitle {
+  font-size: var(--font-size-small);
+  color: var(--color-text-muted);
+}
+
+.screen-tools__close {
+  flex-shrink: 0;
+  margin: -4px -4px 0 0;
+}
+
+.screen-tools__section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 10px;
+  border-top: 1px solid var(--color-menu-border);
+}
+
+.screen-tools__row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+}
+
+.screen-tools__icon {
+  color: var(--color-text-muted);
+}
+
+.screen-tools__label {
+  flex: 1;
+  font-weight: 500;
+}
+
+.screen-tools__stepper {
+  display: flex;
+  gap: 4px;
+}
+
+.screen-tools__step,
+.screen-tools__columns {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: var(--canvas-button-height);
+  border-radius: 8px;
+  background: var(--color-hover);
+}
+
+.screen-tools__step {
+  flex-shrink: 0;
+  width: var(--canvas-button-height);
+}
+
+.screen-tools__columns {
+  flex: 1;
+  gap: 6px;
+  min-width: 0;
+  padding: 0 10px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.screen-tools__columns span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.screen-tools__step:hover:not(:disabled),
+.screen-tools__columns:hover {
+  background: var(--color-active);
+}
+
+.screen-tools__step:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.screen-tools__hint {
+  margin: 0;
+  font-size: var(--font-size-small);
+  color: var(--color-text-muted);
+}
+
+.screen-tools__presets {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: 24px;
+  padding: 0 6px 0 8px;
+  border-radius: 6px;
+  font-size: var(--font-size-small);
+  color: var(--color-text-muted);
+  background: var(--color-hover);
+}
+
+.screen-tools__presets:hover {
+  color: var(--color-text);
+  background: var(--color-active);
+}
+
+.screen-tools__size {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.screen-tools__number {
+  box-sizing: border-box;
+  flex: 1;
+  min-width: 0;
+  height: var(--canvas-button-height);
+  padding: 0 8px;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  font: inherit;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text);
+  background: var(--color-surface);
+  -moz-appearance: textfield;
+}
+
+.screen-tools__number::-webkit-inner-spin-button,
+.screen-tools__number::-webkit-outer-spin-button {
+  margin: 0;
+  -webkit-appearance: none;
+}
+
+.screen-tools__number:focus-visible {
+  outline: none;
+  border-color: var(--color-accent);
+}
+
+.screen-tools__number[aria-invalid='true'] {
+  border-color: var(--color-danger);
+}
+
+.screen-tools__times {
+  color: var(--color-text-muted);
+}
+
+.screen-tools__apply {
+  flex-shrink: 0;
+  height: var(--canvas-button-height);
+  padding: 0 10px;
+  border-radius: 8px;
+  font-weight: 500;
+  background: var(--color-hover);
+}
+
+.screen-tools__apply:hover:not(:disabled) {
+  background: var(--color-active);
+}
+
+.screen-tools__apply:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.screen-tools__suggest {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.screen-tools__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.screen-tools__chip {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  height: 24px;
+  padding: 0 8px;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  font-size: var(--font-size-small);
+  font-variant-numeric: tabular-nums;
+  line-height: 22px;
+}
+
+.screen-tools__chip:hover {
+  border-color: var(--color-accent);
+  background: var(--color-hover);
+}
+
+.screen-tools__chip-grid {
+  color: var(--color-text-muted);
+}
+
+.screen-tools__error {
+  margin: 0;
+  font-size: var(--font-size-small);
+  color: var(--color-danger);
+}
+
 /* Плашка поверх холста: работа агента. */
 .agent-bar {
   position: absolute;
@@ -7752,4 +8071,152 @@ button.usage-indicator[data-warning='true']:hover {
   background: var(--color-accent);
   border-radius: 8px;
   pointer-events: none;
+}
+
+/* Новый холст без чата и пустой экран: выбор размера */
+
+.canvas-list__new {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 14px;
+  white-space: nowrap;
+}
+
+.canvas-list__new .icon {
+  width: 15px;
+  height: 15px;
+}
+
+.screen-size {
+  width: min(640px, 100%);
+}
+
+.screen-size .start-task__body {
+  overflow-y: auto;
+}
+
+.screen-size__row {
+  display: flex;
+  align-items: flex-end;
+  gap: 16px;
+}
+
+.screen-size__grow {
+  flex: 1;
+  min-width: 0;
+}
+
+.screen-size__input {
+  width: 100%;
+  height: 34px;
+  padding: 0 10px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  font: inherit;
+  font-size: 13.5px;
+  color: var(--color-text);
+  background: var(--color-hover);
+  outline: none;
+  user-select: text;
+}
+
+.screen-size__input:focus {
+  border-color: var(--color-accent-text);
+}
+
+.screen-size__input[aria-invalid='true'] {
+  border-color: var(--color-danger, #d93f3f);
+}
+
+.screen-size__tabs {
+  align-self: flex-start;
+}
+
+.screen-size__presets {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 8px;
+}
+
+.screen-size__preset {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  padding: 10px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: calc(var(--radius) + 2px);
+  text-align: left;
+  color: var(--color-text);
+  background: var(--color-hover);
+}
+
+.screen-size__preset:hover {
+  background: var(--color-active);
+}
+
+.screen-size__preset[aria-checked='true'] {
+  border-color: var(--color-accent-text);
+  box-shadow: 0 0 0 1px var(--color-accent-text);
+}
+
+.screen-size__preset-name {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.screen-size__preset-size {
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text-muted);
+}
+
+.screen-size__custom {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.screen-size__dimensions {
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+}
+
+.screen-size__dimension {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.screen-size__dimension-label,
+.screen-size__frames-label {
+  font-size: 12px;
+  color: var(--color-text-muted);
+}
+
+.screen-size__number {
+  width: 110px;
+  font-variant-numeric: tabular-nums;
+}
+
+.screen-size__times,
+.screen-size__unit {
+  padding-bottom: 8px;
+  color: var(--color-text-muted);
+}
+
+.screen-size__frames {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+}
+
+.screen-size__error {
+  margin: 0;
+  font-size: var(--font-size-small);
+  color: var(--color-danger, #d93f3f);
 }

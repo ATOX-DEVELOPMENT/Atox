@@ -41,6 +41,8 @@ const WHEEL_ZOOM_DELTA_LIMIT = 40
 const WHEEL_LINE_HEIGHT = 16
 /** Пауза, после которой вид сохраняется: не на каждом кадре жеста. */
 const VIEW_SAVE_DELAY = 600
+/** Второй клик по тому же экрану не позже этого — двойной: экран становится рабочим, мс. */
+const DOUBLE_CLICK_MS = 400
 /** Сколько длится перелёт к экрану после клика, мс. */
 const FOCUS_DURATION = 380
 /** Ближе друг к другу точки сетки на экране не рисуются: на малом масштабе их берут через одну. */
@@ -63,6 +65,10 @@ interface CanvasStageProps {
   onSelectScreen(screenId: string | null): void
   /** Клик по экрану: холст подвёл к нему вид. */
   onFocusScreen(screenId: string): void
+  /** Рабочий экран: у него открыта панель инструментов. */
+  workingScreenId: string | null
+  /** Двойной клик по экрану делает его рабочим; `null` — клик по пустому месту выходит из режима. */
+  onWorkScreen(screenId: string | null): void
   /** Версия из истории, которую показывает один из экранов. */
   preview: { screenId: string; versionId: string } | null
   chatTitle: string
@@ -81,7 +87,8 @@ interface Drag {
 /**
  * Бесконечный холст с экранами: колесо и трекпад двигают его, щипок и ⌘/Ctrl с колесом
  * масштабируют вокруг курсора, протяжка по пустому месту двигает, протяжка экрана переносит
- * экран, клик по экрану открывает «Fix». Сдвиг и масштаб пишутся прямо в transform, без
+ * экран, клик по экрану подводит к нему вид, двойной клик делает его рабочим (панель
+ * инструментов), «Fix» — в меню экрана. Сдвиг и масштаб пишутся прямо в transform, без
  * перерисовки React.
  */
 export function CanvasStage({
@@ -90,6 +97,8 @@ export function CanvasStage({
   selectedScreenId,
   onSelectScreen,
   onFocusScreen,
+  workingScreenId,
+  onWorkScreen,
   preview,
   chatTitle,
   children,
@@ -404,6 +413,7 @@ export function CanvasStage({
       setPanning(false)
       if (!moved) {
         onSelectScreen(null)
+        onWorkScreen(null)
       }
     }
     stage.addEventListener('pointermove', onMove)
@@ -510,6 +520,9 @@ export function CanvasStage({
     [viewState]
   )
 
+  // Двойной клик считается здесь, а не событием dblclick: кликом считается только нажатие без
+  // протяжки, поэтому быстрый перенос экрана не открывает его инструменты.
+  const lastClickRef = useRef<{ screenId: string; at: number } | null>(null)
   const handleScreenPointerDown = useCallback(
     (screenId: string, event: ReactPointerEvent<HTMLElement>) => {
       const origin = screensRef.current.find(({ id }) => id === screenId)
@@ -521,10 +534,20 @@ export function CanvasStage({
         event,
         new Set([screenId]),
         (dx, dy) => window.atox.canvas.moveScreen(canvasId, screenId, from.x + dx, from.y + dy),
-        () => focusScreen(screenId)
+        () => {
+          const now = performance.now()
+          const last = lastClickRef.current
+          if (last?.screenId === screenId && now - last.at <= DOUBLE_CLICK_MS) {
+            lastClickRef.current = null
+            onWorkScreen(screenId)
+            return
+          }
+          lastClickRef.current = { screenId, at: now }
+          focusScreen(screenId)
+        }
       )
     },
-    [canvasId, startMove, focusScreen]
+    [canvasId, startMove, focusScreen, onWorkScreen]
   )
 
   const groupsRef = useRef(groups)
@@ -574,11 +597,13 @@ export function CanvasStage({
             screen={screen}
             position={positionOf(screen)}
             selected={screen.id === selectedScreenId}
+            working={screen.id === workingScreenId}
             dragging={drag?.ids.has(screen.id) ?? false}
             previewVersionId={preview?.screenId === screen.id ? preview.versionId : null}
             onPointerDown={handleScreenPointerDown}
             onFocus={focusScreen}
             onFix={onSelectScreen}
+            onWork={onWorkScreen}
           />
         ))}
         <CanvasLinks links={canvas.links} screens={screens} bounds={bounds} />

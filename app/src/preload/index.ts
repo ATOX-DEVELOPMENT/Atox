@@ -166,6 +166,7 @@ const api: AtoxApi = {
       ipcRenderer.invoke(IpcChannel.ConversationsReorderQueued, chatId, itemIds),
     answerRequest: (chatId, itemId, answer) =>
       ipcRenderer.invoke(IpcChannel.ConversationsAnswerRequest, chatId, itemId, answer),
+    signIn: (chatId) => ipcRenderer.invoke(IpcChannel.ConversationsSignIn, chatId),
     onEvent: conversationEvents.onEvent,
     onAnyEvent: conversationEvents.onAnyEvent,
     onRunningChange: conversationEvents.onRunningChange,
@@ -315,11 +316,20 @@ const api: AtoxApi = {
     },
     create: (chatId) => ipcRenderer.invoke(IpcChannel.CanvasCreate, chatId),
     addPage: (chatId) => ipcRenderer.invoke(IpcChannel.CanvasAddPage, chatId),
+    createStandalone: (projectId, name, look) =>
+      ipcRenderer.invoke(IpcChannel.CanvasCreateStandalone, projectId, name, look),
+    addBlankScreen: (canvasId, look) =>
+      ipcRenderer.invoke(IpcChannel.CanvasAddBlankScreen, canvasId, look),
+    linkChat: (canvasId, chatId) => ipcRenderer.invoke(IpcChannel.CanvasLinkChat, canvasId, chatId),
     reorderPages: (chatId, pageIds) =>
       ipcRenderer.invoke(IpcChannel.CanvasReorderPages, chatId, pageIds),
     rename: (canvasId, name) => ipcRenderer.invoke(IpcChannel.CanvasRename, canvasId, name),
     renameScreen: (canvasId, screenId, name) =>
       ipcRenderer.invoke(IpcChannel.CanvasRenameScreen, canvasId, screenId, name),
+    setScreenGrid: (canvasId, screenId, grid) =>
+      ipcRenderer.invoke(IpcChannel.CanvasSetScreenGrid, canvasId, screenId, grid),
+    resizeScreen: (canvasId, screenId, look) =>
+      ipcRenderer.invoke(IpcChannel.CanvasResizeScreen, canvasId, screenId, look),
     moveScreen: (canvasId, screenId, x, y) =>
       ipcRenderer.invoke(IpcChannel.CanvasMoveScreen, canvasId, screenId, x, y),
     renameGroup: (canvasId, groupId, name) =>

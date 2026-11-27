@@ -1,10 +1,11 @@
 import { useEffect, useState, type ReactNode } from 'react'
-import { Search } from 'lucide-react'
-import { useCanvases } from '../../hooks/CanvasesContext'
+import { Plus, Search } from 'lucide-react'
+import { useCanvasNavigation, useCanvases } from '../../hooks/CanvasesContext'
 import { useProjectsContext } from '../../hooks/ProjectsContext'
 import { canvasOwner } from '../../lib/canvasOwner'
 import { chatCanvases } from '../../lib/chatCanvas'
 import { CanvasCard } from './CanvasCard'
+import { ScreenSizeDialog } from './ScreenSizeDialog'
 
 /** Как часто обновлять «5m», «3h» у карточек: точнее минуты они не показывают. */
 const CLOCK_TICK_MS = 60_000
@@ -21,9 +22,15 @@ export function CanvasList({ onClose }: CanvasListProps) {
   const { projects } = useProjectsContext()
   const [tab, setTab] = useState<Tab>('active')
   const [query, setQuery] = useState('')
+  const [creating, setCreating] = useState(false)
+  const navigation = useCanvasNavigation()
   const now = useMinuteClock()
 
   useEffect(() => {
+    if (creating) {
+      // Esc, пока открыто окно нового холста, закрывает только окно.
+      return undefined
+    }
     // Esc, который уже обработало поле (поиск, переименование), страницу не закрывает.
     const closeOnEscape = (event: KeyboardEvent) => {
       if (event.key === 'Escape' && !event.defaultPrevented) {
@@ -32,7 +39,7 @@ export function CanvasList({ onClose }: CanvasListProps) {
     }
     window.addEventListener('keydown', closeOnEscape)
     return () => window.removeEventListener('keydown', closeOnEscape)
-  }, [onClose])
+  }, [onClose, creating])
 
   // Один холст на чат: страницы чата собираются в одну карточку.
   const entries = chatCanvases(canvases ?? [])
@@ -90,6 +97,20 @@ export function CanvasList({ onClose }: CanvasListProps) {
             }}
           />
         </label>
+        <button
+          type="button"
+          className="settings__button settings__button--primary canvas-list__new"
+          disabled={projects.length === 0}
+          title={
+            projects.length === 0
+              ? 'Add a project first: screen files are saved in it'
+              : 'Create a canvas without a chat'
+          }
+          onClick={() => setCreating(true)}
+        >
+          <Plus className="icon" aria-hidden />
+          New canvas
+        </button>
       </header>
 
       <div className="canvas-list__body">
@@ -113,6 +134,17 @@ export function CanvasList({ onClose }: CanvasListProps) {
           </ul>
         )}
       </div>
+      {creating && (
+        <ScreenSizeDialog
+          mode="canvas"
+          onSubmit={async ({ name, projectId, look }) => {
+            const canvasId = await window.atox.canvas.createStandalone(projectId, name, look)
+            setCreating(false)
+            navigation.openCanvas(canvasId)
+          }}
+          onClose={() => setCreating(false)}
+        />
+      )}
     </section>
   )
 }
@@ -130,7 +162,7 @@ function emptyHint(tab: Tab, query: string, count: number): ReactNode {
   }
   return tab === 'active' ? (
     <>
-      Create one from a chat’s context menu. Agents can also create one with{' '}
+      Create one with New canvas, or from a chat’s context menu. Agents can also create one with{' '}
       <code className="canvas-list__code">atox canvas</code>.
     </>
   ) : (

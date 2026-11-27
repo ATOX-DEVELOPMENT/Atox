@@ -2,6 +2,7 @@ import {
   Archive,
   ArchiveRestore,
   ArrowUpRight,
+  Bot,
   Copy,
   FileImage,
   FileText,
@@ -9,14 +10,15 @@ import {
   Pencil,
   Presentation,
   RefreshCw,
+  Link,
   Trash2,
   Unlink
 } from 'lucide-react'
-import type { Canvas, CanvasExportFormat } from '../../../shared/canvas'
+import { isStandaloneCanvas, type Canvas, type CanvasExportFormat } from '../../../shared/canvas'
 import type { CanvasNavigation } from '../hooks/CanvasesContext'
 import { showMenu, type MenuAnchor, type MenuItem } from './menu'
 
-type CanvasAction = 'open' | 'chat' | 'rename' | 'archive' | 'remove'
+type CanvasAction = 'open' | 'chat' | 'link' | 'agent' | 'rename' | 'archive' | 'remove'
 
 interface CanvasMenuOptions {
   /** Пункт «Open»: в списке холстов и в сайдбаре; на странице самого холста его нет. */
@@ -26,6 +28,14 @@ interface CanvasMenuOptions {
   navigation: CanvasNavigation
   /** Переименование страницы там, где открыто меню; нет — пункта в меню нет. */
   onRename?(): void
+  /**
+   * Холст без чата: привязать к чату и позвать агента. Нет — у холста без чата пунктов нет
+   * (например, в сайдбаре, где такие холсты не показываются).
+   */
+  standalone?: {
+    linkChat(canvas: Canvas, anchor: MenuAnchor): Promise<void>
+    startAgent(canvas: Canvas): Promise<void>
+  }
 }
 
 /** Меню выгрузки: во что превратить экраны холста. `null` — меню закрыли ничего не выбрав. */
@@ -59,22 +69,25 @@ export async function showShareMenu(anchor: MenuAnchor): Promise<ShareAction | n
 export async function showCanvasMenu(
   canvas: Canvas,
   anchor: MenuAnchor,
-  { withOpen, chatAvailable, navigation, onRename }: CanvasMenuOptions
+  { withOpen, chatAvailable, navigation, onRename, standalone }: CanvasMenuOptions
 ): Promise<void> {
-  const chat: MenuItem<CanvasAction> = {
-    action: 'chat',
-    label: 'Go to chat',
-    icon: <MessageCircle />,
-    enabled: chatAvailable
-  }
+  // У холста без чата вместо «Go to chat» — привязка к чату и новый агент.
+  const chatItems: MenuItem<CanvasAction>[] = isStandaloneCanvas(canvas)
+    ? standalone
+      ? [
+          { action: 'agent', label: 'Start agent', icon: <Bot /> },
+          { action: 'link', label: 'Link to chat…', icon: <Link /> }
+        ]
+      : []
+    : [{ action: 'chat', label: 'Go to chat', icon: <MessageCircle />, enabled: chatAvailable }]
   const rename: MenuItem<CanvasAction>[] = onRename
     ? [{ action: 'rename', label: 'Rename page', icon: <Pencil /> }]
     : []
   // В списке и в сайдбаре холст сначала открывают; на его странице первым идёт переименование.
   const items: MenuItem<CanvasAction>[] = [
     ...(withOpen
-      ? [{ action: 'open' as const, label: 'Open', icon: <ArrowUpRight /> }, chat]
-      : [...rename, chat]),
+      ? [{ action: 'open' as const, label: 'Open', icon: <ArrowUpRight /> }, ...chatItems]
+      : [...rename, ...chatItems]),
     { type: 'separator' },
     canvas.archived
       ? { action: 'archive', label: 'Unarchive', icon: <ArchiveRestore /> }
@@ -87,6 +100,12 @@ export async function showCanvasMenu(
       break
     case 'chat':
       navigation.openChat(canvas.chatId)
+      break
+    case 'agent':
+      void standalone?.startAgent(canvas)
+      break
+    case 'link':
+      void standalone?.linkChat(canvas, anchor)
       break
     case 'rename':
       onRename?.()

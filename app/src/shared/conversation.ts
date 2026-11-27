@@ -85,6 +85,9 @@ export interface ContextReport {
  */
 export const CHAT_COMMANDS = ['usage', 'context', 'clear'] as const
 
+/** Действие, которое лента предлагает под ошибкой хода. */
+export type ErrorAction = 'sign-in'
+
 export type ChatCommand = (typeof CHAT_COMMANDS)[number]
 
 export function isChatCommand(value: unknown): value is ChatCommand {
@@ -246,7 +249,13 @@ export type TimelineItem =
       /** Почему сжать не удалось. */
       error?: string
     }
-  | { kind: 'error'; id: string; message: string }
+  | {
+      kind: 'error'
+      id: string
+      message: string
+      /** Что предложить рядом с ошибкой: `sign-in` — вход истёк или его нет, кнопка «Sign in». */
+      action?: ErrorAction
+    }
   /**
    * Ход оборвался — пропала сеть или упал процесс агента, — и Atox продолжает его сам:
    * ждёт сеть, перезапускает сессию и просит агента продолжить. Одна строка на ход,
