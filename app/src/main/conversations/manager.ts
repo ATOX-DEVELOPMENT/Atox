@@ -207,11 +207,38 @@ export class ConversationManager {
    * закрытый и загруженный заново, не начнёт нумерацию сначала.
    */
   private lastSeq = 0
+  /** Чаты, заполненность контекста которых сейчас читается для кольца. */
+  private readonly restoringContext = new Set<string>()
 
   constructor(private readonly services: ConversationServices) {}
 
   async snapshot(chatId: string): Promise<ConversationSnapshot> {
     return (await this.conversation(chatId)).snapshot
+  }
+
+  /**
+   * Чат открыли, а заполненности его контекста Atox не знает: например, последний ответ был
+   * до того, как Atox начал её сохранять. Агента спрашивают один раз и без хода — кольцо
+   * появляется, не дожидаясь следующего сообщения. Агент не умеет — кольца не будет до ответа.
+   */
+  restoreContext(chatId: string): void {
+    const conversation = this.loaded.get(chatId)
+    const agent = this.services.store.findChat(chatId)?.chat.agent
+    if (
+      !conversation ||
+      !agent ||
+      conversation.snapshot.usage ||
+      !conversation.sessionId ||
+      conversation.sessionAgent !== agent ||
+      !findAgent(agent)?.reportsContext ||
+      this.restoringContext.has(chatId)
+    ) {
+      return
+    }
+    this.restoringContext.add(chatId)
+    this.context(chatId)
+      .catch((error) => console.error('Failed to read the context of an opened chat', error))
+      .finally(() => this.restoringContext.delete(chatId))
   }
 
   /**

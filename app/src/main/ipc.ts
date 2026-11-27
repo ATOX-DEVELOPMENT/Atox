@@ -374,9 +374,12 @@ export function registerIpcHandlers({
 
   ipcMain.handle(IpcChannel.ConversationsSummaries, () => conversations.summaries())
 
-  ipcMain.handle(IpcChannel.ConversationsSnapshot, (_event, chatId: string) =>
-    conversations.snapshot(chatId)
-  )
+  ipcMain.handle(IpcChannel.ConversationsSnapshot, async (_event, chatId: string) => {
+    const snapshot = await conversations.snapshot(chatId)
+    // Чат открыт в окне: если кольцу контекста нечего показать, его заполненность читается.
+    conversations.restoreContext(chatId)
+    return snapshot
+  })
   ipcMain.handle(
     IpcChannel.ConversationsSend,
     (_event, chatId: string, text: unknown, attachments: unknown) => {
