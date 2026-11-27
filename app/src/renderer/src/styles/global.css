@@ -3507,6 +3507,19 @@ ul {
   margin-top: 3px;
 }
 
+.message__body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+
+.message__actions {
+  display: flex;
+  gap: 8px;
+  white-space: normal;
+}
+
 /* Сжатие разговора: разделитель, выше которого агент помнит только сводку */
 
 /* Ход оборвался и продолжается сам: приглушённая строка, без тревоги, пока есть попытки. */

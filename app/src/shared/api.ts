@@ -171,6 +171,8 @@ export interface AtoxApi {
     reorderQueued(chatId: string, itemIds: string[]): Promise<void>
     /** Ответ на разрешение, вопросы или форму агента — элемент ленты `approval` или `question`. */
     answerRequest(chatId: string, itemId: string, answer: RequestAnswer): Promise<void>
+    /** Вход в аккаунт агента чата — кнопка под ошибкой входа, то же, что `/login`. */
+    signIn(chatId: string): Promise<void>
     /** События ленты одного чата. */
     onEvent(chatId: string, listener: (event: ConversationEvent) => void): () => void
     /** В каком-либо чате что-то произошло: пора обновить обзор агентов. */
@@ -475,6 +477,7 @@ export const IpcChannel = {
   ConversationsEditQueued: 'conversations:edit-queued',
   ConversationsReorderQueued: 'conversations:reorder-queued',
   ConversationsAnswerRequest: 'conversations:answer-request',
+  ConversationsSignIn: 'conversations:sign-in',
   ConversationsCommands: 'conversations:commands',
   ConversationsRunCommand: 'conversations:run-command',
   ConversationsContext: 'conversations:context',

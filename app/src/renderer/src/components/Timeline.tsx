@@ -531,12 +531,7 @@ function TimelineEntry({ chatId, item }: { chatId: string; item: TimelineItem })
     case 'reasoning':
       return <Markdown text={item.text} />
     case 'error':
-      return (
-        <div className="message message--error" role="alert">
-          <CircleAlert className="icon" />
-          <span>{item.message}</span>
-        </div>
-      )
+      return <ErrorMessage chatId={chatId} item={item} />
     case 'approval':
       return <ApprovalCard chatId={chatId} item={item} />
     case 'question':
@@ -562,6 +557,44 @@ function TimelineEntry({ chatId, item }: { chatId: string; item: TimelineItem })
     case 'tool':
       return null
   }
+}
+
+/**
+ * Ошибка хода. Если вход в аккаунт истёк, под ней кнопка входа — то же, что `/login`; после
+ * входа сообщение можно отправить снова.
+ */
+function ErrorMessage({
+  chatId,
+  item
+}: {
+  chatId: string
+  item: Extract<TimelineItem, { kind: 'error' }>
+}) {
+  const [opening, setOpening] = useState(false)
+  const signIn = () => {
+    setOpening(true)
+    void window.atox.conversations.signIn(chatId).finally(() => setOpening(false))
+  }
+  return (
+    <div className="message message--error" role="alert">
+      <CircleAlert className="icon" />
+      <div className="message__body">
+        <span>{item.message}</span>
+        {item.action === 'sign-in' && (
+          <div className="message__actions">
+            <button
+              type="button"
+              className="approval__button approval__button--allow"
+              disabled={opening}
+              onClick={signIn}
+            >
+              {opening ? 'Opening sign-in…' : 'Sign in to Claude'}
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  )
 }
 
 /** Ход оборвался, и Atox продолжает его сам: тихая строка вместо сырой ошибки. */

@@ -38,6 +38,7 @@ import {
 } from '../../shared/conversation'
 import type { AccountIdentity } from '../../shared/accounts'
 import { AsyncQueue } from './asyncQueue'
+import { isAuthError } from './authErrors'
 import { readClaudeMcpServers, readClaudePlugins, readClaudeSkills } from './claudeIntegrations'
 import { displayPath, errorMessage } from './display'
 import { elicitationContent, elicitationFields } from './elicitation'
@@ -578,6 +579,8 @@ class ClaudeSession implements AgentSession {
   private sessionLimit: StreamedSessionLimit | null = null
   /** Пользователь остановил ответ: ошибка прерванного хода — не ошибка. */
   private interrupted = false
+  /** Запрос к API в этом ходе не прошёл вход: ошибка хода получит кнопку входа. */
+  private authFailed = false
   /**
    * Последнее сжатие разговора в этом ответе: его элемент ленты обновляется по ходу, а итог
    * с числом токенов может прийти уже после статуса об успехе.
@@ -689,8 +692,11 @@ class ClaudeSession implements AgentSession {
     )
   }
 
-  /** Вход в аккаунт Claude из чата (`/login`): страница открывается в браузере, итог дописывается в ту же запись. */
-  private async signIn(): Promise<void> {
+  /**
+   * Вход в аккаунт Claude из чата (`/login` или кнопка под ошибкой входа): страница открывается
+   * в браузере, итог дописывается в ту же запись.
+   */
+  async signIn(): Promise<void> {
     const { url, done } = await startSignIn(this.options)
     const id = randomUUID()
     this.options.openLink(url)
@@ -824,11 +830,7 @@ class ClaudeSession implements AgentSession {
         this.handle(message)
       }
     } catch (error) {
-      this.events.item({
-        kind: 'error',
-        id: randomUUID(),
-        message: errorMessage(error)
-      })
+      this.reportError(errorMessage(error))
     } finally {
       this.requests.cancelAll()
       this.events.closed()
@@ -886,6 +888,11 @@ class ClaudeSession implements AgentSession {
         // Запрос к API не удался: текст ошибки придёт с концом хода (`result` с `is_error`)
         // и покажется ошибкой, а не репликой агента. Обрезанный по длине ответ — настоящий.
         if (message.error && message.error !== 'max_output_tokens') {
+          // Текст ошибки входа бывает любым, а признак у сообщения точный: по нему под ошибкой
+          // хода появится кнопка входа.
+          if (message.error === 'authentication_failed') {
+            this.authFailed = true
+          }
           break
         }
         this.handleAssistantMessage(
@@ -903,6 +910,7 @@ class ClaudeSession implements AgentSession {
         } else if (message.subtype === 'success' && message.is_error) {
           this.reportError(message.result || 'Claude stopped with an error.')
         }
+        this.authFailed = false
         this.streamingMessageId = null
         this.streamed.clear()
         // Ответ закончился посреди сжатия (например, его остановили) — сжатие не состоялось.
@@ -1125,8 +1133,15 @@ class ClaudeSession implements AgentSession {
     }
   }
 
+  /** Ошибка входа получает кнопку «Sign in»: пользователь войдёт заново прямо из чата. */
   private reportError(message: string): void {
-    this.events.item({ kind: 'error', id: randomUUID(), message })
+    const signIn = this.authFailed || isAuthError(message)
+    this.events.item({
+      kind: 'error',
+      id: randomUUID(),
+      message,
+      ...(signIn && { action: 'sign-in' as const })
+    })
   }
 }
 

@@ -166,6 +166,7 @@ const api: AtoxApi = {
       ipcRenderer.invoke(IpcChannel.ConversationsReorderQueued, chatId, itemIds),
     answerRequest: (chatId, itemId, answer) =>
       ipcRenderer.invoke(IpcChannel.ConversationsAnswerRequest, chatId, itemId, answer),
+    signIn: (chatId) => ipcRenderer.invoke(IpcChannel.ConversationsSignIn, chatId),
     onEvent: conversationEvents.onEvent,
     onAnyEvent: conversationEvents.onAnyEvent,
     onRunningChange: conversationEvents.onRunningChange,
