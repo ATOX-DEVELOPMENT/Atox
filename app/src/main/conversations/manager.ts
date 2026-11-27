@@ -476,6 +476,29 @@ export class ConversationManager {
   }
 
   /**
+   * Вход в аккаунт агента чата — кнопка «Sign in» под ошибкой входа. То же, что `/login`:
+   * страница входа открывается в браузере, а после входа сообщение можно отправить снова.
+   */
+  async signIn(chatId: string): Promise<void> {
+    const conversation = await this.conversation(chatId)
+    const agent = conversation.sessionAgent ?? this.findChat(chatId).chat.agent
+    try {
+      const session = await this.ensureSession(chatId, conversation, agent)
+      if (!session.signIn) {
+        throw new Error(`${findAgent(agent)?.name ?? agent} cannot sign in from the chat.`)
+      }
+      await session.signIn()
+    } catch (error) {
+      if (!conversation.disposed) {
+        this.emit(chatId, conversation, {
+          type: 'item',
+          item: { kind: 'error', id: randomUUID(), message: errorMessage(error) }
+        })
+      }
+    }
+  }
+
+  /**
    * Меняет агента, модель или эффорт чата; всё это вступает в силу со следующего сообщения,
    * а начатый ответ доводит до конца прежний агент. Агента можно сменить и посреди разговора:
    * новый получит переписку и продолжит её.

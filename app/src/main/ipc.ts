@@ -422,6 +422,10 @@ export function registerIpcHandlers({
       conversations.answerRequest(chatId, String(itemId), parseRequestAnswer(answer))
   )
 
+  ipcMain.handle(IpcChannel.ConversationsSignIn, (_event, chatId: string) =>
+    conversations.signIn(chatId)
+  )
+
   ipcMain.handle(IpcChannel.TerminalsAttach, (_event, projectId: string, size: unknown) =>
     terminals.attach(projectId, store.getProject(projectId).path, parseTerminalSize(size))
   )
