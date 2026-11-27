@@ -568,7 +568,9 @@ function isEffortLevel(value: string | undefined): value is EffortLevel {
 const DEFAULT_EFFORT: EffortLevel = 'high'
 
 /** Отмечает эффорт по умолчанию у моделей, которые его поддерживают. */
-function withDefaultEffort(catalog: AgentCatalog): AgentCatalog {
+function withDefaultEffort<Catalog extends { models: { efforts: string[] }[] }>(
+  catalog: Catalog
+): Catalog {
   return {
     ...catalog,
     models: catalog.models.map((model) =>
