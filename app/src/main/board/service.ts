@@ -293,9 +293,9 @@ export class BoardService {
     return this.cards.size !== before
   }
 
-  /** Отдаёт агентам задачи из очереди, пока работающих меньше предела. */
+  /** Отдаёт агентам задачи из очереди, пока работающих меньше предела; без предела — все. */
   private startQueued(): void {
-    const limit = this.services.settings.get().boardMaxAgents
+    const limit = this.services.settings.get().boardMaxAgents ?? Infinity
     const working = [...this.cards.entries()].filter(
       ([id, card]) =>
         this.starting.has(id) ||

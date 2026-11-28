@@ -16,7 +16,8 @@ interface StartTaskDialogProps {
   foreignAuthor: boolean
   /** Сколько агентов доски уже работает и сколько можно. */
   working: number
-  limit: number
+  /** Сколько агентов доски работают сразу; `null` — без предела. */
+  limit: number | null
   onStart(start: TaskStart): void
   onClose(): void
 }
@@ -95,7 +96,7 @@ export function StartTaskDialog({
   }, [onClose])
 
   const note =
-    working >= limit
+    limit !== null && working >= limit
       ? `All ${limit} agents are busy, so the task waits in Queue for a free one.`
       : 'The agent starts right away.'
 
