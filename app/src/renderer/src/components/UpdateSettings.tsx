@@ -18,6 +18,27 @@ type CheckStatus =
  * отсюда же. Карточку вокруг строки собирает страница настроек.
  */
 export function UpdateSettings() {
+  return __DEV_BUILD__ ? <DevBuildVersion /> : <ReleaseUpdateSettings />
+}
+
+/** Сборка для разработчика: версия с веткой и коммитом, обновлений нет. */
+function DevBuildVersion() {
+  return (
+    <div className="settings__row">
+      <span className="settings__label">
+        <span>
+          Atox {__APP_VERSION__} · Dev build ({__BUILD_BRANCH__} @ {__BUILD_COMMIT__})
+        </span>
+        <span className="settings__description">
+          Dev builds don’t update automatically. Rebuild from pre-release to get changes.
+        </span>
+      </span>
+    </div>
+  )
+}
+
+/** Релизная сборка: версия и проверка обновлений. */
+function ReleaseUpdateSettings() {
   const update = useUpdateState()
   const [version, setVersion] = useState<string | null>(null)
   const [status, setStatus] = useState<CheckStatus>({ kind: 'idle' })

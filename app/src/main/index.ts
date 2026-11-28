@@ -236,7 +236,13 @@ async function bootstrap(): Promise<void> {
   })
   const branches = new GitBranchTracker(broadcastGitBranches)
   // Обновляется только собранное приложение; адрес релизов можно подменить для проверки обновлений.
-  const updateInstaller = app.isPackaged ? createUpdateInstaller() : null
+  // Сборку для разработчика не обновляем никогда: без проверок, загрузок и установки при выходе.
+  const updateInstaller = app.isPackaged && !__DEV_BUILD__ ? createUpdateInstaller() : null
+  if (__DEV_BUILD__) {
+    app.setAboutPanelOptions({
+      applicationVersion: `${app.getVersion()} · Dev build (${__BUILD_BRANCH__} @ ${__BUILD_COMMIT__})`
+    })
+  }
   const updateFeedOverride = process.env['ATOX_UPDATE_FEED_URL']
   const updater = updateInstaller
     ? new AppUpdater({
