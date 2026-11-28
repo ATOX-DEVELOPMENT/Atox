@@ -4445,6 +4445,25 @@ ul {
   text-overflow: ellipsis;
 }
 
+/* Пункт с пояснением: подпись и под ней мелкий серый текст, который переносится по словам. */
+.menu__item:has(.menu__description) {
+  padding-block: 5px;
+}
+
+.menu__text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.menu__description {
+  color: var(--color-text-muted);
+  font-size: 11.5px;
+  line-height: 1.3;
+  white-space: normal;
+}
+
 .menu__accelerator {
   flex-shrink: 0;
   padding-left: var(--menu-item-gap);

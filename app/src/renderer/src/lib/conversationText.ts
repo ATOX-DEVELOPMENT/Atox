@@ -1,3 +1,4 @@
+import type { AgentId } from '../../../shared/agents'
 import type { TimelineItem, ToolKind } from '../../../shared/conversation'
 
 /** Названия уровней эффорта; неизвестный уровень показывается как есть, с заглавной буквы. */
@@ -12,8 +13,14 @@ const EFFORT_LABELS: Record<string, string> = {
   ultra: 'Ultra'
 }
 
-export function effortLabel(effort: string): string {
-  return EFFORT_LABELS[effort] ?? effort.charAt(0).toUpperCase() + effort.slice(1)
+/** Названия уровней, которые агент называет по-своему: в приложении Codex `low` — «Light». */
+const AGENT_EFFORT_LABELS: Partial<Record<AgentId, Record<string, string>>> = {
+  codex: { low: 'Light' }
+}
+
+export function effortLabel(effort: string, agent?: AgentId): string {
+  const label = (agent && AGENT_EFFORT_LABELS[agent]?.[effort]) ?? EFFORT_LABELS[effort]
+  return label ?? effort.charAt(0).toUpperCase() + effort.slice(1)
 }
 
 /** Подпись строки действия: глагол по виду инструмента. */

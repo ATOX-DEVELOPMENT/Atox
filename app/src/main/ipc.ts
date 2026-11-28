@@ -901,11 +901,13 @@ function parseConfiguration(value: unknown): ChatConfiguration {
     field === null ? null : typeof field === 'string' && field ? field : undefined
   const model = optionalString(source['model'])
   const effort = optionalString(source['effort'])
+  const serviceTier = optionalString(source['serviceTier'])
   const account = optionalString(source['account'])
   return {
     ...(isAgentId(source['agent']) && { agent: source['agent'] }),
     ...(model !== undefined && { model }),
     ...(effort !== undefined && { effort }),
+    ...(serviceTier !== undefined && { serviceTier }),
     ...(account !== undefined && { account })
   }
 }

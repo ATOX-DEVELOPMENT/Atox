@@ -371,6 +371,7 @@ export class ProjectStore {
       fork: true,
       ...(source.model && { model: source.model }),
       ...(source.effort && { effort: source.effort }),
+      ...(source.serviceTier && { serviceTier: source.serviceTier }),
       ...(source.account && { account: source.account }),
       ...(source.worktree && { worktree: source.worktree }),
       ...(source.githubAccount && { githubAccount: source.githubAccount })
@@ -516,17 +517,23 @@ export class ProjectStore {
    * Агента можно сменить, только пока разговор с ним не начат (`started`).
    * `true` — что-то изменилось.
    */
-  configureChat(chatId: string, { agent, model, effort, account }: ChatConfiguration): boolean {
+  configureChat(
+    chatId: string,
+    { agent, model, effort, serviceTier, account }: ChatConfiguration
+  ): boolean {
     const chat = this.findChat(chatId)?.chat
     if (!chat) {
       return false
     }
-    const before = JSON.stringify([chat.agent, chat.model, chat.effort, chat.account])
+    const snapshot = () =>
+      JSON.stringify([chat.agent, chat.model, chat.effort, chat.serviceTier, chat.account])
+    const before = snapshot()
     if (agent && agent !== chat.agent) {
       // Модели и аккаунты у агентов свои: выбор прежнего агента новому не подходит.
       chat.agent = agent
       delete chat.model
       delete chat.effort
+      delete chat.serviceTier
       delete chat.account
     }
     if (account !== undefined) {
@@ -538,7 +545,10 @@ export class ProjectStore {
     if (effort !== undefined) {
       setOptional(chat, 'effort', effort)
     }
-    const changed = JSON.stringify([chat.agent, chat.model, chat.effort, chat.account]) !== before
+    if (serviceTier !== undefined) {
+      setOptional(chat, 'serviceTier', serviceTier)
+    }
+    const changed = snapshot() !== before
     if (changed) {
       this.persist()
     }
@@ -627,7 +637,11 @@ function unarchived({ archivedAt: _archivedAt, ...chat }: Chat): Chat {
   return chat
 }
 
-function setOptional(chat: Chat, key: 'model' | 'effort' | 'account', value: string | null): void {
+function setOptional(
+  chat: Chat,
+  key: 'model' | 'effort' | 'serviceTier' | 'account',
+  value: string | null
+): void {
   if (value) {
     chat[key] = value
   } else {

@@ -1133,7 +1133,8 @@ export class ConversationManager {
         ...(resumedId && { sessionId: resumedId }),
         selection: {
           ...(sameAgent && chat.model && { model: chat.model }),
-          ...(sameAgent && chat.effort && { effort: chat.effort })
+          ...(sameAgent && chat.effort && { effort: chat.effort }),
+          ...(sameAgent && chat.serviceTier && { serviceTier: chat.serviceTier })
         }
       },
       {
