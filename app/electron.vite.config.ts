@@ -1,3 +1,4 @@
+import { execFileSync } from 'node:child_process'
 import { resolve } from 'node:path'
 import { defineConfig } from 'electron-vite'
 import react from '@vitejs/plugin-react'
@@ -21,13 +22,36 @@ const claudeCodeMinimumVersion = claudeSdkPackage.claudeCodeVersion
 /** Сервер анонимной статистики Atox (админка). */
 const usageStatsUrl = 'https://admin.atox.dev/v1/event'
 
+/**
+ * Сборка для разработчика (`ATOX_DEV_BUILD=1`, `npm run package:dev`): собирается локально из
+ * `pre-release` и никогда не обновляется сама — иначе обновление с сайта затирает её релизом.
+ * Релизная сборка в CI переменную не задаёт.
+ */
+const devBuild = process.env['ATOX_DEV_BUILD'] === '1'
+
+/** Коммит и ветка сборки для разработчика — показываются рядом с версией. */
+function gitValue(args: string[]): string {
+  try {
+    return execFileSync('git', args, { cwd: __dirname, encoding: 'utf8' }).trim()
+  } catch {
+    return 'unknown'
+  }
+}
+
+const buildDefines = {
+  __DEV_BUILD__: JSON.stringify(devBuild),
+  __BUILD_COMMIT__: JSON.stringify(devBuild ? gitValue(['rev-parse', '--short', 'HEAD']) : ''),
+  __BUILD_BRANCH__: JSON.stringify(devBuild ? gitValue(['rev-parse', '--abbrev-ref', 'HEAD']) : '')
+}
+
 export default defineConfig({
   main: {
     define: {
       __UPDATE_FEED_URL__: JSON.stringify(updateFeedUrl),
       __RELEASE_DOWNLOAD_URL__: JSON.stringify(releaseDownloadUrl),
       __USAGE_STATS_URL__: JSON.stringify(usageStatsUrl),
-      __CLAUDE_CODE_MIN_VERSION__: JSON.stringify(claudeCodeMinimumVersion)
+      __CLAUDE_CODE_MIN_VERSION__: JSON.stringify(claudeCodeMinimumVersion),
+      ...buildDefines
     },
     build: {
       rollupOptions: {
@@ -50,7 +74,8 @@ export default defineConfig({
     },
     define: {
       __APP_NAME__: JSON.stringify(packageJson.build.productName),
-      __APP_VERSION__: JSON.stringify(packageJson.version)
+      __APP_VERSION__: JSON.stringify(packageJson.version),
+      ...buildDefines
     },
     plugins: [react()]
   }
