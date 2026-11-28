@@ -17,7 +17,7 @@ const WORKTREES_DIRECTORY = join(ATOX_HOME, 'worktrees')
 /** Папка, в которую идёт клонирование, пока оно не закончилось. */
 const PARTIAL_CLONE_SUFFIX = '.cloning'
 
-/** Ветка задачи: по ней видно, что её завёл агент доски и к какому issue она. */
+/** Начало имени ветки задачи: по нему видно, к какому issue она. */
 const BRANCH_PREFIX = 'atox/issue-'
 
 /** Клонирование и загрузка большого репозитория идут минутами, а не секундами. */
@@ -25,6 +25,11 @@ const NETWORK_TIMEOUT_MS = 10 * 60_000
 
 /** `owner/name` из адреса удалённого репозитория GitHub — https или ssh. */
 const GITHUB_REMOTE = /github\.com[:/]([^/]+\/[^/]+?)(?:\.git)?\/?$/i
+
+/** Ветка задачи: по ней видно, что её завёл агент доски, и по ней же находят pull request. */
+export function taskBranch(issue: number): string {
+  return `${BRANCH_PREFIX}${issue}`
+}
 
 export interface IssueWorktree {
   path: string
@@ -108,7 +113,7 @@ export class BoardWorktrees {
    * например, задачу вернули в очередь, — агент продолжает в нём.
    */
   async create(repositoryPath: string, fullName: string, issue: number, token: string): Promise<IssueWorktree> {
-    const branch = `${BRANCH_PREFIX}${issue}`
+    const branch = taskBranch(issue)
     const path = join(WORKTREES_DIRECTORY, ...fullName.split('/'), `issue-${issue}`)
     if (existsSync(join(path, '.git'))) {
       return { path, branch }
@@ -152,6 +157,11 @@ export class BoardWorktrees {
     if (branch.startsWith(BRANCH_PREFIX)) {
       await this.run('git', ['branch', '-d', branch], repositoryPath).catch(() => undefined)
     }
+  }
+
+  /** Последний коммит worktree: с ним сверяют ветку pull request'а, чтобы знать, что агент запушил. */
+  headOf(worktreePath: string): Promise<string> {
+    return this.run('git', ['rev-parse', 'HEAD'], worktreePath).then((sha) => sha.trim())
   }
 
   /** Основная ветка на GitHub: та, на которую указывает `origin/HEAD`. */

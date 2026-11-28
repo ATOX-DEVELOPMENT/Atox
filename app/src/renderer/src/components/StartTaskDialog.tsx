@@ -5,6 +5,7 @@ import { useProjectsContext } from '../hooks/ProjectsContext'
 import { useSettings } from '../hooks/SettingsContext'
 import { showMenu } from '../lib/menu'
 import { formatAccelerator } from '../../../shared/shortcuts'
+import { findAgent } from '../../../shared/agents'
 import { TaskAgentPicker } from './TaskAgentPicker'
 
 /** Запуск из поля сообщения — как отправка в чате с модификатором. */
@@ -22,6 +23,10 @@ interface StartTaskDialogProps {
   onClose(): void
 }
 
+function agentName(task: { agent: string }): string {
+  return findAgent(task.agent)?.name ?? task.agent
+}
+
 /**
  * Окно перед запуском задачи: с каким агентом, моделью и эффортом её делать и что сказать
  * агенту от себя. По умолчанию — агент доски из настроек.
@@ -34,8 +39,11 @@ export function StartTaskDialog({
   onStart,
   onClose
 }: StartTaskDialogProps) {
-  const { boardAgent } = useSettings()
+  const { boardAgent, boardReview, boardReviewer } = useSettings()
   const [agent, setAgent] = useState(boardAgent)
+  // Проверка отдельным агентом: выбор запоминается и предлагается в следующей задаче.
+  const [review, setReview] = useState(boardReview)
+  const [reviewer, setReviewer] = useState(boardReviewer)
   const [message, setMessage] = useState('')
   // Проект, под которым появится чат; нет — проект репозитория задачи.
   const [projectId, setProjectId] = useState<string | undefined>()
@@ -48,12 +56,15 @@ export function StartTaskDialog({
     void window.atox.board.defaultProject(issue.repository).then(setDefaultProjectId)
   }, [issue.repository])
 
-  const start = () =>
+  const start = () => {
+    void window.atox.settings.update({ boardReview: review, boardReviewer: reviewer })
     onStart({
       agent,
       ...(message.trim() && { message: message.trim() }),
-      ...(projectId && { projectId })
+      ...(projectId && { projectId }),
+      ...(review && { review: reviewer })
     })
+  }
 
   const repositoryName = issue.repository.split('/')[1]
   const defaultProject = projects.find(({ id }) => id === defaultProjectId)
@@ -136,6 +147,25 @@ export function StartTaskDialog({
           <section className="start-task__section">
             <h3 className="start-task__label">Agent</h3>
             <TaskAgentPicker value={agent} onChange={setAgent} />
+          </section>
+
+          <section className="start-task__section">
+            <label className="start-task__check">
+              <input
+                type="checkbox"
+                className="checkbox"
+                checked={review}
+                onChange={(event) => setReview(event.target.checked)}
+              />
+              <span className="start-task__check-text">
+                <span className="start-task__label">Review by a separate agent</span>
+                <span className="start-task__hint">
+                  A fresh agent with no shared context reviews the pull request and comments on it
+                  on GitHub. {agentName(agent)} fixes what blocks the merge.
+                </span>
+              </span>
+            </label>
+            {review && <TaskAgentPicker value={reviewer} onChange={setReviewer} />}
           </section>
 
           <section className="start-task__section">

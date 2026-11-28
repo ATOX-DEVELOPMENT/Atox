@@ -5309,6 +5309,10 @@ button.usage-indicator[data-warning='true']:hover {
   --column-color: var(--color-git-merged);
 }
 
+.board-column[data-column='ready'] {
+  --column-color: var(--color-success);
+}
+
 .board-column[data-column='done'] {
   --column-color: var(--color-success);
 }
@@ -5534,6 +5538,13 @@ button.usage-indicator[data-warning='true']:hover {
 .board-card__status[data-waiting='true'] {
   font-weight: 500;
   color: var(--color-attention);
+}
+
+.board-card__ready-icon {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  color: var(--color-success);
 }
 
 .board-card__open {
@@ -6097,6 +6108,23 @@ button.usage-indicator[data-warning='true']:hover {
   margin: 0;
   font-size: 13px;
   font-weight: 600;
+}
+
+.start-task__check {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  cursor: pointer;
+}
+
+.start-task__check .checkbox {
+  margin-top: 2px;
+}
+
+.start-task__check-text {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
 }
 
 .start-task__optional {

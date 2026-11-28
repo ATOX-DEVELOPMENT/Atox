@@ -1,4 +1,19 @@
-import { DONE_VISIBLE_MS, isBoardColumn, type TaskStart, type BoardColumn, type BoardIssue, type BoardRepository, type BoardState, type AvailableRepository } from '../../shared/board'
+import {
+  DONE_VISIBLE_MS,
+  isBoardColumn,
+  isFixingStep,
+  isReviewAgentStep,
+  isReviewStep,
+  type AvailableRepository,
+  type BoardColumn,
+  type BoardIssue,
+  type BoardRepository,
+  type BoardReview,
+  type BoardState,
+  type ReviewStep,
+  type TaskAgent,
+  type TaskStart
+} from '../../shared/board'
 import type { ConversationEvent, ConversationSnapshot } from '../../shared/conversation'
 import { findAgent } from '../../shared/agents'
 import type { AgentDetector } from '../agents'
@@ -9,13 +24,64 @@ import { errorMessage } from '../processes'
 import type { SettingsStore } from '../settings'
 import type { ProjectStore } from '../store'
 import type { BoardGitHub, GitHubIssue } from './github'
-import { formatIssueTask } from './prompt'
-import type { BoardWorktrees } from './worktrees'
+import { formatFixTask, formatIssueTask, formatReviewTask, parseVerdict, type FixKind } from './prompt'
+import { blockingThreads, isReadyToMerge, type PullRequestStatus } from './pullRequest'
+import { taskBranch, type BoardWorktrees } from './worktrees'
 
 const BOARD_VERSION = 1
 
 /** Сообщение агенту, когда задачу снова отдают ему в его же чате без слов от пользователя. */
 const CONTINUE_MESSAGE = 'Continue working on the task.'
+
+/**
+ * Сколько раз подряд опрос может застать ветку pull request'а без коммита, который агент должен
+ * был запушить, — потом доска считает, что он не запушил: GitHub обновляет ветку не мгновенно.
+ */
+const PUSH_WAIT_POLLS = 5
+
+/** Через сколько после запуска и после чтения задач доска первый раз смотрит pull request'ы. */
+const FIRST_POLL_DELAY_MS = 3_000
+
+/** Причина остановки, когда pull request'а по ветке задачи нет: появится — доска продолжит. */
+const NO_PULL_REQUEST = 'The agent finished without opening a pull request.'
+
+/** Причина остановки, когда pull request закрыли без слияния: откроют снова — доска продолжит. */
+const PULL_REQUEST_CLOSED = 'The pull request was closed without being merged.'
+
+/** Что осталось не исправлено после последнего раунда: для причины остановки. */
+const FIX_PROBLEMS: Record<FixKind, string> = {
+  review: 'the reviewer still finds blocking problems',
+  checks: 'the checks still fail',
+  conflicts: 'the branch still conflicts with its base',
+  comments: 'review comments are still open'
+}
+
+/** Ход проверки pull request'а задачи на колонках Review и Ready. */
+interface Flow {
+  step: ReviewStep
+  /** Сколько раундов исправлений уже запущено. */
+  round: number
+  /** Проверяющий агент одобрил pull request. */
+  approved: boolean
+  /** Чего ждёт доска, если агентов сейчас нет. */
+  detail?: string
+  /** Почему доска остановилась и ждёт человека. */
+  stopped?: string
+  pullRequest?: { number: number; url: string }
+  /** Чат проверяющего на шаге `reviewing`. */
+  reviewChatId?: string
+  /**
+   * Коммит worktree, который агент должен был запушить: пока ветка pull request'а не на нём,
+   * проверки на GitHub относятся к старому коду и решать по ним рано.
+   */
+  expectedHead?: string
+  /** Сколько опросов подряд ветка не оказалась на `expectedHead`. */
+  pushWaits?: number
+  /** Коммит, для которого упавшие проверки уже перезапускали: второй раз не перезапускаем. */
+  rerunHead?: string
+  /** Доска ждёт свободного места для агента: освободится — продолжит сразу, не дожидаясь опроса. */
+  needsAgent?: boolean
+}
 
 /** Где карточка задачи и что с ней делал агент. Задачи без записи лежат в бэклоге. */
 interface Card {
@@ -32,6 +98,12 @@ interface Card {
   start?: TaskStart
   /** Папка репозитория, из которой сделан worktree задачи: из неё его и убирают. */
   repositoryPath?: string
+  /** Агент, который проверит pull request задачи; нет — проверки отдельным агентом не будет. */
+  reviewer?: TaskAgent
+  /** Проверка pull request'а; нет — доска за ним следит только ради слияния. */
+  flow?: Flow
+  /** Чаты проверяющих: на каждую проверку новый. Уходят вместе с чатом задачи. */
+  reviewChatIds?: string[]
 }
 
 interface BoardFile {
@@ -65,6 +137,12 @@ export class BoardService {
   private error: string | null = null
   /** Задачи, агентов которых сейчас готовят: клонируют репозиторий, создают worktree. */
   private readonly starting = new Set<string>()
+  /** Следующий опрос pull request'ов на проверке. */
+  private pollTimer: ReturnType<typeof setTimeout> | null = null
+  /** Задачи, pull request'ы которых читают сейчас: опросы не наезжают друг на друга. */
+  private readonly evaluating = new Set<string>()
+  /** Atox закрывается: опросы больше не запускаются. */
+  private closed = false
 
   private constructor(
     private readonly services: BoardServices,
@@ -92,13 +170,21 @@ export class BoardService {
         ) {
           card.column = 'review'
         }
+        // Проверяющий и исправляющий агенты не переживают перезапуск Atox: проверка начинается
+        // с опроса GitHub — что нужно, доска запустит заново.
+        if (card.flow) {
+          card.flow = restoreFlow(card.flow)
+          if (!card.flow) {
+            delete card.flow
+          }
+        }
         cards.set(id, card)
       }
     }
     const board = new BoardService(services, new JsonFileWriter(filePath), repositories, cards)
     // Задачи из очереди уходят агентам, только когда прочитаны их issue, — не дожидаясь,
     // пока пользователь откроет доску.
-    if ([...cards.values()].some(({ column }) => column === 'queue')) {
+    if ([...cards.values()].some(({ column }) => ['queue', 'review', 'ready'].includes(column))) {
       void board.refresh()
     }
     return board
@@ -165,6 +251,9 @@ export class BoardService {
     }
     card.column = column
     delete card.error
+    // Перенос вручную обрывает проверку: её агент останавливается, а дальше доска только следит.
+    void this.stopReviewer(card)
+    delete card.flow
     if (column === 'done') {
       card.doneAt = Date.now()
       void this.retireAgent(card)
@@ -175,8 +264,14 @@ export class BoardService {
       card.queuedAt = Date.now()
       if (start) {
         card.start = start
+        if (start.review) {
+          card.reviewer = start.review
+        } else {
+          delete card.reviewer
+        }
       } else {
         delete card.start
+        delete card.reviewer
       }
     } else {
       delete card.queuedAt
@@ -190,23 +285,42 @@ export class BoardService {
     this.persist()
     this.changed()
     this.startQueued()
+    this.armPoller()
     return this.state()
   }
 
   /**
    * Агент задачи закончил ход — задача уходит на проверку, а её место — следующей в очереди.
    * Агент задачи на проверке снова взялся за работу (ему написали в чате) — она снова в работе.
+   * Исправляющий агент и проверяющий заканчивают свои ходы внутри проверки: продолжает её доска.
    */
   onConversationEvent(event: ConversationEvent): void {
     if (event.type !== 'running') {
       return
     }
-    const card = [...this.cards.values()].find(({ chatId }) => chatId === event.chatId)
-    if (event.running && card?.column === 'review') {
+    const entry = [...this.cards.entries()].find(
+      ([, { chatId, flow }]) => chatId === event.chatId || flow?.reviewChatId === event.chatId
+    )
+    if (!entry) {
+      return
+    }
+    const [id, card] = entry
+    if (card.flow?.reviewChatId === event.chatId) {
+      if (!event.running) {
+        void this.finishReview(id, card, event.chatId)
+      }
+    } else if (card.flow && isFixingStep(card.flow.step) && card.chatId === event.chatId) {
+      if (!event.running) {
+        void this.finishFix(id, card, event.chatId)
+      }
+    } else if (event.running && (card.column === 'review' || card.column === 'ready')) {
+      // Человек написал агенту сам: проверка начнётся заново, когда агент закончит.
+      void this.stopReviewer(card)
+      delete card.flow
       card.column = 'progress'
       this.persist()
       this.changed()
-    } else if (!event.running && card?.column === 'progress') {
+    } else if (!event.running && card.column === 'progress') {
       void this.finishTurn(card, event.chatId)
     }
   }
@@ -260,6 +374,7 @@ export class BoardService {
       this.syncedAt = Date.now()
       this.error = failures.length > 0 ? failures.join('; ') : null
       this.startQueued()
+      this.armPoller(true)
     } catch (error) {
       console.error('Failed to sync the board', error)
       this.error = errorMessage(error)
@@ -295,14 +410,8 @@ export class BoardService {
 
   /** Отдаёт агентам задачи из очереди, пока работающих меньше предела; без предела — все. */
   private startQueued(): void {
-    const limit = this.services.settings.get().boardMaxAgents ?? Infinity
-    const working = [...this.cards.entries()].filter(
-      ([id, card]) =>
-        this.starting.has(id) ||
-        (card.column === 'progress' &&
-          card.chatId !== undefined &&
-          this.services.conversations.isRunning(card.chatId))
-    ).length
+    const limit = this.agentLimit()
+    const working = this.workingCount()
     // Задачи репозиториев, убранных с доски, агентам не уходят.
     const shown = new Set(this.repositories.map(({ fullName }) => fullName))
     const queued = [...this.cards.entries()]
@@ -312,6 +421,32 @@ export class BoardService {
     for (const issue of queued.slice(0, Math.max(0, limit - working))) {
       void this.start(issue)
     }
+    // Проверка, которой не хватило места для агента, продолжается, как только оно освободилось.
+    if (working < limit) {
+      for (const [id, card] of this.cards) {
+        if (card.flow?.needsAgent) {
+          void this.evaluate(id, card)
+        }
+      }
+    }
+  }
+
+  /** Сколько агентов доски могут работать сразу; без предела в настройках — сколько угодно. */
+  private agentLimit(): number {
+    return this.services.settings.get().boardMaxAgents ?? Infinity
+  }
+
+  /** Сколько агентов доски занято: работают над задачами, проверяют, исправляют или готовятся. */
+  private workingCount(): number {
+    const { conversations } = this.services
+    const running = (chatId?: string) => chatId !== undefined && conversations.isRunning(chatId)
+    return [...this.cards.entries()].filter(
+      ([id, { column, chatId, flow }]) =>
+        this.starting.has(id) ||
+        (column === 'progress' && running(chatId)) ||
+        (flow !== undefined &&
+          (running(flow.reviewChatId) || (isReviewAgentStep(flow.step) && running(chatId))))
+    ).length
   }
 
   private async start(issue: GitHubIssue): Promise<void> {
@@ -420,6 +555,8 @@ export class BoardService {
   private async finishTurn(card: Card, chatId: string): Promise<void> {
     const { conversations } = this.services
     const error = turnError(await conversations.snapshot(chatId).catch(() => null))
+    // Что агент закончил, должно быть на GitHub: по ветке pull request'а это и проверят.
+    const head = await this.localHead(card)
     // Пока читали ленту, задачу могли перенести, а агент — взяться за следующее сообщение.
     if (card.column !== 'progress' || card.chatId !== chatId || conversations.isRunning(chatId)) {
       return
@@ -429,10 +566,402 @@ export class BoardService {
       card.error = error
     } else {
       card.column = 'review'
+      card.flow = { step: 'waiting', round: 0, approved: false, ...(head && { expectedHead: head }) }
     }
     this.persist()
     this.changed()
     this.startQueued()
+    const entry = [...this.cards.entries()].find(([, other]) => other === card)
+    if (entry && card.flow) {
+      void this.evaluate(entry[0], card)
+      this.armPoller()
+    }
+  }
+
+  /** Планирует опрос pull request'ов на проверке, если на доске есть что опрашивать. */
+  private armPoller(first = false): void {
+    const watched = [...this.cards.values()].some(
+      ({ column }) => column === 'review' || column === 'ready'
+    )
+    if (this.pollTimer || this.closed || !watched) {
+      return
+    }
+    const delay = first ? FIRST_POLL_DELAY_MS : this.services.settings.get().boardPollSeconds * 1000
+    this.pollTimer = setTimeout(() => {
+      this.pollTimer = null
+      void this.pollAll().finally(() => this.armPoller())
+    }, delay)
+    this.pollTimer.unref()
+  }
+
+  private async pollAll(): Promise<void> {
+    for (const [id, card] of [...this.cards]) {
+      if (this.closed) {
+        return
+      }
+      if (card.column === 'review' || card.column === 'ready') {
+        await this.evaluate(id, card)
+      }
+    }
+  }
+
+  /** Читает pull request задачи с GitHub и решает, что с ней дальше. */
+  private async evaluate(id: string, card: Card): Promise<void> {
+    const issue = this.issues.find((item) => item.id === id)
+    const repository = this.repositories.find(({ fullName }) => fullName === issue?.repository)
+    if (!issue || !repository || this.evaluating.has(id)) {
+      return
+    }
+    this.evaluating.add(id)
+    try {
+      const status = await this.services.github.pullRequest(repository, taskBranch(issue.number))
+      // Пока читали GitHub, задачу могли перенести или убрать.
+      if (this.cards.get(id) === card && (card.column === 'review' || card.column === 'ready')) {
+        await this.apply(id, card, issue, status)
+      }
+    } catch (error) {
+      console.error(`Failed to check the pull request of ${issue.repository}#${issue.number}`, error)
+      if (card.flow?.step === 'waiting') {
+        card.flow.detail = `Can’t read the pull request: ${errorMessage(error)}`
+        this.changed()
+      }
+    } finally {
+      this.evaluating.delete(id)
+    }
+  }
+
+  private async apply(
+    id: string,
+    card: Card,
+    issue: GitHubIssue,
+    status: PullRequestStatus | null
+  ): Promise<void> {
+    // Смерженная задача закрыта — и та, которую доска ведёт, и та, за которой она лишь следит.
+    if (status?.state === 'merged') {
+      this.move(id, 'done')
+      return
+    }
+    const flow = card.flow
+    if (!flow) {
+      return
+    }
+    if (!status || status.state === 'closed') {
+      const reason = status ? PULL_REQUEST_CLOSED : NO_PULL_REQUEST
+      if (flow.step !== 'stopped' || flow.stopped !== reason) {
+        this.stop(card, reason)
+      }
+      return
+    }
+    flow.pullRequest = { number: status.number, url: status.url }
+    if (flow.step === 'stopped') {
+      // Остановку из-за отсутствия или закрытия pull request'а снимает его появление.
+      if (flow.stopped !== NO_PULL_REQUEST && flow.stopped !== PULL_REQUEST_CLOSED) {
+        return
+      }
+      delete flow.stopped
+      flow.step = 'waiting'
+    }
+    if (!isReviewAgentStep(flow.step)) {
+      await this.decide(id, card, flow, issue, status)
+    }
+    this.persist()
+    this.changed()
+  }
+
+  /** Что делать с pull request'ом, пока агентов на нём нет: ждать, перезапустить, звать агента. */
+  private async decide(
+    id: string,
+    card: Card,
+    flow: Flow,
+    issue: GitHubIssue,
+    status: PullRequestStatus
+  ): Promise<void> {
+    if (flow.expectedHead) {
+      if (status.headSha === flow.expectedHead) {
+        delete flow.expectedHead
+        delete flow.pushWaits
+      } else {
+        flow.pushWaits = (flow.pushWaits ?? 0) + 1
+        if (flow.pushWaits > PUSH_WAIT_POLLS) {
+          this.stop(card, 'The agent’s latest commits are not pushed to the pull request.')
+        } else {
+          this.wait(card, 'Waiting for the push to reach GitHub')
+        }
+        return
+      }
+    }
+    if (isReadyToMerge(status, card.reviewer === undefined || flow.approved)) {
+      card.column = 'ready'
+      flow.step = 'waiting'
+      delete flow.detail
+      delete flow.needsAgent
+      return
+    }
+    // Готовая задача, в которой что-то изменилось, снова на проверке.
+    if (card.column === 'ready') {
+      card.column = 'review'
+    }
+    if (status.outdated) {
+      await this.fix(id, card, flow, 'conflicts', [`Base branch: ${status.baseBranch}`])
+    } else if (card.reviewer && !flow.approved) {
+      await this.review(id, card, flow, issue, status)
+    } else if (status.checks.pending.length > 0) {
+      this.wait(card, `Waiting for checks (${status.checks.pending.length} running)`)
+    } else if (status.checks.failed.length > 0) {
+      await this.handleFailedChecks(id, card, flow, issue, status)
+    } else if (blockingThreads(status).length > 0 || status.changesRequested) {
+      const threads = blockingThreads(status).map(
+        ({ path, line, url, excerpt }) =>
+          `${path ? `${path}${line ? `:${line}` : ''}` : 'General'} — ${url} — ${excerpt}`
+      )
+      await this.fix(id, card, flow, 'comments', [
+        ...(status.changesRequested ? ['Changes were requested on the pull request.'] : []),
+        ...threads
+      ])
+    } else {
+      this.wait(card, status.mergeBlocker ?? 'Waiting for GitHub')
+    }
+  }
+
+  /** Упавшие проверки: сначала один перезапуск — CI бывает нестабильным, — потом агент. */
+  private async handleFailedChecks(
+    id: string,
+    card: Card,
+    flow: Flow,
+    issue: GitHubIssue,
+    status: PullRequestStatus
+  ): Promise<void> {
+    const runIds = [...new Set(status.checks.failed.flatMap(({ runId }) => runId ?? []))]
+    const repository = this.repositories.find(({ fullName }) => fullName === issue.repository)
+    if (flow.rerunHead !== status.headSha && runIds.length > 0 && repository) {
+      flow.rerunHead = status.headSha
+      try {
+        await Promise.all(runIds.map((runId) => this.services.github.rerunFailedJobs(repository, runId)))
+      } catch (error) {
+        this.stop(card, `Couldn’t re-run the failed checks: ${errorMessage(error)}`)
+        return
+      }
+      this.wait(card, 'Re-running the failed checks')
+      return
+    }
+    await this.fix(
+      id,
+      card,
+      flow,
+      'checks',
+      status.checks.failed.map(
+        ({ name, url, runId }) =>
+          `${name}${url ? ` — ${url}` : ''}${runId ? ` (run id ${runId})` : ''}`
+      )
+    )
+  }
+
+  /**
+   * Агент задачи правит то, что нашла проверка, — в своём чате, где он знает свой код. Раундов
+   * не больше, чем в настройках; без свободного места доска ждёт. `force` — место уже занято
+   * проверяющим, который только что закончил.
+   */
+  private async fix(
+    id: string,
+    card: Card,
+    flow: Flow,
+    kind: FixKind,
+    details: string[],
+    force = false
+  ): Promise<void> {
+    const { store, conversations, settings } = this.services
+    const { boardMaxRounds } = settings.get()
+    if (flow.round >= boardMaxRounds) {
+      this.stop(card, `Still not clean after ${boardMaxRounds} rounds of fixes: ${FIX_PROBLEMS[kind]}.`)
+      return
+    }
+    if (!force && this.workingCount() >= this.agentLimit()) {
+      this.wait(card, 'Waiting for a free agent', true)
+      return
+    }
+    if (!card.chatId || !store.findChat(card.chatId) || !flow.pullRequest) {
+      this.stop(card, 'The task’s chat is gone, so there is no agent to fix it.')
+      return
+    }
+    flow.round += 1
+    flow.step = `fixing-${kind}`
+    delete flow.detail
+    delete flow.needsAgent
+    this.starting.add(id)
+    this.changed()
+    try {
+      await conversations.send(card.chatId, formatFixTask(kind, flow.pullRequest, details))
+    } catch (error) {
+      console.error('Failed to send the fix to the task agent', error)
+      this.stop(card, `Couldn’t start the agent: ${errorMessage(error)}`)
+    } finally {
+      this.starting.delete(id)
+    }
+  }
+
+  /** Новый агент в новом чате, без общего контекста с автором, проверяет pull request. */
+  private async review(
+    id: string,
+    card: Card,
+    flow: Flow,
+    issue: GitHubIssue,
+    status: PullRequestStatus
+  ): Promise<void> {
+    const { store, conversations, agents, github } = this.services
+    const reviewer = card.reviewer
+    if (!reviewer) {
+      return
+    }
+    if (this.workingCount() >= this.agentLimit()) {
+      this.wait(card, 'Waiting for a free agent', true)
+      return
+    }
+    if (!(await agents.list()).includes(reviewer.agent)) {
+      this.stop(card, `${findAgent(reviewer.agent)?.name ?? reviewer.agent} is not installed, so it can’t review.`)
+      return
+    }
+    const location = card.chatId ? store.findChat(card.chatId) : undefined
+    const worktree = location?.chat.worktree
+    if (!card.chatId || !location || !worktree) {
+      this.stop(card, 'The task’s chat is gone, so there is no worktree to review in.')
+      return
+    }
+    this.starting.add(id)
+    try {
+      const body = await github.issueBody(card.account, issue.id)
+      const { model, effort } = reviewer
+      const chat = store.createTaskChat(
+        location.project.id,
+        reviewer.agent,
+        { ...(model && { model }), ...(effort && { effort }) },
+        {
+          title: `Review: #${issue.number} ${issue.title}`,
+          worktree,
+          githubAccount: card.account
+        }
+      )
+      card.reviewChatIds = [...(card.reviewChatIds ?? []), chat.id]
+      flow.reviewChatId = chat.id
+      flow.step = 'reviewing'
+      delete flow.detail
+      delete flow.needsAgent
+      this.persist()
+      this.services.onProjectsChanged()
+      this.changed()
+      // Агент задачи в проверке не участвует: его сессия закрыта, а чат остаётся в истории.
+      await conversations.close(card.chatId)
+      await conversations.send(
+        chat.id,
+        formatReviewTask(issue, body, status, { path: worktree, branch: taskBranch(issue.number) })
+      )
+    } catch (error) {
+      console.error('Failed to start the reviewer', error)
+      this.stop(card, `Couldn’t start the reviewer: ${errorMessage(error)}`)
+    } finally {
+      this.starting.delete(id)
+    }
+  }
+
+  /** Проверяющий закончил: одобрил — доска ждёт проверки, нашёл ошибки — их правит автор. */
+  private async finishReview(id: string, card: Card, chatId: string): Promise<void> {
+    const { conversations } = this.services
+    const snapshot = await conversations.snapshot(chatId).catch(() => null)
+    const flow = card.flow
+    if (!flow || flow.reviewChatId !== chatId || conversations.isRunning(chatId)) {
+      return
+    }
+    delete flow.reviewChatId
+    const error = turnError(snapshot)
+    const verdict = error ? null : parseVerdict(lastAnswer(snapshot))
+    if (error) {
+      this.stop(card, `The reviewer stopped: ${error}`)
+    } else if (verdict === null) {
+      this.stop(card, 'The reviewer finished without a verdict. Open its chat to see why.')
+    } else if (verdict === 'approve') {
+      flow.approved = true
+      flow.step = 'waiting'
+      this.persist()
+      this.changed()
+      void this.evaluate(id, card)
+      return
+    } else if (flow.pullRequest) {
+      await this.fix(id, card, flow, 'review', [], true)
+    } else {
+      this.stop(card, NO_PULL_REQUEST)
+    }
+    this.persist()
+    this.changed()
+  }
+
+  /** Агент задачи закончил исправления: доска ждёт, пока они дойдут до GitHub и проверки пройдут. */
+  private async finishFix(id: string, card: Card, chatId: string): Promise<void> {
+    const { conversations } = this.services
+    const error = turnError(await conversations.snapshot(chatId).catch(() => null))
+    const head = await this.localHead(card)
+    const flow = card.flow
+    if (!flow || !isFixingStep(flow.step) || card.chatId !== chatId || conversations.isRunning(chatId)) {
+      return
+    }
+    if (error) {
+      this.stop(card, `The agent stopped: ${error}`)
+    } else {
+      // После исправления проверяющего нужен новый: он смотрит уже исправленный код.
+      flow.approved = flow.approved && flow.step !== 'fixing-review'
+      flow.step = 'waiting'
+      if (head) {
+        flow.expectedHead = head
+        flow.pushWaits = 0
+      }
+      void this.evaluate(id, card)
+    }
+    this.persist()
+    this.changed()
+    this.startQueued()
+  }
+
+  /** Останавливает проверяющего задачи, если он работает: задачу перенесли или к ней вернулся человек. */
+  private async stopReviewer(card: Card): Promise<void> {
+    const chatId = card.flow?.reviewChatId
+    if (chatId) {
+      await this.services.conversations.interrupt(chatId).catch(() => undefined)
+    }
+  }
+
+  /** Доска ждёт GitHub или свободного агента. */
+  private wait(card: Card, detail: string, needsAgent = false): void {
+    if (!card.flow) {
+      return
+    }
+    card.flow.step = 'waiting'
+    card.flow.detail = detail
+    if (needsAgent) {
+      card.flow.needsAgent = true
+    } else {
+      delete card.flow.needsAgent
+    }
+  }
+
+  /** Доска останавливается и ждёт человека: причина видна на карточке. */
+  private stop(card: Card, reason: string): void {
+    if (!card.flow) {
+      return
+    }
+    if (card.column === 'ready') {
+      card.column = 'review'
+    }
+    card.flow.step = 'stopped'
+    card.flow.stopped = reason
+    delete card.flow.detail
+    delete card.flow.needsAgent
+    delete card.flow.reviewChatId
+    this.persist()
+    this.changed()
+  }
+
+  /** Последний коммит worktree агента задачи; нет worktree — `undefined`. */
+  private async localHead(card: Card): Promise<string | undefined> {
+    const worktree = card.chatId ? this.services.store.findChat(card.chatId)?.chat.worktree : undefined
+    return worktree ? this.services.worktrees.headOf(worktree).catch(() => undefined) : undefined
   }
 
   /** Задача давно в Done и с доски ушла. */
@@ -442,20 +971,26 @@ export class BoardService {
   }
 
   /**
-   * Задача закрыта — её агент больше не нужен: он останавливается, а его чат и worktree
+   * Задача закрыта — её агенты больше не нужны: они останавливаются, а их чаты и worktree
    * удаляются. Работа агента уже в ветке и pull request'е на GitHub.
    */
   private async retireAgent(card: Card): Promise<void> {
-    const chatId = card.chatId
+    const chatIds = [card.chatId, ...(card.reviewChatIds ?? [])].filter(
+      (chatId): chatId is string => chatId !== undefined
+    )
+    const taskChatId = card.chatId
     delete card.chatId
+    delete card.reviewChatIds
     this.persist()
-    if (!chatId) {
+    if (chatIds.length === 0) {
       return
     }
     const { store, conversations, worktrees } = this.services
-    const location = store.findChat(chatId)
-    store.removeChat(chatId)
-    await conversations.remove(chatId)
+    const location = taskChatId ? store.findChat(taskChatId) : undefined
+    for (const chatId of chatIds) {
+      store.removeChat(chatId)
+      await conversations.remove(chatId)
+    }
     this.services.onProjectsChanged()
     if (location?.chat.worktree) {
       await worktrees
@@ -483,7 +1018,22 @@ export class BoardService {
           ? 'progress'
           : (card?.column ?? 'backlog'),
       ...(card?.chatId && { chatId: card.chatId }),
-      ...(card?.error && { error: card.error })
+      ...(card?.error && { error: card.error }),
+      ...(card?.flow && { review: this.toBoardReview(card, card.flow) })
+    }
+  }
+
+  private toBoardReview(card: Card, flow: Flow): BoardReview {
+    return {
+      step: flow.step,
+      round: flow.round,
+      maxRounds: this.services.settings.get().boardMaxRounds,
+      reviewed: card.reviewer !== undefined,
+      approved: flow.approved,
+      ...(flow.detail && { detail: flow.detail }),
+      ...(flow.pullRequest && { pullRequestUrl: flow.pullRequest.url }),
+      ...(flow.reviewChatId && { reviewChatId: flow.reviewChatId }),
+      ...(flow.stopped && { stopped: flow.stopped })
     }
   }
 
@@ -501,6 +1051,11 @@ export class BoardService {
   }
 
   flush(): Promise<void> {
+    this.closed = true
+    if (this.pollTimer) {
+      clearTimeout(this.pollTimer)
+      this.pollTimer = null
+    }
     return this.file.flush()
   }
 }
@@ -511,6 +1066,30 @@ function turnError(snapshot: ConversationSnapshot | null): string | null {
   const answer = items.slice(items.findLastIndex(({ kind }) => kind === 'user') + 1)
   const ending = answer.findLast(({ kind }) => kind === 'assistant' || kind === 'error')
   return ending?.kind === 'error' ? ending.message : null
+}
+
+/** Восстанавливает ход проверки из файла: агентов перезапуск не пережил, шаги с ними сбрасываются. */
+function restoreFlow(value: Flow): Flow | undefined {
+  if (!isReviewStep(value?.step)) {
+    return undefined
+  }
+  const { step, round, approved, stopped, pullRequest, rerunHead } = value
+  return {
+    step: step === 'stopped' ? step : 'waiting',
+    round: Number.isInteger(round) ? round : 0,
+    approved: approved === true,
+    ...(step === 'stopped' && typeof stopped === 'string' && { stopped }),
+    ...(pullRequest && { pullRequest }),
+    ...(rerunHead && { rerunHead })
+  }
+}
+
+/** Последнее сообщение агента в ленте — после последнего сообщения пользователя. */
+function lastAnswer(snapshot: ConversationSnapshot | null): string {
+  const items = snapshot?.items ?? []
+  const answer = items.slice(items.findLastIndex(({ kind }) => kind === 'user') + 1)
+  const last = answer.findLast((item) => item.kind === 'assistant')
+  return last?.kind === 'assistant' ? last.text : ''
 }
 
 function isBoardRepository(value: unknown): value is BoardRepository {
