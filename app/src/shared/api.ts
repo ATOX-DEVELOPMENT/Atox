@@ -1,5 +1,6 @@
 import type { ProjectFileContent, ProjectFileList } from './projectFiles'
 import type { AgentAccount } from './accounts'
+import type { AgentCliStatus } from './agentCli'
 import type { AgentId } from './agents'
 import type { MessageAttachments, PickedFile } from './attachments'
 import type {
@@ -12,10 +13,11 @@ import type {
 import type {
   CanvasExportFormat,
   CanvasExportResult,
-  CanvasGrid,
   CanvasState,
   CanvasShare,
   CanvasView,
+  ScreenGrid,
+  ScreenResize,
   ScreenLook,
   ScreenVersion
 } from './canvas'
@@ -119,6 +121,17 @@ export interface AtoxApi {
       projectId: string | null
     ): Promise<IntegrationList<Kind>>
   }
+  agentCli: {
+    /** Установлены ли программы агентов, их версии и идущие установки. */
+    list(): Promise<AgentCliStatus[]>
+    /** Ставит программу агента; ход установки приходит через `onChanged`. */
+    install(agent: AgentId): Promise<void>
+    /** Обновляет программу агента тем способом, которым она установлена. */
+    update(agent: AgentId): Promise<void>
+    /** Убирает сообщение о неудачной установке или обновлении. */
+    dismiss(agent: AgentId): Promise<void>
+    onChanged(listener: (statuses: AgentCliStatus[]) => void): () => void
+  }
   chats: {
     /**
      * Создаёт чат с агентом. Выбранный агент становится агентом по умолчанию; без агента
@@ -161,6 +174,8 @@ export interface AtoxApi {
     context(chatId: string): Promise<ContextReport>
     /** Останавливает текущий ответ агента; сообщения в очереди уходят ему следом. */
     interrupt(chatId: string): Promise<void>
+    /** Останавливает одну фоновую задачу агента чата; отклоняется, если агент её не остановил. */
+    stopTask(chatId: string, taskId: string): Promise<void>
     /** Убирает сообщение из очереди, пока агент его не взял. */
     cancelQueued(chatId: string, itemId: string): Promise<void>
     sendQueuedNow(chatId: string, itemId: string): Promise<void>
@@ -170,6 +185,8 @@ export interface AtoxApi {
     reorderQueued(chatId: string, itemIds: string[]): Promise<void>
     /** Ответ на разрешение, вопросы или форму агента — элемент ленты `approval` или `question`. */
     answerRequest(chatId: string, itemId: string, answer: RequestAnswer): Promise<void>
+    /** Вход в аккаунт агента чата — кнопка под ошибкой входа, то же, что `/login`. */
+    signIn(chatId: string): Promise<void>
     /** События ленты одного чата. */
     onEvent(chatId: string, listener: (event: ConversationEvent) => void): () => void
     /** В каком-либо чате что-то произошло: пора обновить обзор агентов. */
@@ -374,6 +391,16 @@ export interface AtoxApi {
     rename(canvasId: string, name: string): Promise<void>
     renameScreen(canvasId: string, screenId: string, name: string): Promise<void>
     /**
+     * Сетка поверх экрана (инструмент Grid): видна ли и какая клетка. Клетка должна делить
+     * ширину и высоту экрана нацело с чётным числом столбцов. Страницу экрана сетка не меняет.
+     */
+    setScreenGrid(canvasId: string, screenId: string, grid: ScreenGrid): Promise<void>
+    /**
+     * Новый размер экрана на холсте (панель инструментов): устройство из списка или свой размер,
+     * рамка экрана остаётся. Меняется экран, а не его HTML; сетка берёт ближайшую верную клетку.
+     */
+    resizeScreen(canvasId: string, screenId: string, look: ScreenResize): Promise<void>
+    /**
      * Вызывается, когда человек отпустил экран; позицию в процессе перетаскивания держит окно.
      * Позиция уже стоит по линиям сетки: об этом заботится окно.
      */
@@ -393,8 +420,6 @@ export interface AtoxApi {
     ungroup(canvasId: string, groupId: string): Promise<void>
     /** Запоминает сдвиг и масштаб холста; окно зовёт редко (после паузы), не на каждый кадр. */
     setView(canvasId: string, view: CanvasView): Promise<void>
-    /** Сетка холста чата (вкладка Tools): пишется у всех его страниц. */
-    setGrid(canvasId: string, grid: CanvasGrid): Promise<void>
     /** Убирает в архив весь холст чата (все страницы вместе) или возвращает его. */
     archive(canvasId: string, archived: boolean): Promise<void>
     /**
@@ -447,6 +472,11 @@ export const IpcChannel = {
   AgentsAvailable: 'agents:available',
   AgentsCatalog: 'agents:catalog',
   AgentsIntegrations: 'agents:integrations',
+  AgentCliList: 'agent-cli:list',
+  AgentCliInstall: 'agent-cli:install',
+  AgentCliUpdate: 'agent-cli:update',
+  AgentCliDismiss: 'agent-cli:dismiss',
+  AgentCliChanged: 'agent-cli:changed',
   ChatsCreate: 'chats:create',
   ChatsFork: 'chats:fork',
   ChatsRemove: 'chats:remove',
@@ -461,11 +491,13 @@ export const IpcChannel = {
   ConversationsSummaries: 'conversations:summaries',
   ConversationsSend: 'conversations:send',
   ConversationsInterrupt: 'conversations:interrupt',
+  ConversationsStopTask: 'conversations:stop-task',
   ConversationsCancelQueued: 'conversations:cancel-queued',
   ConversationsSendQueuedNow: 'conversations:send-queued-now',
   ConversationsEditQueued: 'conversations:edit-queued',
   ConversationsReorderQueued: 'conversations:reorder-queued',
   ConversationsAnswerRequest: 'conversations:answer-request',
+  ConversationsSignIn: 'conversations:sign-in',
   ConversationsCommands: 'conversations:commands',
   ConversationsRunCommand: 'conversations:run-command',
   ConversationsContext: 'conversations:context',
@@ -538,6 +570,8 @@ export const IpcChannel = {
   CanvasRemoveCanvas: 'canvas:remove-canvas',
   CanvasRename: 'canvas:rename',
   CanvasRenameScreen: 'canvas:rename-screen',
+  CanvasSetScreenGrid: 'canvas:set-screen-grid',
+  CanvasResizeScreen: 'canvas:resize-screen',
   CanvasMoveScreen: 'canvas:move-screen',
   CanvasRenameGroup: 'canvas:rename-group',
   CanvasMoveGroup: 'canvas:move-group',
@@ -545,7 +579,6 @@ export const IpcChannel = {
   CanvasShare: 'canvas:share',
   CanvasStopSharing: 'canvas:stop-sharing',
   CanvasSetView: 'canvas:set-view',
-  CanvasSetGrid: 'canvas:set-grid',
   CanvasArchive: 'canvas:archive',
   CanvasRemove: 'canvas:remove',
   CanvasRemoveScreen: 'canvas:remove-screen',

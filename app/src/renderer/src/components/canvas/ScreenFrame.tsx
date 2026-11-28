@@ -1,8 +1,9 @@
 import { memo, useState, type CSSProperties, type MouseEvent, type PointerEvent } from 'react'
-import { Pencil, Trash2, TriangleAlert, Wrench } from 'lucide-react'
+import { Grid3x3, Pencil, Trash2, TriangleAlert, Wrench } from 'lucide-react'
 import {
   CANVAS_NAME_MAX_LENGTH,
   canvasScreenUrl,
+  effectiveScreenGrid,
   SCREEN_DEVICES,
   type CanvasScreen,
   type ScreenFrame as FrameKind
@@ -11,7 +12,7 @@ import { FRAME_INSETS, screenFrame, type Point } from '../../lib/canvasView'
 import { showMenu } from '../../lib/menu'
 import { InlineRename } from '../InlineRename'
 
-type ScreenAction = 'fix' | 'rename' | 'remove'
+type ScreenAction = 'fix' | 'tools' | 'rename' | 'remove'
 
 interface ScreenFrameProps {
   canvasId: string
@@ -19,6 +20,8 @@ interface ScreenFrameProps {
   /** Где стоит экран: пока его тянут, позиция отличается от сохранённой. */
   position: Point
   selected: boolean
+  /** Рабочий экран: выбран двойным кликом, у него открыта панель инструментов. */
+  working: boolean
   /** Экран тянут прямо сейчас. */
   dragging: boolean
   /** Версия из истории, которую показывает экран вместо текущей. */
@@ -28,6 +31,8 @@ interface ScreenFrameProps {
   onFocus(screenId: string): void
   /** «Fix» из меню экрана: открывает окно просьбы к агенту. */
   onFix(screenId: string): void
+  /** «Screen tools» из меню экрана: делает его рабочим, как двойной клик. */
+  onWork(screenId: string): void
 }
 
 /** Подпись устройства: «iPhone 390 × 844», у своего размера — «Custom 500 × 300». */
@@ -39,23 +44,27 @@ export function describeDevice(screen: Pick<CanvasScreen, 'device' | 'width' | '
 /**
  * Экран на холсте: подпись над ним, рамка устройства и сам HTML в iframe. Поверх iframe лежит
  * прозрачный слой: человек не нажимает кнопки дизайна, а двигает экран, подходит к нему кликом
- * и по правой кнопке выбирает «Fix», переименование или удаление.
+ * и по правой кнопке выбирает «Fix», переименование или удаление. Двойной клик делает экран
+ * рабочим. Сетка экрана (инструмент Grid) лежит над iframe и в саму страницу не попадает.
  */
 export const ScreenFrame = memo(function ScreenFrame({
   canvasId,
   screen,
   position,
   selected,
+  working,
   dragging,
   previewVersionId,
   onPointerDown,
   onFocus,
-  onFix
+  onFix,
+  onWork
 }: ScreenFrameProps) {
   const [renaming, setRenaming] = useState(false)
   const frame = screenFrame(screen)
   const insets = FRAME_INSETS[frame]
   const frameWidth = screen.width + insets.left + insets.right
+  const grid = effectiveScreenGrid(screen)
   const style = {
     transform: `translate(${position.x}px, ${position.y}px)`,
     width: frameWidth,
@@ -75,6 +84,7 @@ export const ScreenFrame = memo(function ScreenFrame({
     const action = await showMenu<ScreenAction>(
       [
         { action: 'fix', label: 'Fix…', icon: <Wrench /> },
+        { action: 'tools', label: 'Screen tools', icon: <Grid3x3 /> },
         { action: 'rename', label: 'Rename', icon: <Pencil /> },
         { type: 'separator' },
         { action: 'remove', label: 'Remove from canvas…', icon: <Trash2 />, destructive: true }
@@ -83,6 +93,8 @@ export const ScreenFrame = memo(function ScreenFrame({
     )
     if (action === 'fix') {
       onFix(screen.id)
+    } else if (action === 'tools') {
+      onWork(screen.id)
     } else if (action === 'rename') {
       setRenaming(true)
     } else if (action === 'remove') {
@@ -96,6 +108,7 @@ export const ScreenFrame = memo(function ScreenFrame({
       data-screen-id={screen.id}
       data-frame={frame}
       data-selected={selected}
+      data-working={working}
       data-dragging={dragging}
       style={style}
     >
@@ -124,6 +137,7 @@ export const ScreenFrame = memo(function ScreenFrame({
           </span>
         )}
         {previewVersionId && <span className="canvas-screen__tag">Older version</span>}
+        {working && <span className="canvas-screen__tag">Working</span>}
       </div>
       <div className="canvas-screen__device-frame">
         <DeviceChrome frame={frame} file={screen.file} />
@@ -135,6 +149,19 @@ export const ScreenFrame = memo(function ScreenFrame({
           src={canvasScreenUrl(canvasId, screen.id, screen.revision, previewVersionId ?? undefined)}
           style={{ width: screen.width, height: screen.height }}
         />
+        {grid.visible && grid.option !== null && (
+          <div
+            className="canvas-screen__grid"
+            aria-hidden
+            style={
+              {
+                width: screen.width,
+                height: screen.height,
+                '--grid-cell': `${grid.option.cell}px`
+              } as CSSProperties
+            }
+          />
+        )}
         {frame === 'phone' && <span className="canvas-screen__island" aria-hidden />}
       </div>
       <button
@@ -147,7 +174,7 @@ export const ScreenFrame = memo(function ScreenFrame({
         // Клик мышью уже обработан протяжкой; здесь — Enter и пробел (у них `detail` равен 0).
         onClick={(event) => event.detail === 0 && onFocus(screen.id)}
       />
-      {selected && <div className="canvas-screen__ring" aria-hidden />}
+      {(selected || working) && <div className="canvas-screen__ring" aria-hidden />}
     </div>
   )
 })

@@ -5,7 +5,6 @@ import { app } from 'electron'
 import {
   CANVAS_GROUPS_MAX,
   CANVAS_LINKS_MAX,
-  DEFAULT_CANVAS_GRID,
   DEFAULT_SCREEN_DEVICE,
   LINK_ON_MAX_LENGTH,
   SCREEN_SIZE,
@@ -16,8 +15,15 @@ import {
   isCanvasExportFormat,
   isScreenDeviceId,
   isScreenFrame,
+  effectiveScreenGrid,
+  describeScreenGridOption,
+  isScreenGrid,
   isStandaloneCanvas,
+  nearestScreenGridOption,
+  needsBetterScreenSize,
   screenFrameOf,
+  screenGridOptions,
+  suggestScreenSizes,
   screenSourceKind,
   type CanvasExportFormat,
   type CanvasExportResult,
@@ -30,6 +36,7 @@ import {
   type ScreenVersion
 } from '../../shared/canvas'
 import type { Project } from '../../shared/models'
+import type { CanvasScreenGridInfo } from '../../shared/orchestration'
 import { CANVAS_KIT_ENTRY } from '../../shared/canvasRuntime'
 import type { ConversationManager } from '../conversations/manager'
 import { JsonFileWriter, readVersionedJson } from '../jsonFile'
@@ -71,7 +78,6 @@ import {
   CANVAS_FILE_VERSION,
   normalizeCanvases,
   normalizeView,
-  parseGrid,
   publicCanvas,
   type CanvasFile,
   type StoredCanvas,
@@ -100,8 +106,11 @@ export interface CanvasServices {
 /** Экран, который агент ставит на холст командой `atox canvas screen set`. */
 export interface AgentScreenRequest {
   name: string
-  /** Абсолютный путь к файлу экрана: HTML или React-компонент. */
-  file: string
+  /**
+   * Абсолютный путь к файлу экрана: HTML или React-компонент. Не задан — у существующего экрана
+   * меняется только устройство или размер.
+   */
+  file?: string
   device?: string
   /** `WxH` — свой размер экрана. */
   size?: string
@@ -133,6 +142,21 @@ export interface AgentScreenResult {
   buildError: string | null
   /** Ошибки, которые вывела страница экрана при открытии. */
   runtimeErrors: string[]
+  grid: CanvasScreenGridInfo
+}
+
+/** Сетка, которую ставит агент: клетка или число столбцов (одно из них) и видимость. */
+export interface AgentGridRequest {
+  cell?: number
+  columns?: number
+  visible?: boolean
+}
+
+export interface AgentGridResult {
+  screen: string
+  width: number
+  height: number
+  grid: CanvasScreenGridInfo
 }
 
 export interface AgentScreenPreview {
@@ -200,6 +224,7 @@ export interface AgentCanvasView {
     file: string
     missing: boolean
     buildError: string | null
+    grid: CanvasScreenGridInfo
   }[]
 }
 
@@ -383,7 +408,7 @@ export class CanvasService implements ScreenDocumentSource {
       height: look.height,
       ...(look.frame && { frame: look.frame }),
       file,
-      ...placeNewScreen(canvas.screens, look.width, canvas.grid.size),
+      ...placeNewScreen(canvas.screens, look.width),
       revision: 0,
       missing: false,
       buildError: null,
@@ -481,6 +506,101 @@ export class CanvasService implements ScreenDocumentSource {
     this.changed()
   }
 
+  /**
+   * Сетка поверх экрана: инструмент человека на холсте. Хранится у экрана, но не меняет его файл,
+   * не уходит в выгрузку и в ссылку. Клетка должна быть одной из верных для размера экрана.
+   */
+  setScreenGrid(canvasId: string, screenId: string, grid: unknown): void {
+    const { screen } = this.getScreen(canvasId, screenId)
+    if (!isScreenGrid(grid) || !isGridCellOf(screen, grid.cell)) {
+      throw new CanvasError('Invalid screen grid.')
+    }
+    screen.grid = { visible: grid.visible, cell: grid.cell }
+    this.changed()
+  }
+
+  /**
+   * Новый размер экрана из панели инструментов: устройство из списка или свой размер. Меняется
+   * сам экран на холсте (его ширина и высота), а не HTML. Свой размер сохраняет рамку экрана.
+   * Сетка берёт ближайшую верную клетку для нового размера.
+   */
+  resizeScreen(canvasId: string, screenId: string, look: unknown): void {
+    const { canvas, screen } = this.getScreen(canvasId, screenId)
+    const next = parseResizeLook(look)
+    if (next.device === 'custom') {
+      const frame = screenFrameOf(screen)
+      Object.assign(screen, { device: 'custom', width: next.width, height: next.height })
+      if (frame === 'none') {
+        delete screen.frame
+      } else {
+        screen.frame = frame
+      }
+    } else {
+      Object.assign(screen, deviceLook(next.device))
+      delete screen.frame
+    }
+    refitGrid(screen)
+    canvas.updatedAt = Date.now()
+    this.changed()
+    // Другой размер экрана сдвигает кнопки: линии от них находят их заново.
+    void this.refreshAnchors(canvas, screen)
+  }
+
+  /**
+   * Сетка экрана по команде агента: показать, выбрать клетку или число столбцов, включить или
+   * спрятать. Неверная клетка — ошибка со списком верных.
+   */
+  setGridForAgent(target: CanvasTarget, name: string, request: AgentGridRequest): AgentGridResult {
+    const canvas = this.agentCanvas(target)
+    const screen = this.screenNamed(canvas, name)
+    const options = screenGridOptions(screen.width, screen.height)
+    const changing =
+      request.cell !== undefined || request.columns !== undefined || request.visible !== undefined
+    if (changing) {
+      if (request.cell !== undefined && request.columns !== undefined) {
+        throw new CanvasError('Use either --cell or --columns, not both.')
+      }
+      if (options.length === 0) {
+        throw new CanvasError(
+          `${screen.width}x${screen.height} has no exact square grid. ${describeSuggestions(screen)}`
+        )
+      }
+      const current = effectiveScreenGrid(screen).option ?? options[0]!
+      let option = current
+      if (request.cell !== undefined) {
+        const found = options.find(({ cell }) => cell === request.cell)
+        if (!found) {
+          throw new CanvasError(
+            `A ${request.cell}px cell does not split ${screen.width}x${screen.height} into whole squares. ${describeOptions(screen)}`
+          )
+        }
+        option = found
+      } else if (request.columns !== undefined) {
+        const found = options.find(({ columns }) => columns === request.columns)
+        if (!found) {
+          throw new CanvasError(
+            `${request.columns} columns do not split ${screen.width}x${screen.height} into whole squares. ${describeOptions(screen)}`
+          )
+        }
+        option = found
+      }
+      // Выбор клетки показывает сетку: иначе он ничего бы не изменил на экране.
+      const visible =
+        request.visible ??
+        (request.cell !== undefined || request.columns !== undefined
+          ? true
+          : (screen.grid?.visible ?? false))
+      screen.grid = { visible, cell: option.cell }
+      this.changed()
+    }
+    return {
+      screen: screen.name,
+      width: screen.width,
+      height: screen.height,
+      grid: gridInfoOf(screen)
+    }
+  }
+
   moveScreen(canvasId: string, screenId: string, x: unknown, y: unknown): void {
     if (!isFiniteNumber(x) || !isFiniteNumber(y)) {
       throw new CanvasError('Invalid screen position.')
@@ -498,22 +618,6 @@ export class CanvasService implements ScreenDocumentSource {
       throw new CanvasError('Invalid canvas view.')
     }
     canvas.view = normalized
-    this.changed()
-  }
-
-  /**
-   * Сетка холста из вкладки Tools: одна на холст чата, поэтому записывается у всех его страниц.
-   * Экраны не двигаются: новая клетка действует на следующие переносы и раскладки.
-   */
-  setGrid(canvasId: string, grid: unknown): void {
-    const { chatId } = this.getCanvas(canvasId)
-    const parsed = parseGrid(grid)
-    if (!parsed) {
-      throw new CanvasError('Invalid canvas grid.')
-    }
-    for (const page of this.pagesOf(chatId)) {
-      page.grid = { ...parsed }
-    }
     this.changed()
   }
 
@@ -760,14 +864,15 @@ export class CanvasService implements ScreenDocumentSource {
         const target = canvas.screens.find(({ id }) => id === to)
         return source && target ? [{ from: source.name, to: target.name, on }] : []
       }),
-      screens: canvas.screens.map(({ name, device, width, height, file, missing, buildError }) => ({
-        name,
-        device,
-        width,
-        height,
-        file,
-        missing,
-        buildError
+      screens: canvas.screens.map((screen) => ({
+        name: screen.name,
+        device: screen.device,
+        width: screen.width,
+        height: screen.height,
+        file: screen.file,
+        missing: screen.missing,
+        buildError: screen.buildError,
+        grid: gridInfoOf(screen)
       }))
     }
   }
@@ -803,7 +908,23 @@ export class CanvasService implements ScreenDocumentSource {
     const folders = [caller.project.path, caller.chat.worktree].filter(
       (folder) => folder !== undefined
     )
-    const file = await verifyScreenFile(request.file, folders)
+    if (request.file === undefined) {
+      // Без файла команда только меняет размер существующего экрана.
+      if (device === undefined && size === undefined) {
+        throw new CanvasError('Give the screen file, or --device or --size to resize the screen.')
+      }
+      const known = this.canvasOf({
+        chatId: caller.chat.id,
+        ...(request.canvas !== undefined && { canvas: request.canvas })
+      })
+      if (!known || !findScreenByName(known.screens, name)) {
+        throw new CanvasError(
+          `There is no screen "${name}" yet. Give its file: atox canvas screen set "${name}" <file.tsx>.`
+        )
+      }
+    }
+    const file =
+      request.file === undefined ? undefined : await verifyScreenFile(request.file, folders)
     // Пока проверяли файл, чат могли удалить.
     const location = this.services.store.findChat(caller.chat.id)
     if (!location) {
@@ -819,14 +940,18 @@ export class CanvasService implements ScreenDocumentSource {
     // Без --device и --size существующий экран остаётся на своём устройстве.
     const look = size ? { device: 'custom' as const, ...size } : device && deviceLook(device)
     if (screen) {
-      if (screen.file !== file) {
+      if (file !== undefined && screen.file !== file) {
         this.forgetOutput(screenKey(canvas.id, screen.id))
       }
-      Object.assign(screen, look, { file })
+      Object.assign(screen, look, file !== undefined && { file })
       if (look) {
         // Агент выбрал устройство или свой размер: рамка, которую выбирал человек, уходит.
         delete screen.frame
+        refitGrid(screen)
       }
+    } else if (file === undefined) {
+      // Экран удалили, пока шла команда.
+      throw new CanvasError(`There is no screen "${name}" any more.`)
     } else {
       const newLook = look ?? deviceLook(DEFAULT_SCREEN_DEVICE)
       screen = {
@@ -834,7 +959,7 @@ export class CanvasService implements ScreenDocumentSource {
         name,
         ...newLook,
         file,
-        ...placeNewScreen(canvas.screens, newLook.width, canvas.grid.size),
+        ...placeNewScreen(canvas.screens, newLook.width),
         revision: 0,
         missing: false,
         buildError: null,
@@ -846,7 +971,7 @@ export class CanvasService implements ScreenDocumentSource {
     canvas.updatedAt = Date.now()
     this.changed()
     const key = screenKey(canvas.id, screen.id)
-    this.watcher.watch(key, [file])
+    this.watcher.watch(key, [screen.file])
     await this.queueCheck(key)
     if (!created && look) {
       // Другой размер экрана сдвигает кнопки: линии от них находят их заново.
@@ -864,7 +989,8 @@ export class CanvasService implements ScreenDocumentSource {
       file: screen.file,
       layout: describeOverflow(screen, inspection?.size ?? null),
       buildError: screen.buildError,
-      runtimeErrors: inspection?.errors ?? []
+      runtimeErrors: inspection?.errors ?? [],
+      grid: gridInfoOf(screen)
     }
   }
 
@@ -1248,7 +1374,7 @@ export class CanvasService implements ScreenDocumentSource {
     const rest = canvas.screens
       .filter((screen) => !placed.has(screen))
       .toSorted((a, b) => a.y - b.y || a.x - b.x)
-    const places = arrangeRows(rest.length > 0 ? [...named, rest] : named, canvas.grid.size)
+    const places = arrangeRows(rest.length > 0 ? [...named, rest] : named)
     for (const [screen, { x, y }] of places) {
       screen.x = x
       screen.y = y
@@ -1446,8 +1572,6 @@ export class CanvasService implements ScreenDocumentSource {
       share: this.chatShareOf(chatId),
       archived: false,
       view: null,
-      // Сетка одна на холст чата: новая страница берёт её у остальных.
-      grid: { ...(this.pagesOf(chatId)[0]?.grid ?? DEFAULT_CANVAS_GRID) },
       createdAt: now,
       updatedAt: now
     }
@@ -1973,4 +2097,73 @@ async function writeBlankScreenFile(
     return realpath(file)
   }
   throw new CanvasError(`Could not find a free file name in ${folder}.`)
+}
+
+/** Клетка `cell` — одна из верных сеток для размера экрана. */
+function isGridCellOf(screen: Pick<StoredScreen, 'width' | 'height'>, cell: number): boolean {
+  return screenGridOptions(screen.width, screen.height).some((option) => option.cell === cell)
+}
+
+/**
+ * После смены размера сетка берёт ближайшую верную клетку. Если у нового размера ровной сетки
+ * нет, клетка остаётся прежней: вернётся размер — вернётся и сетка.
+ */
+function refitGrid(screen: StoredScreen): void {
+  if (!screen.grid) {
+    return
+  }
+  const option = nearestScreenGridOption(screen.width, screen.height, screen.grid.cell)
+  if (option) {
+    screen.grid = { visible: screen.grid.visible, cell: option.cell }
+  }
+}
+
+/** Сетка экрана для агента: включена ли, текущая, все верные и размеры получше. */
+function gridInfoOf(screen: StoredScreen): CanvasScreenGridInfo {
+  const { visible, option } = effectiveScreenGrid(screen)
+  return {
+    visible,
+    current: option,
+    options: screenGridOptions(screen.width, screen.height),
+    suggestions: needsBetterScreenSize(screen.width, screen.height)
+      ? suggestScreenSizes(screen.width, screen.height)
+      : []
+  }
+}
+
+/** «Valid options: --cell 80 (16 × 15 cells · 80px), …» — для ошибки агенту. */
+function describeOptions(screen: StoredScreen): string {
+  const options = screenGridOptions(screen.width, screen.height)
+  return `Valid options for ${screen.width}x${screen.height}: ${options
+    .map((option) => `--cell ${option.cell} or --columns ${option.columns} (${describeScreenGridOption(option)})`)
+    .join('; ')}.`
+}
+
+/** «Nearest sizes with a good grid: 384x840 (…)» — для ошибки агенту. */
+function describeSuggestions(screen: StoredScreen): string {
+  const suggestions = suggestScreenSizes(screen.width, screen.height)
+  if (suggestions.length === 0) {
+    return ''
+  }
+  return `Nearest sizes with a good square grid: ${suggestions
+    .map(({ width, height, grid }) => `${width}x${height} (${describeScreenGridOption(grid)})`)
+    .join(', ')}. Resize with: atox canvas screen set "${screen.name}" --size WxH.`
+}
+
+/** Новый размер экрана из панели: устройство из списка или свой размер (рамку берёт экран). */
+function parseResizeLook(
+  value: unknown
+): { device: ScreenDeviceId } | { device: 'custom'; width: number; height: number } {
+  const look = typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : {}
+  const device = look['device']
+  if (isScreenDeviceId(device)) {
+    return { device }
+  }
+  const { width, height } = look
+  if (device !== 'custom' || !isScreenDimension(width) || !isScreenDimension(height)) {
+    throw new CanvasError(
+      `The width and height must be whole numbers from ${SCREEN_SIZE.min} to ${SCREEN_SIZE.max}.`
+    )
+  }
+  return { device: 'custom', width, height }
 }

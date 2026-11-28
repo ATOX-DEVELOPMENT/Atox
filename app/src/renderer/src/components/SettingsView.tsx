@@ -9,6 +9,7 @@ import {
   SlashSquare,
   SlidersHorizontal,
   SquareKanban,
+  SquareTerminal,
   Sparkles,
   UsersRound,
   X,
@@ -18,6 +19,7 @@ import { isIntegrationKind, type IntegrationKind } from '../../../shared/integra
 import { useProjectsContext } from '../hooks/ProjectsContext'
 import { useIntegrationLists } from '../hooks/useIntegrationLists'
 import { AccountSettings } from './AccountSettings'
+import { AgentCliSettings } from './AgentCliSettings'
 import { AgentIntegrations } from './AgentIntegrations'
 import { ArchivedChats } from './ArchivedChats'
 import { BoardSettings } from './BoardSettings'
@@ -30,7 +32,7 @@ import { ShortcutList } from './ShortcutList'
 import { UsageSettings } from './UsageSettings'
 
 export type SettingsSection =
-  'general' | 'appearance' | 'shortcuts' | 'accounts' | 'usage' | 'board' | 'commands' | 'github' | 'archived' | IntegrationKind
+  'general' | 'appearance' | 'shortcuts' | 'cli' | 'accounts' | 'usage' | 'board' | 'commands' | 'github' | 'archived' | IntegrationKind
 
 interface SectionItem {
   id: SettingsSection
@@ -57,6 +59,7 @@ const SECTION_GROUPS: ReadonlyArray<{ title?: string; items: ReadonlyArray<Secti
   {
     title: 'Agents',
     items: [
+      { id: 'cli', label: 'Agent CLIs', icon: SquareTerminal },
       { id: 'plugins', label: 'Plugins', icon: Puzzle },
       { id: 'skills', label: 'Skills', icon: Sparkles },
       { id: 'mcp', label: 'MCP', icon: Plug }
@@ -174,6 +177,8 @@ export function SettingsView({ initialSection, onClose }: SettingsViewProps) {
               <GitHubSettings />
             ) : section === 'archived' ? (
               <ArchivedChats />
+            ) : section === 'cli' ? (
+              <AgentCliSettings />
             ) : (
               <AgentIntegrations
                 // Фильтр у каждого раздела свой.

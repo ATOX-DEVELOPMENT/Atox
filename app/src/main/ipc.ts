@@ -23,6 +23,8 @@ import type { Settings } from '../shared/settings'
 import type { UpdateState } from '../shared/update'
 import { findAgent, isAgentId, type AgentId } from '../shared/agents'
 import type { AgentDetector } from './agents'
+import type { AgentCliService } from './agentCli'
+import type { AgentCliStatus } from '../shared/agentCli'
 import type { WorkingTreeReader } from './changes'
 import type { ProjectFiles } from './projectFiles'
 import type { ConversationManager } from './conversations/manager'
@@ -60,6 +62,7 @@ interface AppServices {
   workingTree: WorkingTreeReader
   projectFiles: ProjectFiles
   agents: AgentDetector
+  agentCli: AgentCliService
   /** `null` — обновления недоступны, например при запуске из исходников. */
   updater: AppUpdater | null
   menu: AppMenu
@@ -83,6 +86,7 @@ export function registerIpcHandlers({
   linkPreviews,
   workingTree,
   agents,
+  agentCli,
   updater,
   menu,
   planLimits,
@@ -247,6 +251,23 @@ export function registerIpcHandlers({
     }
   )
 
+  const agentFrom = (agent: unknown): AgentId => {
+    if (!isAgentId(agent)) {
+      throw new Error('Unknown agent')
+    }
+    return agent
+  }
+  ipcMain.handle(IpcChannel.AgentCliList, () => agentCli.list())
+  ipcMain.handle(IpcChannel.AgentCliInstall, (_event, agent: unknown) =>
+    agentCli.install(agentFrom(agent))
+  )
+  ipcMain.handle(IpcChannel.AgentCliUpdate, (_event, agent: unknown) =>
+    agentCli.update(agentFrom(agent))
+  )
+  ipcMain.handle(IpcChannel.AgentCliDismiss, (_event, agent: unknown) =>
+    agentCli.dismiss(agentFrom(agent))
+  )
+
   /** Агент по умолчанию, если он установлен, иначе первый установленный. */
   const resolveDefaultAgent = async (): Promise<AgentId> => {
     const { defaultAgent } = settings.get()
@@ -374,9 +395,12 @@ export function registerIpcHandlers({
 
   ipcMain.handle(IpcChannel.ConversationsSummaries, () => conversations.summaries())
 
-  ipcMain.handle(IpcChannel.ConversationsSnapshot, (_event, chatId: string) =>
-    conversations.snapshot(chatId)
-  )
+  ipcMain.handle(IpcChannel.ConversationsSnapshot, async (_event, chatId: string) => {
+    const snapshot = await conversations.snapshot(chatId)
+    // Чат открыт в окне: если кольцу контекста нечего показать, его заполненность читается.
+    conversations.restoreContext(chatId)
+    return snapshot
+  })
   ipcMain.handle(
     IpcChannel.ConversationsSend,
     (_event, chatId: string, text: unknown, attachments: unknown) => {
@@ -402,6 +426,9 @@ export function registerIpcHandlers({
   ipcMain.handle(IpcChannel.ConversationsInterrupt, (_event, chatId: string) =>
     conversations.interrupt(chatId)
   )
+  ipcMain.handle(IpcChannel.ConversationsStopTask, (_event, chatId: string, taskId: unknown) =>
+    conversations.stopTask(chatId, String(taskId))
+  )
   ipcMain.handle(IpcChannel.ConversationsCancelQueued, (_event, chatId: string, itemId: unknown) =>
     conversations.cancelQueued(chatId, String(itemId))
   )
@@ -420,6 +447,10 @@ export function registerIpcHandlers({
     IpcChannel.ConversationsAnswerRequest,
     (_event, chatId: string, itemId: unknown, answer: unknown) =>
       conversations.answerRequest(chatId, String(itemId), parseRequestAnswer(answer))
+  )
+
+  ipcMain.handle(IpcChannel.ConversationsSignIn, (_event, chatId: string) =>
+    conversations.signIn(chatId)
   )
 
   ipcMain.handle(IpcChannel.TerminalsAttach, (_event, projectId: string, size: unknown) =>
@@ -656,6 +687,16 @@ export function registerIpcHandlers({
       canvas.renameScreen(requireId(canvasId), requireId(screenId), name)
   )
   ipcMain.handle(
+    IpcChannel.CanvasSetScreenGrid,
+    (_event, canvasId: unknown, screenId: unknown, grid: unknown) =>
+      canvas.setScreenGrid(requireId(canvasId), requireId(screenId), grid)
+  )
+  ipcMain.handle(
+    IpcChannel.CanvasResizeScreen,
+    (_event, canvasId: unknown, screenId: unknown, look: unknown) =>
+      canvas.resizeScreen(requireId(canvasId), requireId(screenId), look)
+  )
+  ipcMain.handle(
     IpcChannel.CanvasMoveScreen,
     (_event, canvasId: unknown, screenId: unknown, x: unknown, y: unknown) =>
       canvas.moveScreen(requireId(canvasId), requireId(screenId), x, y)
@@ -710,9 +751,6 @@ export function registerIpcHandlers({
   })
   ipcMain.handle(IpcChannel.CanvasSetView, (_event, canvasId: unknown, view: unknown) =>
     canvas.setView(requireId(canvasId), view)
-  )
-  ipcMain.handle(IpcChannel.CanvasSetGrid, (_event, canvasId: unknown, grid: unknown) =>
-    canvas.setGrid(requireId(canvasId), grid)
   )
   ipcMain.handle(IpcChannel.CanvasArchive, (_event, canvasId: unknown, archived: unknown) => {
     if (typeof archived !== 'boolean') {
@@ -868,11 +906,13 @@ function parseConfiguration(value: unknown): ChatConfiguration {
     field === null ? null : typeof field === 'string' && field ? field : undefined
   const model = optionalString(source['model'])
   const effort = optionalString(source['effort'])
+  const serviceTier = optionalString(source['serviceTier'])
   const account = optionalString(source['account'])
   return {
     ...(isAgentId(source['agent']) && { agent: source['agent'] }),
     ...(model !== undefined && { model }),
     ...(effort !== undefined && { effort }),
+    ...(serviceTier !== undefined && { serviceTier }),
     ...(account !== undefined && { account })
   }
 }
@@ -946,6 +986,10 @@ export function broadcastTerminalExit(projectId: string): void {
 
 export function broadcastAgentListsStale(agent: AgentId): void {
   broadcast(IpcChannel.AgentsListsStale, agent)
+}
+
+export function broadcastAgentCli(statuses: AgentCliStatus[]): void {
+  broadcast(IpcChannel.AgentCliChanged, statuses)
 }
 
 export function broadcastPlanLimits(state: PlanLimitsState): void {

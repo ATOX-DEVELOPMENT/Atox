@@ -4,6 +4,8 @@
  * Команда подключается к локальному сокету приложения и отправляет одну строку JSON.
  */
 
+import type { ScreenGridOption, ScreenSizeSuggestion } from './canvas'
+
 /** Переменные окружения, которые получает терминал каждого чата. */
 export const OrchestrationEnv = {
   /** Путь к сокету приложения. */
@@ -67,6 +69,22 @@ export interface CanvasScreenInfo {
   missing: boolean
   /** Экран-React не собирается: «файл:строка: что не так»; `null` — собирается. */
   buildError: string | null
+  grid: CanvasScreenGridInfo
+}
+
+/**
+ * Сетка экрана, как её видит агент: инструмент человека поверх экрана, в страницу не попадает.
+ * Клетка квадратная и делит ширину и высоту нацело, столбцов чётное число.
+ */
+export interface CanvasScreenGridInfo {
+  /** Человек (или агент) включил сетку: блоки стоит ставить по её клеткам. */
+  visible: boolean
+  /** Текущая сетка; `null` — у этого размера ровной квадратной сетки нет. */
+  current: ScreenGridOption | null
+  /** Все верные сетки для размера, от крупной клетки к мелкой. */
+  options: ScreenGridOption[]
+  /** Ближайшие размеры с хорошей сеткой, если у текущего её нет или клетки только мелкие. */
+  suggestions: ScreenSizeSuggestion[]
 }
 
 /** Команды и их параметры/результаты. */
@@ -123,7 +141,8 @@ export interface OrchestrationMethods {
    * регистра). Холста нет — он создаётся. `file` — абсолютный путь (.html, .tsx, .jsx), `size` — `WxH`.
    */
   canvasScreenSet: {
-    params: CanvasTargetParams & { name: string; file: string; device?: string; size?: string }
+    /** Без `file` — только у существующего экрана: меняется устройство или размер, файл прежний. */
+    params: CanvasTargetParams & { name: string; file?: string; device?: string; size?: string }
     result: {
       canvas: string
       screen: string
@@ -139,7 +158,21 @@ export interface OrchestrationMethods {
       buildError: string | null
       /** Ошибки страницы при открытии: необработанные исключения, `console.error`. */
       runtimeErrors: string[]
+      grid: CanvasScreenGridInfo
     }
+  }
+  /**
+   * Сетка экрана: без параметров — только показать. `cell` или `columns` выбирают верную сетку
+   * (и показывают её), `visible` включает или прячет. Неверное значение — ошибка со списком верных.
+   */
+  canvasScreenGrid: {
+    params: CanvasTargetParams & {
+      name: string
+      cell?: number
+      columns?: number
+      visible?: boolean
+    }
+    result: { screen: string; width: number; height: number; grid: CanvasScreenGridInfo }
   }
   /** Снимает экран в PNG, как он выглядит на холсте, и проверяет раскладку. */
   canvasScreenPreview: {

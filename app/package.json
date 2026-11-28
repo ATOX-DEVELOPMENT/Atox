@@ -90,13 +90,10 @@
         "!node_modules/node-pty/build/**",
         "!node_modules/node-pty/prebuilds/win32-*/**",
         "!node_modules/@esbuild/**",
-        "!node_modules/esbuild/bin/**"
+        "!node_modules/esbuild/bin/**",
+        "!node_modules/@anthropic-ai/claude-agent-sdk-*/**"
       ],
       "extraResources": [
-        {
-          "from": "node_modules/@anthropic-ai/claude-agent-sdk-darwin-${arch}/claude",
-          "to": "claude-cli/claude"
-        },
         {
           "from": "node_modules/@esbuild/darwin-${arch}/bin/esbuild",
           "to": "esbuild/esbuild"
@@ -121,13 +118,10 @@
         "!node_modules/node-pty/build/**/*.{mk,Makefile,gypi}",
         "!node_modules/node-pty/build/{Makefile,config.gypi,node_gyp_bins}",
         "!node_modules/@esbuild/**",
-        "!node_modules/esbuild/bin/**"
+        "!node_modules/esbuild/bin/**",
+        "!node_modules/@anthropic-ai/claude-agent-sdk-*/**"
       ],
       "extraResources": [
-        {
-          "from": "node_modules/@anthropic-ai/claude-agent-sdk-linux-${arch}/claude",
-          "to": "claude-cli/claude"
-        },
         {
           "from": "node_modules/@esbuild/linux-${arch}/bin/esbuild",
           "to": "esbuild/esbuild"
@@ -170,13 +164,10 @@
         "!node_modules/node-pty/prebuilds/darwin-*/**",
         "!node_modules/node-pty/prebuilds/linux-*/**",
         "!node_modules/@esbuild/**",
-        "!node_modules/esbuild/bin/**"
+        "!node_modules/esbuild/bin/**",
+        "!node_modules/@anthropic-ai/claude-agent-sdk-*/**"
       ],
       "extraResources": [
-        {
-          "from": "node_modules/@anthropic-ai/claude-agent-sdk-win32-${arch}/claude.exe",
-          "to": "claude-cli/claude.exe"
-        },
         {
           "from": "node_modules/@esbuild/win32-${arch}/esbuild.exe",
           "to": "esbuild/esbuild.exe"

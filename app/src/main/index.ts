@@ -2,6 +2,7 @@ import { tmpdir, userInfo } from 'node:os'
 import { basename, delimiter, join } from 'node:path'
 import { app, BrowserWindow, nativeTheme, net, protocol, shell as electronShell } from 'electron'
 import { AccountService } from './accounts/service'
+import { AgentCliService } from './agentCli'
 import { AgentDetector } from './agents'
 import { WorkingTreeReader } from './changes'
 import { ProjectFiles } from './projectFiles'
@@ -22,6 +23,7 @@ import { canvasResourcePath } from './canvas/resources'
 import { CanvasService } from './canvas/service'
 import {
   broadcastAccounts,
+  broadcastAgentCli,
   broadcastBoard,
   broadcastCanvas,
   broadcastGitBranches,
@@ -83,6 +85,9 @@ const CLI_SCRIPT = join('out', 'main', 'atox.js')
 /** Путь к AppImage, если приложение запущено из него: его задаёт среда запуска AppImage. */
 const appImage = process.env['APPIMAGE']
 
+/** Только в разработке: каталоги с подставными программами агентов, которые встают в начало PATH. */
+const DEV_AGENT_PATH_VARIABLE = 'ATOX_DEV_AGENT_PATH'
+
 /** Сборка для разработки хранит данные отдельно и не трогает проекты установленного приложения. */
 const DEV_USER_DATA_SUFFIX = '-dev'
 
@@ -124,7 +129,11 @@ async function bootstrap(): Promise<void> {
     process.execPath,
     join(app.getAppPath(), CLI_SCRIPT)
   )
-  const shell = new ShellEnvironment()
+  // Только в разработке: каталоги с подставными программами агентов встают в начало PATH, чтобы
+  // проверять обновление агентов, не трогая настоящие.
+  const shell = new ShellEnvironment(
+    app.isPackaged ? null : (process.env[DEV_AGENT_PATH_VARIABLE] ?? null)
+  )
   const agents = new AgentDetector(shell)
   // Агенты получают окружение оболочки входа пользователя, а команду `atox` находят по PATH.
   const githubAccounts = new GitHubAccounts(shell)
@@ -291,6 +300,12 @@ async function bootstrap(): Promise<void> {
   )
   settings.onChange(() => board?.onSettingsChanged())
   const repository = new RepositoryReader(shell, githubAccounts)
+  const agentCli = new AgentCliService(agents, shell, {
+    onChange: broadcastAgentCli,
+    // Новая версия агента знает другие модели и команды, а сессии идут со старой: как после входа.
+    onChanged: (agent) => conversations.accountSignedIn(agent)
+  })
+  app.on('will-quit', () => agentCli.close())
   registerIpcHandlers({
     store,
     settings,
@@ -306,6 +321,7 @@ async function bootstrap(): Promise<void> {
     projectFiles: new ProjectFiles(shell),
     updater,
     agents,
+    agentCli,
     menu,
     planLimits,
     accounts,

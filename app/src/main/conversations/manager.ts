@@ -207,11 +207,38 @@ export class ConversationManager {
    * закрытый и загруженный заново, не начнёт нумерацию сначала.
    */
   private lastSeq = 0
+  /** Чаты, заполненность контекста которых сейчас читается для кольца. */
+  private readonly restoringContext = new Set<string>()
 
   constructor(private readonly services: ConversationServices) {}
 
   async snapshot(chatId: string): Promise<ConversationSnapshot> {
     return (await this.conversation(chatId)).snapshot
+  }
+
+  /**
+   * Чат открыли, а заполненности его контекста Atox не знает: например, последний ответ был
+   * до того, как Atox начал её сохранять. Агента спрашивают один раз и без хода — кольцо
+   * появляется, не дожидаясь следующего сообщения. Агент не умеет — кольца не будет до ответа.
+   */
+  restoreContext(chatId: string): void {
+    const conversation = this.loaded.get(chatId)
+    const agent = this.services.store.findChat(chatId)?.chat.agent
+    if (
+      !conversation ||
+      !agent ||
+      conversation.snapshot.usage ||
+      !conversation.sessionId ||
+      conversation.sessionAgent !== agent ||
+      !findAgent(agent)?.reportsContext ||
+      this.restoringContext.has(chatId)
+    ) {
+      return
+    }
+    this.restoringContext.add(chatId)
+    this.context(chatId)
+      .catch((error) => console.error('Failed to read the context of an opened chat', error))
+      .finally(() => this.restoringContext.delete(chatId))
   }
 
   /**
@@ -307,6 +334,15 @@ export class ConversationManager {
       () => this.forceStop(chatId, conversation, turn),
       INTERRUPT_TIMEOUT_MS
     )
+  }
+
+  /** Останавливает одну фоновую задачу агента; её строка пропадёт, когда агент подтвердит. */
+  async stopTask(chatId: string, taskId: string): Promise<void> {
+    const { session } = await this.conversation(chatId)
+    if (!session?.stopTask) {
+      throw new Error('The agent cannot stop this task.')
+    }
+    await session.stopTask(taskId)
   }
 
   /** Убирает сообщение из очереди, пока агент его не взял: например, его отправили по ошибке. */
@@ -476,6 +512,29 @@ export class ConversationManager {
   }
 
   /**
+   * Вход в аккаунт агента чата — кнопка «Sign in» под ошибкой входа. То же, что `/login`:
+   * страница входа открывается в браузере, а после входа сообщение можно отправить снова.
+   */
+  async signIn(chatId: string): Promise<void> {
+    const conversation = await this.conversation(chatId)
+    const agent = conversation.sessionAgent ?? this.findChat(chatId).chat.agent
+    try {
+      const session = await this.ensureSession(chatId, conversation, agent)
+      if (!session.signIn) {
+        throw new Error(`${findAgent(agent)?.name ?? agent} cannot sign in from the chat.`)
+      }
+      await session.signIn()
+    } catch (error) {
+      if (!conversation.disposed) {
+        this.emit(chatId, conversation, {
+          type: 'item',
+          item: { kind: 'error', id: randomUUID(), message: errorMessage(error) }
+        })
+      }
+    }
+  }
+
+  /**
    * Меняет агента, модель или эффорт чата; всё это вступает в силу со следующего сообщения,
    * а начатый ответ доводит до конца прежний агент. Агента можно сменить и посреди разговора:
    * новый получит переписку и продолжит её.
@@ -575,7 +634,9 @@ export class ConversationManager {
       queue: [],
       sessionId,
       sessionAgent: source.sessionAgent,
-      lastAgent: source.lastAgent
+      lastAgent: source.lastAgent,
+      // Копия разговора агента занимает столько же контекста; пересказ истории — заранее неизвестно.
+      ...(sessionId && source.snapshot.usage && { usage: source.snapshot.usage })
     })
     if (sessionId === null && items.some(({ kind }) => kind === 'user')) {
       const conversation = await this.conversation(forked.chat.id)
@@ -756,11 +817,12 @@ export class ConversationManager {
       }
       conversation = this.services.transcripts
         .load(chatId)
-        .then(({ items, queue, sessionId, sessionAgent, lastAgent }) => {
+        .then(({ items, queue, sessionId, sessionAgent, lastAgent, usage }) => {
           const loaded: Conversation = {
             snapshot: {
               items,
               running: false,
+              ...(usage && { usage }),
               ...(queue.length > 0 && { queued: queue.map(({ item }) => item) })
             },
             session: null,
@@ -1101,7 +1163,8 @@ export class ConversationManager {
         ...(resumedId && { sessionId: resumedId }),
         selection: {
           ...(sameAgent && chat.model && { model: chat.model }),
-          ...(sameAgent && chat.effort && { effort: chat.effort })
+          ...(sameAgent && chat.effort && { effort: chat.effort }),
+          ...(sameAgent && chat.serviceTier && { serviceTier: chat.serviceTier })
         }
       },
       {
@@ -1526,8 +1589,13 @@ export class ConversationManager {
     if (event.type === 'item' || event.type === 'reset') {
       this.updateWaiting(chatId, conversation)
     }
-    // Сохраняется лента, а состояние работы и заполненность контекста агент сообщит заново.
-    if (event.type === 'item' || event.type === 'delta' || event.type === 'reset') {
+    // Сохраняются лента и заполненность контекста; состояние работы агент сообщит заново.
+    if (
+      event.type === 'item' ||
+      event.type === 'delta' ||
+      event.type === 'reset' ||
+      event.type === 'usage'
+    ) {
       this.persist(chatId, conversation)
     }
   }
@@ -1581,7 +1649,8 @@ export class ConversationManager {
           queue: conversation.queue,
           sessionId: conversation.sessionId,
           sessionAgent: conversation.sessionAgent,
-          lastAgent: conversation.lastAgent
+          lastAgent: conversation.lastAgent,
+          ...(conversation.snapshot.usage && { usage: conversation.snapshot.usage })
         })
       }
     }

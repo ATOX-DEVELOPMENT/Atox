@@ -1,3 +1,4 @@
+import type { AgentId } from '../../../shared/agents'
 import type { AgentCatalog, AgentModel, ChatConfiguration } from '../../../shared/conversation'
 import type { Chat } from '../../../shared/models'
 import { effortLabel } from './conversationText'
@@ -15,7 +16,8 @@ export function currentModel(chat: Chat, catalog: AgentCatalog): AgentModel | un
 }
 
 /**
- * Смена модели. Эффорт, которого у новой модели нет, сбрасывается на её эффорт по умолчанию.
+ * Смена модели. Эффорт, которого у новой модели нет, сбрасывается на её эффорт по умолчанию,
+ * а режим обслуживания, которого нет, — на обычный.
  */
 export function modelConfiguration(
   chat: Chat,
@@ -24,7 +26,13 @@ export function modelConfiguration(
 ): ChatConfiguration {
   const next = findModel(catalog, modelId)
   const keepEffort = chat.effort !== undefined && next?.efforts.includes(chat.effort)
-  return { model: modelId, ...(!keepEffort && { effort: null }) }
+  const keepTier =
+    chat.serviceTier !== undefined && next?.serviceTiers?.some(({ id }) => id === chat.serviceTier)
+  return {
+    model: modelId,
+    ...(!keepEffort && { effort: null }),
+    ...(chat.serviceTier !== undefined && !keepTier && { serviceTier: null })
+  }
 }
 
 /** Модель по тексту из `/model`: идентификатор или название, например `opus` или `Opus 5.5`. */
@@ -40,13 +48,17 @@ export function matchModel(catalog: AgentCatalog, query: string): AgentModel | u
  * Эффорт по тексту из `/effort`: уровень или его название; `null` — эффорт по умолчанию,
  * `undefined` — такого уровня у модели нет.
  */
-export function matchEffort(model: AgentModel, query: string): string | null | undefined {
+export function matchEffort(
+  model: AgentModel,
+  query: string,
+  agent: AgentId
+): string | null | undefined {
   const wanted = normalize(query)
   if (wanted === DEFAULT_EFFORT_ARGUMENT) {
     return null
   }
   return model.efforts.find(
-    (level) => normalize(level) === wanted || normalize(effortLabel(level)) === wanted
+    (level) => normalize(level) === wanted || normalize(effortLabel(level, agent)) === wanted
   )
 }
 

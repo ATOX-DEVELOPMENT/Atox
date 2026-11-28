@@ -307,15 +307,34 @@ export class OrchestrationServer {
     },
 
     canvasScreenSet: (caller, { name, file, device, size, canvas }) => {
-      if (typeof name !== 'string' || typeof file !== 'string') {
-        throw new CommandError('Specify the screen name and its HTML file.')
+      if (typeof name !== 'string' || (file !== undefined && typeof file !== 'string')) {
+        throw new CommandError('Specify the screen name and its file.')
       }
       return this.services.canvas.setScreen(caller, {
         name,
-        file,
+        ...(typeof file === 'string' && { file }),
         ...(typeof canvas === 'string' && { canvas }),
         ...(typeof device === 'string' && { device }),
         ...(typeof size === 'string' && { size })
+      })
+    },
+
+    canvasScreenGrid: (caller, { name, cell, columns, visible, canvas }) => {
+      if (typeof name !== 'string' || !name.trim()) {
+        throw new CommandError('Specify the name of the screen.')
+      }
+      const whole = (value: unknown) =>
+        value === undefined || (typeof value === 'number' && Number.isSafeInteger(value) && value > 0)
+      if (!whole(cell) || !whole(columns)) {
+        throw new CommandError('The cell and the columns must be whole positive numbers.')
+      }
+      if (visible !== undefined && typeof visible !== 'boolean') {
+        throw new CommandError('Invalid grid visibility.')
+      }
+      return this.services.canvas.setGridForAgent(targetOf(caller, canvas), name, {
+        ...(cell !== undefined && { cell }),
+        ...(columns !== undefined && { columns }),
+        ...(visible !== undefined && { visible })
       })
     },
 

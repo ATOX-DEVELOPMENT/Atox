@@ -112,6 +112,184 @@ export function devicesOf(category: DeviceCategory): ScreenDeviceId[] {
 /** Свой размер экрана в пикселях: меньше не видно, больше тянет память. */
 export const SCREEN_SIZE = { min: 120, max: 4000 } as const
 
+/**
+ * Сетка поверх экрана — инструмент человека на холсте: рисуется над iframe и никогда не меняет
+ * страницу (не попадает в файл экрана, выгрузку, ссылку и миниатюры). Делит экран на целые
+ * одинаковые квадраты без обрезанных рядов и столбцов: клетка `cell` делит и ширину, и высоту
+ * нацело, а столбцов чётное число. Агент видит сетку в `atox canvas` и выравнивает по ней блоки.
+ */
+export interface ScreenGrid {
+  visible: boolean
+  /** Сторона клетки в px; если размер экрана изменился и она не подходит, берётся ближайшая верная. */
+  cell: number
+}
+
+/** Один верный вариант сетки для размера экрана. */
+export interface ScreenGridOption {
+  /** Сторона клетки в px. */
+  cell: number
+  /** Столбцов (всегда чётное число) и рядов: оба ровно, без остатка. */
+  columns: number
+  rows: number
+}
+
+/** Клетка сетки экрана не мельче, иначе линии сливаются. */
+export const SCREEN_GRID_MIN_CELL = 4
+
+/** Клетка, к которой ближе всего сетка по умолчанию, в пикселях. */
+export const SCREEN_GRID_DEFAULT_CELL = 40
+
+/** Клетка не мельче этой — «хорошая» сетка: такие размеры предлагаются взамен неудобных. */
+export const SCREEN_GRID_GOOD_CELL = 8
+
+function greatestCommonDivisor(a: number, b: number): number {
+  while (b !== 0) {
+    const rest = a % b
+    a = b
+    b = rest
+  }
+  return a
+}
+
+function isGridDimension(value: number): boolean {
+  return Number.isSafeInteger(value) && value > 0
+}
+
+/**
+ * Верные сетки для размера, от крупной клетки к мелкой. Клетка `c` делит высоту и половину
+ * ширины (тогда столбцов `width / c` — чётное число), то есть делит НОД(width / 2, height),
+ * и не мельче минимума. Пусто — ровной квадратной сетки у такого размера нет.
+ */
+export function screenGridOptions(width: number, height: number): ScreenGridOption[] {
+  if (!isGridDimension(width) || !isGridDimension(height) || width % 2 !== 0) {
+    return []
+  }
+  const common = greatestCommonDivisor(width / 2, height)
+  const options: ScreenGridOption[] = []
+  for (let cell = common; cell >= SCREEN_GRID_MIN_CELL; cell -= 1) {
+    if (common % cell === 0) {
+      options.push({ cell, columns: width / cell, rows: height / cell })
+    }
+  }
+  return options
+}
+
+/** Вариант с клеткой, ближайшей к `target` px; при равенстве — крупнее. `null` — вариантов нет. */
+export function nearestScreenGridOption(
+  width: number,
+  height: number,
+  target: number
+): ScreenGridOption | null {
+  let best: ScreenGridOption | null = null
+  for (const option of screenGridOptions(width, height)) {
+    if (best === null || Math.abs(option.cell - target) < Math.abs(best.cell - target)) {
+      best = option
+    }
+  }
+  return best
+}
+
+/** Сетка по умолчанию: верный вариант, у которого клетка ближе всего к 40 px. */
+export function defaultScreenGridOption(width: number, height: number): ScreenGridOption | null {
+  return nearestScreenGridOption(width, height, SCREEN_GRID_DEFAULT_CELL)
+}
+
+/** «16 × 15 cells · 80px». */
+export function describeScreenGridOption({ cell, columns, rows }: ScreenGridOption): string {
+  return `${columns} × ${rows} cells · ${cell}px`
+}
+
+/**
+ * Сетка, которую экран показывает сейчас: сохранённая (клетка — ближайшая верная для текущего
+ * размера), а без неё — скрытая сетка по умолчанию. `option: null` — у размера нет ровной
+ * квадратной сетки, и сетки у экрана нет.
+ */
+export function effectiveScreenGrid(
+  screen: Pick<CanvasScreen, 'width' | 'height' | 'grid'>
+): { visible: boolean; option: ScreenGridOption | null } {
+  const option = screen.grid
+    ? nearestScreenGridOption(screen.width, screen.height, screen.grid.cell)
+    : defaultScreenGridOption(screen.width, screen.height)
+  return { visible: (screen.grid?.visible ?? false) && option !== null, option }
+}
+
+/** Размер, близкий к неудобному, у которого сетка ровная и клетка не мельче хорошей. */
+export interface ScreenSizeSuggestion {
+  width: number
+  height: number
+  /** Сетка, которую экран получит по умолчанию на этом размере. */
+  grid: ScreenGridOption
+}
+
+/** Круглые клетки, под которые подбираются предложенные размеры. */
+const SUGGESTED_CELLS = [8, 10, 12, 16, 20, 24, 32, 40] as const
+
+/** Сторона в границах экрана, кратная `step`: ближайшие снизу и сверху. */
+function multiplesAround(value: number, step: number): number[] {
+  const below = Math.floor(value / step) * step
+  return [below, below + step].filter(
+    (side) => side >= SCREEN_SIZE.min && side <= SCREEN_SIZE.max
+  )
+}
+
+/**
+ * Ближайшие размеры с ровной сеткой из клеток не мельче 8 px (столбцов чётное число): их
+ * панель предлагает, когда у размера экрана сетки нет или клетки только мелкие. Сначала самые
+ * близкие (сумма сдвигов сторон), при равенстве — с более крупной клеткой. Сам размер не
+ * предлагается.
+ */
+export function suggestScreenSizes(
+  width: number,
+  height: number,
+  limit = 4
+): ScreenSizeSuggestion[] {
+  const candidates = new Map<string, { width: number; height: number; distance: number; best: number }>()
+  for (const cell of SUGGESTED_CELLS) {
+    for (const w of multiplesAround(width, cell * 2)) {
+      for (const h of multiplesAround(height, cell)) {
+        if (w === width && h === height) {
+          continue
+        }
+        const best = screenGridOptions(w, h)[0]?.cell ?? 0
+        candidates.set(`${w}x${h}`, {
+          width: w,
+          height: h,
+          distance: Math.abs(w - width) + Math.abs(h - height),
+          best
+        })
+      }
+    }
+  }
+  return [...candidates.values()]
+    .sort((a, b) => a.distance - b.distance || b.best - a.best)
+    .slice(0, limit)
+    .flatMap(({ width: w, height: h }) => {
+      const grid = defaultScreenGridOption(w, h)
+      return grid ? [{ width: w, height: h, grid }] : []
+    })
+}
+
+/** Размеру нужны предложения: ровной сетки нет или самая крупная клетка мельче хорошей. */
+export function needsBetterScreenSize(width: number, height: number): boolean {
+  const largest = screenGridOptions(width, height)[0]
+  return largest === undefined || largest.cell < SCREEN_GRID_GOOD_CELL
+}
+
+/** Сетка из файла или от окна: клетка — целое число px от минимума до самого большого экрана. */
+export function isScreenGrid(value: unknown): value is ScreenGrid {
+  if (typeof value !== 'object' || value === null) {
+    return false
+  }
+  const { visible, cell } = value as Record<string, unknown>
+  return (
+    typeof visible === 'boolean' &&
+    typeof cell === 'number' &&
+    Number.isSafeInteger(cell) &&
+    cell >= SCREEN_GRID_MIN_CELL &&
+    cell <= SCREEN_SIZE.max
+  )
+}
+
 export function isScreenFrame(value: unknown): value is ScreenFrame {
   return (
     value === 'phone' ||
@@ -138,6 +316,11 @@ export type ScreenLook =
   | { device: ScreenDeviceId }
   | { device: 'custom'; width: number; height: number; frame: ScreenFrame }
 
+/** Новый размер существующего экрана: устройство из списка или свой размер (рамка остаётся). */
+export type ScreenResize =
+  | { device: ScreenDeviceId }
+  | { device: 'custom'; width: number; height: number }
+
 /**
  * Холст без чата: вместо id чата у него свой ключ с этой приставкой. По ключу страницы такого
  * холста собираются вместе так же, как страницы холста чата.
@@ -149,48 +332,17 @@ export function isStandaloneCanvas(canvas: Pick<Canvas, 'chatId'>): boolean {
   return canvas.chatId.startsWith(STANDALONE_CANVAS_PREFIX)
 }
 
-/**
- * Клетка сетки холста по умолчанию, в пикселях холста. Человек меняет её во вкладке Tools
- * (`CanvasGrid`); агент раскладывает экраны по клетке холста.
- */
+/** Клетка сетки холста, в пикселях холста: экраны и группы встают только по её линиям. */
 export const CANVAS_GRID = 40
 
-/** Границы клетки сетки: мельче точки сливаются, крупнее сетка перестаёт помогать. */
-export const CANVAS_GRID_SIZE = { min: 4, max: 160 } as const
-
-/** Готовые размеры клетки во вкладке Tools. */
-export const CANVAS_GRID_PRESETS = [8, 16, 24, 32, 40] as const
-
-/**
- * Сетка холста: видны ли точки, шаг клетки и встают ли экраны по линиям. Показ и прилипание
- * независимы: можно прилипать к скрытой сетке и видеть сетку без прилипания. Одна на холст чата:
- * записана у всех его страниц, как ссылка.
- */
-export interface CanvasGrid {
-  visible: boolean
-  size: number
-  snap: boolean
-}
-
-export const DEFAULT_CANVAS_GRID: CanvasGrid = { visible: true, size: CANVAS_GRID, snap: true }
-
-export function isCanvasGridSize(value: unknown): value is number {
-  return (
-    typeof value === 'number' &&
-    Number.isInteger(value) &&
-    value >= CANVAS_GRID_SIZE.min &&
-    value <= CANVAS_GRID_SIZE.max
-  )
-}
-
 /** Ближайшая линия сетки. */
-export function snapToGrid(value: number, size: number = CANVAS_GRID): number {
-  return Math.round(value / size) * size
+export function snapToGrid(value: number): number {
+  return Math.round(value / CANVAS_GRID) * CANVAS_GRID
 }
 
 /** Ближайшая линия сетки не левее `value`: так экран встаёт после соседа, не наезжая на него. */
-export function snapUpToGrid(value: number, size: number = CANVAS_GRID): number {
-  return Math.ceil(value / size) * size
+export function snapUpToGrid(value: number): number {
+  return Math.ceil(value / CANVAS_GRID) * CANVAS_GRID
 }
 
 /** Расстояние между рамками экранов на холсте: кратно клетке сетки. */
@@ -232,6 +384,8 @@ export interface CanvasScreen {
   height: number
   /** Рамка экрана своего размера (`custom`); у устройства из списка не задаётся. */
   frame?: ScreenFrame
+  /** Сетка поверх экрана, которую выбрал человек; нет — сетка скрыта и по умолчанию. */
+  grid?: ScreenGrid
   /**
    * Абсолютный путь к файлу экрана в проекте: HTML или React-компонент. Приложение следит за
    * файлом и всем, что он импортирует, и обновляет экран.
@@ -296,31 +450,15 @@ export interface CanvasGroup {
 export const CANVAS_GROUPS_MAX = 60
 
 /**
- * Поля рамки группы вокруг её экранов при клетке по умолчанию, в пикселях холста. Сверху место
- * под название группы и подписи экранов: они стоят на месте и растут вместе с холстом.
+ * Поля рамки группы вокруг её экранов, в пикселях холста; кратны клетке сетки, чтобы рамка стояла
+ * по сетке вместе со своими экранами. Сверху место под название группы и подписи экранов: они
+ * стоят на месте и растут вместе с холстом.
  */
 export const GROUP_PADDING = {
   top: CANVAS_GRID * 6,
   side: CANVAS_GRID * 2,
   bottom: CANVAS_GRID * 2
 } as const
-
-/**
- * Поля рамки группы при клетке `size`: не меньше `GROUP_PADDING` и кратны клетке, чтобы рамка
- * стояла по сетке вместе со своими экранами при любом шаге.
- */
-export function groupPadding(size: number = CANVAS_GRID): {
-  top: number
-  side: number
-  bottom: number
-} {
-  const fit = (base: number) => Math.ceil(base / size) * size
-  return {
-    top: fit(GROUP_PADDING.top),
-    side: fit(GROUP_PADDING.side),
-    bottom: fit(GROUP_PADDING.bottom)
-  }
-}
 
 /** Сдвиг и масштаб холста: окно возвращает человека туда, где он остановился. */
 export interface CanvasView {
@@ -359,8 +497,6 @@ export interface Canvas {
   share: CanvasShare | null
   /** Сохранённый вид; нет — окно вписывает все экраны само. */
   view: CanvasView | null
-  /** Сетка холста чата: одна на все его страницы. */
-  grid: CanvasGrid
   createdAt: number
   updatedAt: number
 }
