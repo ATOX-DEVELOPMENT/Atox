@@ -6207,12 +6207,22 @@ button.usage-indicator[data-warning='true']:hover {
   background: var(--color-hover);
 }
 
+/*
+ * Кнопки холста — отдельная таблетка в шапке, того же вида и скругления, что таблетки сайдбара:
+ * над содержимым экранов они читаются одной группой.
+ */
 .canvas-header__actions {
   display: flex;
   align-items: center;
   gap: var(--toolbar-gap);
   flex-shrink: 0;
+  height: var(--window-pill-height);
   margin-left: auto;
+  padding: 0 3px;
+  border: 1px solid var(--color-sidebar-border);
+  border-radius: var(--sidebar-radius);
+  background: var(--color-sidebar);
+  -webkit-app-region: no-drag;
 }
 
 .canvas-header__export-spinner {
