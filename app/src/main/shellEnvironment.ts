@@ -90,10 +90,28 @@ export class ShellEnvironment {
   private refreshing: Promise<Environment> | null = null
   private readAt = 0
 
+  /**
+   * `pathPrefix` — каталоги, которые встают в начало PATH. Нужны только в разработке: так
+   * проверяют обновление агентов на подставной программе, не трогая настоящую.
+   */
+  constructor(private readonly pathPrefix: string | null = null) {}
+
   get(): Promise<Environment> {
     // Без профиля агенты найдутся хуже, но запустятся с тем, что есть у процесса.
-    this.environment ??= this.read().then((environment) => environment ?? sessionEnvironment())
+    this.environment ??= this.read().then((environment) =>
+      this.withPathPrefix(environment ?? sessionEnvironment())
+    )
     return this.environment
+  }
+
+  private withPathPrefix(environment: Environment): Environment {
+    if (!this.pathPrefix) {
+      return environment
+    }
+    return {
+      ...environment,
+      PATH: [this.pathPrefix, environment['PATH']].filter(Boolean).join(delimiter)
+    }
   }
 
   /**
@@ -111,9 +129,9 @@ export class ShellEnvironment {
     this.refreshing ??= this.read()
       .then((environment) => {
         if (environment) {
-          this.environment = Promise.resolve(environment)
+          this.environment = Promise.resolve(this.withPathPrefix(environment))
         }
-        return environment ?? current
+        return environment ? this.withPathPrefix(environment) : current
       })
       .finally(() => {
         this.refreshing = null

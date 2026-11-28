@@ -6,6 +6,8 @@ export type MenuItem<Action extends string> =
       type?: 'action'
       action: Action
       label: string
+      /** Пояснение мелким шрифтом под подписью. */
+      description?: string
       /** Значок слева от подписи, например `<Pencil />` из lucide. */
       icon?: ReactNode
       /** Цвет в формате CSS — вместо значка у пункта цветной кружок. */

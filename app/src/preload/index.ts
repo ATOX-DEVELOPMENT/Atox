@@ -1,5 +1,6 @@
 import { contextBridge, ipcRenderer, webUtils } from 'electron'
 import type { AgentAccount } from '../shared/accounts'
+import type { AgentCliStatus } from '../shared/agentCli'
 import type { AgentId } from '../shared/agents'
 import type { AppCommand } from '../shared/commands'
 import type { BoardState } from '../shared/board'
@@ -133,6 +134,18 @@ const api: AtoxApi = {
     integrations: (agent, kind, projectId) =>
       ipcRenderer.invoke(IpcChannel.AgentsIntegrations, agent, kind, projectId)
   },
+  agentCli: {
+    list: () => ipcRenderer.invoke(IpcChannel.AgentCliList),
+    install: (agent) => ipcRenderer.invoke(IpcChannel.AgentCliInstall, agent),
+    update: (agent) => ipcRenderer.invoke(IpcChannel.AgentCliUpdate, agent),
+    dismiss: (agent) => ipcRenderer.invoke(IpcChannel.AgentCliDismiss, agent),
+    onChanged: (listener) => {
+      const handler = (_event: Electron.IpcRendererEvent, statuses: AgentCliStatus[]) =>
+        listener(statuses)
+      ipcRenderer.on(IpcChannel.AgentCliChanged, handler)
+      return () => ipcRenderer.removeListener(IpcChannel.AgentCliChanged, handler)
+    }
+  },
   chats: {
     create: (projectId, agent) => ipcRenderer.invoke(IpcChannel.ChatsCreate, projectId, agent),
     fork: (chatId) => ipcRenderer.invoke(IpcChannel.ChatsFork, chatId),
@@ -156,6 +169,8 @@ const api: AtoxApi = {
       ipcRenderer.invoke(IpcChannel.ConversationsRunCommand, chatId, command),
     context: (chatId) => ipcRenderer.invoke(IpcChannel.ConversationsContext, chatId),
     interrupt: (chatId) => ipcRenderer.invoke(IpcChannel.ConversationsInterrupt, chatId),
+    stopTask: (chatId, taskId) =>
+      ipcRenderer.invoke(IpcChannel.ConversationsStopTask, chatId, taskId),
     cancelQueued: (chatId, itemId) =>
       ipcRenderer.invoke(IpcChannel.ConversationsCancelQueued, chatId, itemId),
     sendQueuedNow: (chatId, itemId) =>
@@ -166,6 +181,7 @@ const api: AtoxApi = {
       ipcRenderer.invoke(IpcChannel.ConversationsReorderQueued, chatId, itemIds),
     answerRequest: (chatId, itemId, answer) =>
       ipcRenderer.invoke(IpcChannel.ConversationsAnswerRequest, chatId, itemId, answer),
+    signIn: (chatId) => ipcRenderer.invoke(IpcChannel.ConversationsSignIn, chatId),
     onEvent: conversationEvents.onEvent,
     onAnyEvent: conversationEvents.onAnyEvent,
     onRunningChange: conversationEvents.onRunningChange,
@@ -315,11 +331,20 @@ const api: AtoxApi = {
     },
     create: (chatId) => ipcRenderer.invoke(IpcChannel.CanvasCreate, chatId),
     addPage: (chatId) => ipcRenderer.invoke(IpcChannel.CanvasAddPage, chatId),
+    createStandalone: (projectId, name, look) =>
+      ipcRenderer.invoke(IpcChannel.CanvasCreateStandalone, projectId, name, look),
+    addBlankScreen: (canvasId, look) =>
+      ipcRenderer.invoke(IpcChannel.CanvasAddBlankScreen, canvasId, look),
+    linkChat: (canvasId, chatId) => ipcRenderer.invoke(IpcChannel.CanvasLinkChat, canvasId, chatId),
     reorderPages: (chatId, pageIds) =>
       ipcRenderer.invoke(IpcChannel.CanvasReorderPages, chatId, pageIds),
     rename: (canvasId, name) => ipcRenderer.invoke(IpcChannel.CanvasRename, canvasId, name),
     renameScreen: (canvasId, screenId, name) =>
       ipcRenderer.invoke(IpcChannel.CanvasRenameScreen, canvasId, screenId, name),
+    setScreenGrid: (canvasId, screenId, grid) =>
+      ipcRenderer.invoke(IpcChannel.CanvasSetScreenGrid, canvasId, screenId, grid),
+    resizeScreen: (canvasId, screenId, look) =>
+      ipcRenderer.invoke(IpcChannel.CanvasResizeScreen, canvasId, screenId, look),
     moveScreen: (canvasId, screenId, x, y) =>
       ipcRenderer.invoke(IpcChannel.CanvasMoveScreen, canvasId, screenId, x, y),
     renameGroup: (canvasId, groupId, name) =>

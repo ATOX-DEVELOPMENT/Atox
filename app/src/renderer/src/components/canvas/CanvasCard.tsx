@@ -2,7 +2,9 @@ import { memo } from 'react'
 import { Ellipsis } from 'lucide-react'
 import { useCanvasNavigation } from '../../hooks/CanvasesContext'
 import { showCanvasMenu } from '../../lib/canvasMenu'
-import { CHAT_DELETED_LABEL } from '../../lib/canvasOwner'
+import { isStandaloneCanvas } from '../../../../shared/canvas'
+import { CHAT_DELETED_LABEL, NO_CHAT_LABEL } from '../../lib/canvasOwner'
+import { useStandaloneCanvas } from './useStandaloneCanvas'
 import type { ChatCanvas } from '../../lib/chatCanvas'
 import { formatFullDate, formatRelativeTime } from '../../lib/relativeTime'
 import { CanvasThumbnail } from './CanvasThumbnail'
@@ -32,6 +34,7 @@ export const CanvasCard = memo(function CanvasCard({
   now
 }: CanvasCardProps) {
   const navigation = useCanvasNavigation()
+  const standalone = useStandaloneCanvas()
   const [first] = canvas.pages
   if (!first) {
     return null
@@ -39,7 +42,7 @@ export const CanvasCard = memo(function CanvasCard({
   const name = chatTitle ?? first.name
   const details = [
     projectName,
-    chatTitle === undefined && CHAT_DELETED_LABEL,
+    chatTitle === undefined && (isStandaloneCanvas(first) ? NO_CHAT_LABEL : CHAT_DELETED_LABEL),
     canvas.pages.length > 1 && plural(canvas.pages.length, 'page'),
     plural(canvas.screenCount, 'screen')
   ]
@@ -80,7 +83,8 @@ export const CanvasCard = memo(function CanvasCard({
           void showCanvasMenu(first, event.currentTarget, {
             withOpen: true,
             chatAvailable: chatTitle !== undefined,
-            navigation
+            navigation,
+            standalone
           })
         }
       >

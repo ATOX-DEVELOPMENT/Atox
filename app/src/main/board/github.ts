@@ -1,6 +1,12 @@
 import type { AvailableRepository, BoardLabel, BoardRepository } from '../../shared/board'
 import type { GitHubAccounts } from '../githubAccounts'
 import { httpRequest } from '../httpRequest'
+import {
+  PULL_REQUEST_FIELDS,
+  toPullRequestStatus,
+  type PullRequestNode,
+  type PullRequestStatus
+} from './pullRequest'
 
 const GRAPHQL_URL = 'https://api.github.com/graphql'
 
@@ -12,6 +18,9 @@ const PAGE_SIZE = 100
  * в большой организации может не уложиться во время запроса.
  */
 const REPOSITORIES_PAGE_SIZE = 50
+
+/** Сколько pull request'ов одной ветки читать: ветку открывали и закрывали не раз, но не сотни. */
+const BRANCH_PULL_REQUESTS = 5
 
 /** Сколько ждать ответа GitHub. */
 const REQUEST_TIMEOUT_MS = 60_000
@@ -83,6 +92,18 @@ const NODES_QUERY = `query($ids: [ID!]!) {
 const ISSUE_BODY_QUERY = `query($id: ID!) {
   node(id: $id) { ... on Issue { body } }
 }`
+
+/** Pull request'ы ветки: открытый приоритетнее, но смерженный нужен, чтобы закрыть задачу. */
+const PULL_REQUESTS_QUERY = `query($owner: String!, $name: String!, $branch: String!) {
+  repository(owner: $owner, name: $name) {
+    pullRequests(headRefName: $branch, first: ${BRANCH_PULL_REQUESTS}, orderBy: { field: CREATED_AT, direction: DESC }) {
+      nodes { ${PULL_REQUEST_FIELDS} }
+    }
+  }
+}`
+
+/** Так GitHub отвечает, приняв перезапуск упавших заданий. */
+const RERUN_ACCEPTED_STATUS = 201
 
 interface PageInfo {
   hasNextPage: boolean
@@ -238,6 +259,42 @@ export class BoardGitHub {
       { id }
     )
     return node?.body ?? ''
+  }
+
+  /**
+   * Pull request ветки задачи: открытый, а без него — самый свежий из закрытых и смерженных.
+   * `null` — по ветке pull request'а нет.
+   */
+  async pullRequest(
+    { fullName, account }: BoardRepository,
+    branch: string
+  ): Promise<PullRequestStatus | null> {
+    const [owner = '', name = ''] = fullName.split('/')
+    const data = await this.query<{
+      repository: { pullRequests: { nodes: PullRequestNode[] } } | null
+    }>(account, PULL_REQUESTS_QUERY, { owner, name, branch })
+    const nodes = data.repository?.pullRequests.nodes ?? []
+    const node = nodes.find(({ state }) => state === 'OPEN') ?? nodes[0]
+    return node ? toPullRequestStatus(node) : null
+  }
+
+  /** Перезапускает упавшие задания запуска GitHub Actions. */
+  async rerunFailedJobs({ fullName, account }: BoardRepository, runId: number): Promise<void> {
+    const response = await httpRequest(
+      `https://api.github.com/repos/${fullName}/actions/runs/${runId}/rerun-failed-jobs`,
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `bearer ${await this.token(account)}`,
+          Accept: 'application/vnd.github+json'
+        },
+        signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS)
+      }
+    )
+    if (response.status !== RERUN_ACCEPTED_STATUS) {
+      const body = (await response.json().catch(() => null)) as { message?: string } | null
+      throw new Error(body?.message ?? `GitHub responded with HTTP ${response.status}`)
+    }
   }
 
   private async query<Data>(account: string, query: string, variables: Variables): Promise<Data> {

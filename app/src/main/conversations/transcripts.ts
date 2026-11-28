@@ -1,7 +1,7 @@
 import { mkdir, rm, stat } from 'node:fs/promises'
 import { join } from 'node:path'
 import { isAgentId, type AgentId } from '../../shared/agents'
-import type { TimelineItem, UserMessage } from '../../shared/conversation'
+import type { ConversationUsage, TimelineItem, UserMessage } from '../../shared/conversation'
 import { JsonFileWriter, readVersionedJson } from '../jsonFile'
 
 const TRANSCRIPT_VERSION = 1
@@ -28,6 +28,11 @@ export interface Transcript {
   sessionAgent: AgentId | null
   /** Агент последнего отправленного сообщения: по нему видно, что следующее уходит другому. */
   lastAgent: AgentId | null
+  /**
+   * Заполненность контекста, которую агент сообщил последней: после перезапуска кольцо видно
+   * сразу, а не только после следующего ответа. Нет — агент её ещё не сообщал.
+   */
+  usage?: ConversationUsage
 }
 
 interface TranscriptFile extends Transcript {
@@ -62,7 +67,8 @@ export class TranscriptStore {
       queue: Array.isArray(data?.queue) ? data.queue.filter(isQueuedMessage) : [],
       sessionId: typeof data?.sessionId === 'string' ? data.sessionId : null,
       sessionAgent: isAgentId(data?.sessionAgent) ? data.sessionAgent : null,
-      lastAgent: isAgentId(data?.lastAgent) ? data.lastAgent : null
+      lastAgent: isAgentId(data?.lastAgent) ? data.lastAgent : null,
+      ...(isUsage(data?.usage) && { usage: data.usage })
     }
   }
 
@@ -99,6 +105,18 @@ export class TranscriptStore {
   private path(chatId: string): string {
     return join(this.directory, `${chatId}.json`)
   }
+}
+
+/** Заполненность контекста из файла: числа, иначе кольцо показало бы мусор. */
+function isUsage(value: unknown): value is ConversationUsage {
+  const context = (value as Partial<ConversationUsage> | null)?.context
+  return (
+    typeof context === 'object' &&
+    context !== null &&
+    Number.isFinite(context.used) &&
+    Number.isFinite(context.limit) &&
+    context.limit > 0
+  )
 }
 
 /** Сообщение очереди из файла: повреждённое не должно уйти агенту обрывком. */

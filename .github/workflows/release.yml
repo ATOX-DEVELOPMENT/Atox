@@ -1,8 +1,12 @@
-# Релиз выпускается вручную (`gh workflow run release.yml`): сборки в закрытом репозитории
-# тратят минуты Actions. Установленный Atox находит релиз через atox.dev/updates.
+# Релиз выпускается мержем релизного PR `pre-release → main`: в main больше ничего не попадает,
+# поэтому каждый push в неё — новый релиз. Работа копится в pre-release и релизов не запускает:
+# сборки в закрытом репозитории тратят минуты Actions. Ручной запуск — тоже только из main.
+# Установленный Atox находит релиз через atox.dev/updates.
 name: Release
 
 on:
+  push:
+    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -81,27 +85,8 @@ jobs:
       # На Linux node-pty собирается из исходников: готовых сборок под него в пакете нет.
       - run: npm ci
 
-      # Mac собирается на Intel-раннере, а бинарь claude под darwin-arm64 npm на Intel не ставит
-      # (optional dep под другую архитектуру). Раскладываем оба тарбола руками — без второго
-      # npm install, который перетирает первый. Без этого релизы 0.2.108 и 0.2.109 вышли без
-      # бандла, и подписка Claude не отображалась.
-      - if: matrix.platform == 'mac'
-        run: |
-          set -eu
-          VER=$(node -e "console.log(JSON.parse(require('fs').readFileSync('node_modules/@anthropic-ai/claude-agent-sdk/package.json','utf8')).version)")
-          for ARCH in arm64 x64; do
-            PKG="@anthropic-ai/claude-agent-sdk-darwin-$ARCH"
-            DIR="node_modules/@anthropic-ai/claude-agent-sdk-darwin-$ARCH"
-            TGZ=$(npm pack "$PKG@$VER" --pack-destination /tmp --silent)
-            rm -rf "$DIR"
-            mkdir -p "$DIR"
-            tar -xzf "/tmp/$TGZ" --strip-components=1 -C "$DIR"
-            chmod +x "$DIR/claude"
-            test -x "$DIR/claude"
-          done
-
-      # Так же с esbuild, который собирает экраны холста: в приложение кладётся бинарник
-      # своей архитектуры, а npm на Intel-раннере ставит только darwin-x64.
+      # Esbuild собирает экраны холста: в приложение кладётся бинарник своей архитектуры,
+      # а npm на Intel-раннере ставит только darwin-x64.
       - if: matrix.platform == 'mac'
         run: |
           set -eu
@@ -128,13 +113,9 @@ jobs:
 
       - run: npx electron-builder ${{ matrix.builder }} --publish never -c.extraMetadata.version="$VERSION"
 
-      # Если бандл claude не долетел до .app, релиз бесполезен — лимиты и список моделей падают
-      # как в 0.2.109. Проваливаем сборку, чтобы не публиковать такой релиз.
       - if: matrix.platform == 'mac'
         run: |
           set -eu
-          test -x dist/mac-arm64/Atox.app/Contents/Resources/claude-cli/claude
-          test -x dist/mac/Atox.app/Contents/Resources/claude-cli/claude
           for APP in dist/mac-arm64 dist/mac; do
             test -x "$APP/Atox.app/Contents/Resources/esbuild/esbuild"
             test -d "$APP/Atox.app/Contents/Resources/canvas-vendor"
@@ -142,13 +123,11 @@ jobs:
       - if: matrix.platform == 'linux'
         run: |
           set -eu
-          test -x dist/linux-unpacked/resources/claude-cli/claude
           test -x dist/linux-unpacked/resources/esbuild/esbuild
           test -d dist/linux-unpacked/resources/canvas-vendor
       - if: matrix.platform == 'windows'
         run: |
           set -eu
-          test -f dist/win-unpacked/resources/claude-cli/claude.exe
           test -f dist/win-unpacked/resources/esbuild/esbuild.exe
           test -d dist/win-unpacked/resources/canvas-vendor
 

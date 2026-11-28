@@ -1,10 +1,8 @@
 import { execFile } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
-import { existsSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
-import { extname, join } from 'node:path'
+import { extname } from 'node:path'
 import { promisify } from 'node:util'
-import { app } from 'electron'
 import {
   forkSession,
   query,
@@ -13,7 +11,6 @@ import {
   type ElicitationRequest,
   type ElicitationResult,
   type AccountInfo,
-  type ModelInfo,
   type Options,
   type PermissionResult,
   type SDKControlGetUsageResponse,
@@ -24,13 +21,11 @@ import {
 } from '@anthropic-ai/claude-agent-sdk'
 import {
   limitOutput,
-  type AgentCatalog,
   type BackgroundTaskKind,
   type ApprovalField,
   type InputField,
   type RequestAnswer,
   type AgentCommand,
-  type AgentModel,
   type ContextReport,
   type PlanLimit,
   type TimelineItem,
@@ -38,6 +33,8 @@ import {
 } from '../../shared/conversation'
 import type { AccountIdentity } from '../../shared/accounts'
 import { AsyncQueue } from './asyncQueue'
+import { isAuthError } from './authErrors'
+import { toCatalog } from './claudeCatalog'
 import { readClaudeMcpServers, readClaudePlugins, readClaudeSkills } from './claudeIntegrations'
 import { displayPath, errorMessage } from './display'
 import { elicitationContent, elicitationFields } from './elicitation'
@@ -79,9 +76,6 @@ type StreamedKind = 'assistant' | 'reasoning'
 /** Уровни эффорта, которые принимает Claude Code. */
 const EFFORT_LEVELS: readonly EffortLevel[] = ['low', 'medium', 'high', 'xhigh', 'max']
 
-/** Строка списка моделей, которая означает «модель по умолчанию», а не отдельную модель. */
-const DEFAULT_MODEL_ALIAS = 'default'
-
 /**
  * Сколько символов текста в среднем приходится на токен: так оценивается ответ, пока модель
  * его пишет, — точное число Claude присылает только в конце каждого сообщения.
@@ -93,9 +87,6 @@ const COMMAND_OUTPUT_MODEL = '<synthetic>'
 
 /** Служебные команды Claude Code для его собственной инфраструктуры — не для людей. */
 const INTERNAL_COMMAND_PREFIX = '__'
-
-/** Полные идентификаторы закреплённых версий: в меню они убраны в подменю. */
-const PINNED_MODEL_PREFIX = 'claude-'
 
 /**
  * Встроенные субагенты Claude работают невидимо для пользователя. В Atox помощники запускаются
@@ -153,43 +144,12 @@ function parseLocalCommand(text: string): LocalCommand | null {
   return name === '/login' && rest.length === 0 ? { name: 'login' } : null
 }
 
-/**
- * Claude Code, который Atox принёс с собой: он той же версии, что и SDK, и понимает служебные
- * запросы вроде лимитов подписки (`get_usage`). У пользователя может стоять более старая версия,
- * где этих запросов ещё нет, — тогда лимитов не видно и список моделей урезан. `null` — бандл
- * не нашёлся: это бывает на платформах, для которых SDK не кладёт native-бинарь.
- */
-function bundledClaudeExecutable(): string | null {
-  const platform = `${process.platform}-${process.arch}`
-  if (app.isPackaged) {
-    const packaged = join(
-      process.resourcesPath,
-      'claude-cli',
-      process.platform === 'win32' ? 'claude.exe' : 'claude'
-    )
-    return existsSync(packaged) ? packaged : null
-  }
-  try {
-    // В разработке берём бинарь прямо из `node_modules` — так же, как electron-builder в сборке.
-    return require.resolve(
-      `@anthropic-ai/claude-agent-sdk-${platform}/claude${process.platform === 'win32' ? '.exe' : ''}`
-    )
-  } catch {
-    return null
-  }
-}
-
-/** Путь к Claude Code, который используется для сессий Atox: сначала наш бандл, потом системный. */
-function claudeExecutablePath(launch: AgentLaunch): string {
-  return bundledClaudeExecutable() ?? launch.executable
-}
-
 function launchOptions(launch: AgentLaunch): Options {
   const { env, cwd } = launch
   return {
     cwd,
     env,
-    pathToClaudeCodeExecutable: claudeExecutablePath(launch),
+    pathToClaudeCodeExecutable: launch.executable,
     // Те же настройки, CLAUDE.md, навыки и хуки, что у Claude Code в терминале.
     settingSources: ['user', 'project', 'local'],
     systemPrompt: { type: 'preset', preset: 'claude_code', append: ATOX_SYSTEM_PROMPT },
@@ -201,7 +161,9 @@ export const claudeDriver: AgentDriver = {
   agent: 'claude',
 
   catalog(launch) {
-    return withIdleSession(launch, async (session) => toCatalog(await session.supportedModels()))
+    return withIdleSession(launch, async (session) =>
+      withDefaultEffort(toCatalog(await session.supportedModels()))
+    )
   },
 
   commands(launch) {
@@ -480,7 +442,7 @@ const execFileAsync = promisify(execFile)
 
 /** Выход из аккаунта делает сам Claude Code: он знает, где хранит вход — в связке ключей или в файле. */
 async function signOut(launch: AgentLaunch): Promise<void> {
-  await execFileAsync(claudeExecutablePath(launch), ['auth', 'logout'], {
+  await execFileAsync(launch.executable, ['auth', 'logout'], {
     cwd: launch.cwd,
     env: launch.env,
     timeout: SIGN_OUT_TIMEOUT_MS,
@@ -513,33 +475,6 @@ async function withIdleSession<T>(
   }
 }
 
-function toCatalog(models: ModelInfo[]): AgentCatalog {
-  const alias = models.find(({ value }) => value === DEFAULT_MODEL_ALIAS)
-  const listed = models.filter(({ value }) => value !== DEFAULT_MODEL_ALIAS)
-  // «По умолчанию» — не модель, а ссылка на одну из них: показываем ту, на которую она указывает.
-  const defaultModel =
-    listed.find(
-      (model) =>
-        !model.value.startsWith(PINNED_MODEL_PREFIX) &&
-        model.resolvedModel !== undefined &&
-        model.resolvedModel === alias?.resolvedModel
-    )?.value ??
-    listed[0]?.value ??
-    DEFAULT_MODEL_ALIAS
-  return {
-    agent: 'claude',
-    defaultModel,
-    // Без аккаунта Claude Code отдаёт только общие названия: ни прежних моделей, ни версий.
-    ...(!listed.some(({ value }) => value.startsWith(PINNED_MODEL_PREFIX)) && { incomplete: true }),
-    models: listed.map((model): AgentModel => ({
-      id: model.value,
-      name: model.displayName,
-      efforts: model.supportedEffortLevels ?? [],
-      ...(model.value.startsWith(PINNED_MODEL_PREFIX) && { secondary: true })
-    }))
-  }
-}
-
 /** Вид фоновой задачи по `task_type` Claude Code: `local_bash`, `local_agent`, `local_workflow`, мониторы. */
 function backgroundTaskKind(taskType: string): BackgroundTaskKind {
   if (taskType === 'local_bash') {
@@ -556,6 +491,24 @@ function backgroundTaskKind(taskType: string): BackgroundTaskKind {
 
 function isEffortLevel(value: string | undefined): value is EffortLevel {
   return EFFORT_LEVELS.some((level) => level === value)
+}
+
+/**
+ * Эффорт, с которым Atox запускает Claude, если в чате его не выбрали: у всех моделей один.
+ * Claude Code сам выбрал бы разный и нигде бы его не показал; так в меню видно, какой он.
+ */
+const DEFAULT_EFFORT: EffortLevel = 'high'
+
+/** Отмечает эффорт по умолчанию у моделей, которые его поддерживают. */
+function withDefaultEffort<Catalog extends { models: { efforts: string[] }[] }>(
+  catalog: Catalog
+): Catalog {
+  return {
+    ...catalog,
+    models: catalog.models.map((model) =>
+      model.efforts.includes(DEFAULT_EFFORT) ? { ...model, defaultEffort: DEFAULT_EFFORT } : model
+    )
+  }
 }
 
 class ClaudeSession implements AgentSession {
@@ -578,6 +531,8 @@ class ClaudeSession implements AgentSession {
   private sessionLimit: StreamedSessionLimit | null = null
   /** Пользователь остановил ответ: ошибка прерванного хода — не ошибка. */
   private interrupted = false
+  /** Запрос к API в этом ходе не прошёл вход: ошибка хода получит кнопку входа. */
+  private authFailed = false
   /**
    * Последнее сжатие разговора в этом ответе: его элемент ленты обновляется по ходу, а итог
    * с числом токенов может прийти уже после статуса об успехе.
@@ -598,7 +553,8 @@ class ClaudeSession implements AgentSession {
         ...launchOptions(options),
         ...(sessionId && { resume: sessionId }),
         ...(selection?.model && { model: selection.model }),
-        ...(isEffortLevel(selection?.effort) && { effort: selection.effort }),
+        // Эффорт не выбран — тот, что показан в меню как «по умолчанию».
+        effort: isEffortLevel(selection?.effort) ? selection.effort : DEFAULT_EFFORT,
         // Режим «полный доступ», как у агента в терминале с пропуском разрешений.
         permissionMode: 'bypassPermissions',
         allowDangerouslySkipPermissions: true,
@@ -608,7 +564,11 @@ class ClaudeSession implements AgentSession {
         // вызов сам, не спросив пользователя.
         canUseTool: (toolName, input, request) => this.canUseTool(toolName, input, request),
         // Без этого обработчика Claude Code отклоняет формы и ссылки MCP-серверов сам.
-        onElicitation: (request, { signal }) => this.elicit(request, signal)
+        onElicitation: (request, { signal }) => this.elicit(request, signal),
+        // В панели у каждой фоновой задачи есть своя кнопка «стоп» (`stopTask`), поэтому «Стоп»
+        // чата обрывает только ход и задачи не трогает. Без кнопки флаг включать нельзя:
+        // зависшую задачу было бы нечем остановить.
+        perTaskStopAffordance: true
       }
     })
     void this.consume()
@@ -689,8 +649,11 @@ class ClaudeSession implements AgentSession {
     )
   }
 
-  /** Вход в аккаунт Claude из чата (`/login`): страница открывается в браузере, итог дописывается в ту же запись. */
-  private async signIn(): Promise<void> {
+  /**
+   * Вход в аккаунт Claude из чата (`/login` или кнопка под ошибкой входа): страница открывается
+   * в браузере, итог дописывается в ту же запись.
+   */
+  async signIn(): Promise<void> {
     const { url, done } = await startSignIn(this.options)
     const id = randomUUID()
     this.options.openLink(url)
@@ -712,6 +675,10 @@ class ClaudeSession implements AgentSession {
     this.interrupted = true
     this.requests.cancelAll()
     await this.session.interrupt()
+  }
+
+  async stopTask(taskId: string): Promise<void> {
+    await this.session.stopTask(taskId)
   }
 
   answer(itemId: string, answer: RequestAnswer): void {
@@ -824,11 +791,7 @@ class ClaudeSession implements AgentSession {
         this.handle(message)
       }
     } catch (error) {
-      this.events.item({
-        kind: 'error',
-        id: randomUUID(),
-        message: errorMessage(error)
-      })
+      this.reportError(errorMessage(error))
     } finally {
       this.requests.cancelAll()
       this.events.closed()
@@ -860,7 +823,8 @@ class ClaudeSession implements AgentSession {
               .map(({ task_id, task_type, description }) => ({
                 id: task_id,
                 kind: backgroundTaskKind(task_type),
-                description
+                description,
+                stoppable: true
               }))
           )
         } else if (message.subtype === 'status') {
@@ -886,6 +850,11 @@ class ClaudeSession implements AgentSession {
         // Запрос к API не удался: текст ошибки придёт с концом хода (`result` с `is_error`)
         // и покажется ошибкой, а не репликой агента. Обрезанный по длине ответ — настоящий.
         if (message.error && message.error !== 'max_output_tokens') {
+          // Текст ошибки входа бывает любым, а признак у сообщения точный: по нему под ошибкой
+          // хода появится кнопка входа.
+          if (message.error === 'authentication_failed') {
+            this.authFailed = true
+          }
           break
         }
         this.handleAssistantMessage(
@@ -903,6 +872,7 @@ class ClaudeSession implements AgentSession {
         } else if (message.subtype === 'success' && message.is_error) {
           this.reportError(message.result || 'Claude stopped with an error.')
         }
+        this.authFailed = false
         this.streamingMessageId = null
         this.streamed.clear()
         // Ответ закончился посреди сжатия (например, его остановили) — сжатие не состоялось.
@@ -1125,8 +1095,15 @@ class ClaudeSession implements AgentSession {
     }
   }
 
+  /** Ошибка входа получает кнопку «Sign in»: пользователь войдёт заново прямо из чата. */
   private reportError(message: string): void {
-    this.events.item({ kind: 'error', id: randomUUID(), message })
+    const signIn = this.authFailed || isAuthError(message)
+    this.events.item({
+      kind: 'error',
+      id: randomUUID(),
+      message,
+      ...(signIn && { action: 'sign-in' as const })
+    })
   }
 }
 

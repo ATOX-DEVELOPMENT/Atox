@@ -1,5 +1,13 @@
 import type { AgentId } from './agents'
 
+/** Режим обслуживания модели, который включается отдельно от эффорта, например быстрый (Fast). */
+export interface ServiceTier {
+  /** Идентификатор, который передаётся агенту. */
+  id: string
+  name: string
+  description: string
+}
+
 /** Модель агента так, как её отдаёт сам агент: список зависит от его версии и подписки. */
 export interface AgentModel {
   /** Идентификатор, который передаётся агенту. */
@@ -9,6 +17,10 @@ export interface AgentModel {
   efforts: string[]
   /** Эффорт, с которым модель работает, если его не выбрали. */
   defaultEffort?: string
+  /** Что делает каждый уровень эффорта, по словам агента; уровня без описания здесь нет. */
+  effortDescriptions?: Record<string, string>
+  /** Режимы обслуживания, которые поддерживает модель; нет — переключать нечего. */
+  serviceTiers?: ServiceTier[]
   /** Прежняя или закреплённая версия модели: в меню она убрана в подменю. */
   secondary?: boolean
 }
@@ -85,16 +97,21 @@ export interface ContextReport {
  */
 export const CHAT_COMMANDS = ['usage', 'context', 'clear'] as const
 
+/** Действие, которое лента предлагает под ошибкой хода. */
+export type ErrorAction = 'sign-in'
+
 export type ChatCommand = (typeof CHAT_COMMANDS)[number]
 
 export function isChatCommand(value: unknown): value is ChatCommand {
   return CHAT_COMMANDS.some((command) => command === value)
 }
 
-/** Модель и эффорт, выбранные для чата. */
+/** Модель, эффорт и режим обслуживания, выбранные для чата. */
 export interface ModelSelection {
   model: string
   effort?: string
+  /** Режим обслуживания модели (`ServiceTier.id`); нет — обычный. */
+  serviceTier?: string
 }
 
 /** Что можно поменять в чате; `null` — вернуть значение по умолчанию. Агента — в любой момент. */
@@ -102,6 +119,7 @@ export interface ChatConfiguration {
   agent?: AgentId
   model?: string | null
   effort?: string | null
+  serviceTier?: string | null
   /** Дополнительный аккаунт агента; `null` — основной. */
   account?: string | null
 }
@@ -246,7 +264,13 @@ export type TimelineItem =
       /** Почему сжать не удалось. */
       error?: string
     }
-  | { kind: 'error'; id: string; message: string }
+  | {
+      kind: 'error'
+      id: string
+      message: string
+      /** Что предложить рядом с ошибкой: `sign-in` — вход истёк или его нет, кнопка «Sign in». */
+      action?: ErrorAction
+    }
   /**
    * Ход оборвался — пропала сеть или упал процесс агента, — и Atox продолжает его сам:
    * ждёт сеть, перезапускает сессию и просит агента продолжить. Одна строка на ход,
@@ -316,6 +340,8 @@ export interface BackgroundTask {
   id: string
   kind: BackgroundTaskKind
   description: string
+  /** Агент умеет остановить именно эту задачу; нет — кнопки «стоп» у неё не будет. */
+  stoppable?: boolean
 }
 
 export interface ConversationSnapshot {

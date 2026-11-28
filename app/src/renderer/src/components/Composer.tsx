@@ -10,6 +10,7 @@ import type { Chat } from '../../../shared/models'
 import { LOCAL_COMMAND_ALIASES, type PromptTemplate } from '../../../shared/slashCommands'
 import { useProjectsContext } from '../hooks/ProjectsContext'
 import { BackgroundTasksPill } from './BackgroundTasks'
+import { AgentCliNotice } from './AgentCliNotice'
 import { useAgentCatalog } from '../hooks/useAgentCatalog'
 import { useSettings } from '../hooks/SettingsContext'
 import { useAgentCommands } from '../hooks/useAgentCommands'
@@ -180,7 +181,7 @@ export const Composer = memo(function Composer({
       }
     }
     if (model && argument && name === 'effort') {
-      const effort = matchEffort(model, argument)
+      const effort = matchEffort(model, argument, chat.agent)
       if (effort !== undefined) {
         void configureChat(chat.id, { effort })
         return true
@@ -432,6 +433,7 @@ export const Composer = memo(function Composer({
           onChoose={(command) => chooseCommand(command, true)}
         />
       )}
+      <AgentCliNotice agent={chat.agent} />
       {error && (
         <div className="composer__error" role="alert">
           <CircleAlert className="icon" aria-hidden />

@@ -1,19 +1,26 @@
 import { useState, type CSSProperties } from 'react'
-import { LoaderCircle } from 'lucide-react'
+import { CircleAlert, LoaderCircle, Square } from 'lucide-react'
 import type { BackgroundTask } from '../../../shared/conversation'
 import { TERMINAL_WIDTH } from '../../../shared/settings'
 import { useSettings } from '../hooks/SettingsContext'
+import { useStopTask } from '../hooks/useStopTask'
 import { BACKGROUND_TASK_ICONS, BACKGROUND_TASK_LABELS } from './BackgroundTasks'
 import { PanelResizer } from './PanelResizer'
 
 const { atox } = window
 
+interface TasksPanelProps {
+  chatId: string | null
+  tasks: readonly BackgroundTask[]
+}
+
 /**
  * Панель справа от чатов: что агент текущего чата оставил работать в фоне — команды,
  * помощников, слежение за CI. Его ответ может уже закончиться, а работа идёт.
  */
-export function TasksPanel({ tasks }: { tasks: readonly BackgroundTask[] }) {
+export function TasksPanel({ chatId, tasks }: TasksPanelProps) {
   const { terminalWidth } = useSettings()
+  const { stopping, errors, stop } = useStopTask(chatId, tasks)
   const [draftWidth, setDraftWidth] = useState<number | null>(null)
   const width = draftWidth ?? terminalWidth
 
@@ -31,16 +38,39 @@ export function TasksPanel({ tasks }: { tasks: readonly BackgroundTask[] }) {
           </p>
         ) : (
           <ul className="task-list">
-            {tasks.map(({ id, kind, description }) => {
+            {tasks.map(({ id, kind, description, stoppable }) => {
               const Icon = BACKGROUND_TASK_ICONS[kind]
+              const error = errors.get(id)
               return (
                 <li key={id} className="task-list__item">
                   <Icon className="task-list__icon" aria-hidden />
                   <span className="task-list__text">
                     <span className="task-list__description">{description}</span>
                     <span className="task-list__kind">{BACKGROUND_TASK_LABELS[kind]}</span>
+                    {error && (
+                      <span className="task-list__error" role="alert">
+                        <CircleAlert className="task-list__error-icon" aria-hidden />
+                        {error}
+                      </span>
+                    )}
                   </span>
-                  <LoaderCircle className="task-list__spinner" aria-label="Running" />
+                  <span className="task-list__action">
+                    <LoaderCircle
+                      className="task-list__spinner"
+                      aria-label={stopping.has(id) ? 'Stopping' : 'Running'}
+                    />
+                    {stoppable && !stopping.has(id) && (
+                      <button
+                        type="button"
+                        className="task-list__stop"
+                        aria-label={`Stop: ${description}`}
+                        title="Stop"
+                        onClick={() => stop(id)}
+                      >
+                        <Square className="task-list__stop-icon" aria-hidden />
+                      </button>
+                    )}
+                  </span>
                 </li>
               )
             })}

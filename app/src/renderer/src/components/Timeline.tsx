@@ -23,6 +23,7 @@ import {
   workingLabel
 } from '../lib/conversationText'
 import { fileName, useImagePreview } from '../lib/attachments'
+import { answerIndices } from '../lib/turnAnswer'
 import { ImageViewer } from './ImageViewer'
 import { GeneratedImage } from './GeneratedImage'
 import { imageContextMenu, type ShownImage } from '../lib/imageActions'
@@ -400,8 +401,8 @@ interface TurnProps {
 
 /**
  * Ответ на сообщение. Пока агент работает, видно всё по порядку: что он пишет и что делает.
- * Законченный ответ — это последний текст агента с временем и копированием, а работа до него
- * свёрнута в «Worked for». Остановленный ответ не сворачивается: всё, что агент успел, остаётся.
+ * Законченный ответ — то, что агент написал после последнего действия (`answerIndices`), а
+ * работа до него свёрнута в «Worked for». Остановленный ответ не сворачивается: всё, что агент успел, остаётся.
  */
 function Turn({ chatId, user, items, live, unfolded, tokens, visible }: TurnProps) {
   if (live || unfolded || user.stopped) {
@@ -417,8 +418,8 @@ function Turn({ chatId, user, items, live, unfolded, tokens, visible }: TurnProp
     )
   }
   const finishedAt = knownFinish(user)
-  const finalIndex = items.findLastIndex((item) => item.kind === 'assistant' && item.text !== '')
-  const work = items.filter((item, index) => index !== finalIndex && FOLDED_KINDS.has(item.kind))
+  const answer = answerIndices(items)
+  const work = items.filter((item, index) => !answer.has(index) && FOLDED_KINDS.has(item.kind))
   return (
     <>
       <WorkSummary
@@ -427,8 +428,10 @@ function Turn({ chatId, user, items, live, unfolded, tokens, visible }: TurnProp
         items={work}
       />
       {items.map((item, index) =>
-        index === finalIndex && item.kind === 'assistant' ? (
+        answer.has(index) && item.kind === 'assistant' ? (
           <Markdown key={item.id} text={item.text} preserveLineBreaks={item.commandOutput} />
+        ) : answer.has(index) && item.kind === 'reasoning' ? (
+          <Markdown key={item.id} text={item.text} />
         ) : FOLDED_KINDS.has(item.kind) ? null : (
           <TimelineEntry key={item.id} chatId={chatId} item={item} />
         )
@@ -509,6 +512,8 @@ function WorkSummary({ chatId, duration, items }: WorkSummaryProps) {
         className="work-summary__toggle"
         aria-expanded={expandable ? open : undefined}
         disabled={!expandable}
+        // Клик мышью не оставляет на кнопке фокус и рамку вокруг неё; с клавиатуры — как обычно.
+        onMouseDown={(event) => event.preventDefault()}
         onClick={() => setOpen((value) => !value)}
       >
         {label}
@@ -531,12 +536,7 @@ function TimelineEntry({ chatId, item }: { chatId: string; item: TimelineItem })
     case 'reasoning':
       return <Markdown text={item.text} />
     case 'error':
-      return (
-        <div className="message message--error" role="alert">
-          <CircleAlert className="icon" />
-          <span>{item.message}</span>
-        </div>
-      )
+      return <ErrorMessage chatId={chatId} item={item} />
     case 'approval':
       return <ApprovalCard chatId={chatId} item={item} />
     case 'question':
@@ -562,6 +562,44 @@ function TimelineEntry({ chatId, item }: { chatId: string; item: TimelineItem })
     case 'tool':
       return null
   }
+}
+
+/**
+ * Ошибка хода. Если вход в аккаунт истёк, под ней кнопка входа — то же, что `/login`; после
+ * входа сообщение можно отправить снова.
+ */
+function ErrorMessage({
+  chatId,
+  item
+}: {
+  chatId: string
+  item: Extract<TimelineItem, { kind: 'error' }>
+}) {
+  const [opening, setOpening] = useState(false)
+  const signIn = () => {
+    setOpening(true)
+    void window.atox.conversations.signIn(chatId).finally(() => setOpening(false))
+  }
+  return (
+    <div className="message message--error" role="alert">
+      <CircleAlert className="icon" />
+      <div className="message__body">
+        <span>{item.message}</span>
+        {item.action === 'sign-in' && (
+          <div className="message__actions">
+            <button
+              type="button"
+              className="approval__button approval__button--allow"
+              disabled={opening}
+              onClick={signIn}
+            >
+              {opening ? 'Opening sign-in…' : 'Sign in to Claude'}
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  )
 }
 
 /** Ход оборвался, и Atox продолжает его сам: тихая строка вместо сырой ошибки. */

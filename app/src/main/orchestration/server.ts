@@ -21,12 +21,6 @@ import type { ConversationManager } from '../conversations/manager'
 import type { ChatLocation, ProjectStore } from '../store'
 import { formatMessage, formatReport, formatWorkerTask } from './prompts'
 
-/**
- * Сколько помощников одного агента могут работать одновременно. Каждый тратит лимит
- * подписки — агент не должен случайно запустить их десятки.
- */
-const MAX_ACTIVE_WORKERS = 4
-
 /** Запрос — одна строка JSON; больше этого — не команда, а ошибка или мусор. */
 const MAX_REQUEST_BYTES = 1024 * 1024
 
@@ -76,8 +70,6 @@ export class OrchestrationServer {
   private readonly secret = randomBytes(32)
   /** Помощники, которые отчитались и с тех пор не получали новых сообщений от агента. */
   private readonly reportedChatIds = new Set<string>()
-  /** Помощники, которых уже создали, но которые ещё не начали работать. */
-  private readonly startingChatIds = new Set<string>()
   private server: Server | null = null
 
   constructor(private readonly services: OrchestrationServices) {}
@@ -201,36 +193,21 @@ export class OrchestrationServer {
       }
       const agentId = await this.installedAgent(agent)
       const selection = await this.workerSelection(agentId, model, effort)
-      // Подсчёт и создание идут без ожидания между ними: параллельные команды не обойдут лимит.
-      const active = this.workersOf(caller).filter(
-        (chat) =>
-          !this.reportedChatIds.has(chat.id) &&
-          (this.startingChatIds.has(chat.id) || this.services.conversations.isRunning(chat.id))
-      )
-      if (active.length >= MAX_ACTIVE_WORKERS) {
-        throw new CommandError(
-          `You already have ${active.length} workers in progress. Wait for their reports before starting more.`
-        )
-      }
+      // Помощников сколько угодно: сколько их запускать, решает человек, а не Atox.
       const { chat } = this.services.store.createWorkerChat(
         caller.chat.id,
         agentId,
         title,
         selection
       )
-      this.startingChatIds.add(chat.id)
-      try {
-        // Задание — первое сообщение помощнику: он сразу начинает работать. Чат без своего
-        // названия называется по заданию, а не по служебному началу сообщения.
-        await this.services.conversations.send(
-          chat.id,
-          formatWorkerTask(caller.chat, task),
-          {},
-          { titleFrom: task }
-        )
-      } finally {
-        this.startingChatIds.delete(chat.id)
-      }
+      // Задание — первое сообщение помощнику: он сразу начинает работать. Чат без своего
+      // названия называется по заданию, а не по служебному началу сообщения.
+      await this.services.conversations.send(
+        chat.id,
+        formatWorkerTask(caller.chat, task),
+        {},
+        { titleFrom: task }
+      )
       this.services.onProjectsChanged()
       return {
         chatId: chat.id,
@@ -330,15 +307,34 @@ export class OrchestrationServer {
     },
 
     canvasScreenSet: (caller, { name, file, device, size, canvas }) => {
-      if (typeof name !== 'string' || typeof file !== 'string') {
-        throw new CommandError('Specify the screen name and its HTML file.')
+      if (typeof name !== 'string' || (file !== undefined && typeof file !== 'string')) {
+        throw new CommandError('Specify the screen name and its file.')
       }
       return this.services.canvas.setScreen(caller, {
         name,
-        file,
+        ...(typeof file === 'string' && { file }),
         ...(typeof canvas === 'string' && { canvas }),
         ...(typeof device === 'string' && { device }),
         ...(typeof size === 'string' && { size })
+      })
+    },
+
+    canvasScreenGrid: (caller, { name, cell, columns, visible, canvas }) => {
+      if (typeof name !== 'string' || !name.trim()) {
+        throw new CommandError('Specify the name of the screen.')
+      }
+      const whole = (value: unknown) =>
+        value === undefined || (typeof value === 'number' && Number.isSafeInteger(value) && value > 0)
+      if (!whole(cell) || !whole(columns)) {
+        throw new CommandError('The cell and the columns must be whole positive numbers.')
+      }
+      if (visible !== undefined && typeof visible !== 'boolean') {
+        throw new CommandError('Invalid grid visibility.')
+      }
+      return this.services.canvas.setGridForAgent(targetOf(caller, canvas), name, {
+        ...(cell !== undefined && { cell }),
+        ...(columns !== undefined && { columns }),
+        ...(visible !== undefined && { visible })
       })
     },
 

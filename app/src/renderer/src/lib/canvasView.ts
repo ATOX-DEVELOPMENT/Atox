@@ -47,9 +47,9 @@ export const FRAME_INSETS: Record<ScreenFrame, FrameInsets> = {
   none: { top: 0, right: 0, bottom: 0, left: 0 }
 }
 
-/** Рамка экрана: у своего размера (`custom`) её нет. */
-export function screenFrame(screen: Pick<CanvasScreen, 'device'>): ScreenFrame {
-  return screenFrameOf(screen.device)
+/** Рамка экрана: у своего размера (`custom`) — выбранная человеком или никакой. */
+export function screenFrame(screen: Pick<CanvasScreen, 'device' | 'frame'>): ScreenFrame {
+  return screenFrameOf(screen)
 }
 
 /**

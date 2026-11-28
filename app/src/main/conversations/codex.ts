@@ -51,8 +51,10 @@ interface CodexModel {
   displayName: string
   hidden: boolean
   isDefault: boolean
-  supportedReasoningEfforts: { reasoningEffort: string }[]
+  supportedReasoningEfforts: { reasoningEffort: string; description: string }[]
   defaultReasoningEffort: string
+  /** Режимы обслуживания модели, например `{ id: 'priority', name: 'Fast' }`. */
+  serviceTiers?: { id: string; name: string; description: string }[]
 }
 
 interface ThreadResponse {
@@ -473,13 +475,22 @@ function toCatalog(models: CodexModel[]): AgentCatalog {
       id: model.id,
       name: model.displayName,
       efforts: model.supportedReasoningEfforts.map(({ reasoningEffort }) => reasoningEffort),
-      defaultEffort: model.defaultReasoningEffort
+      defaultEffort: model.defaultReasoningEffort,
+      effortDescriptions: Object.fromEntries(
+        model.supportedReasoningEfforts
+          .filter(({ description }) => description)
+          .map(({ reasoningEffort, description }) => [reasoningEffort, description])
+      ),
+      ...(model.serviceTiers?.length && { serviceTiers: model.serviceTiers })
     }))
   }
 }
 
 /** Части сводки рассуждений разделяются в ленте пустой строкой — как в готовом элементе. */
 const SUMMARY_PART_SEPARATOR = '\n\n'
+
+/** Режим обслуживания «обычный» в `serviceTierForTurn`: так Codex отличает его от «не задан». */
+const DEFAULT_SERVICE_TIER = 'default'
 
 /** Сколько раз пробовать остановить ход, который Codex ещё не успел запустить. */
 const INTERRUPT_ATTEMPTS = 20
@@ -499,6 +510,8 @@ class CodexSession implements AgentSession {
   private readonly requestSignals = new Map<number | string, AbortController>()
   /** Модель и эффорт разговора — известны, когда тред открыт. */
   private selection: Partial<ModelSelection> = {}
+  /** У модели разговора есть режимы обслуживания: только тогда их можно передавать Codex. */
+  private supportsServiceTiers = false
   /**
    * Сколько токенов тред написал до текущего хода: счётчик хода — разница с итогом треда.
    * Codex сообщает лишь итог треда и последний запрос, а запросов за ход бывает много.
@@ -543,7 +556,11 @@ class CodexSession implements AgentSession {
             ...images.map((path) => ({ type: 'localImage', path }))
           ],
           ...(this.selection.model && { model: this.selection.model }),
-          ...(this.selection.effort && { effort: this.selection.effort })
+          ...(this.selection.effort && { effort: this.selection.effort }),
+          // Не выбран — «default»: иначе ход унаследовал бы режим, оставшийся у треда.
+          ...(this.supportsServiceTiers && {
+            serviceTierForTurn: this.selection.serviceTier ?? DEFAULT_SERVICE_TIER
+          })
         })
       )
       .then(({ turn }) => {
@@ -742,7 +759,8 @@ class CodexSession implements AgentSession {
     const params = {
       cwd,
       ...FULL_ACCESS,
-      ...(this.selection.model && { model: this.selection.model })
+      ...(this.selection.model && { model: this.selection.model }),
+      ...(this.selection.serviceTier && { serviceTier: this.selection.serviceTier })
     }
     let response: ThreadResponse | null = null
     if (sessionId) {
@@ -771,17 +789,24 @@ class CodexSession implements AgentSession {
    */
   private async resolveSelection(): Promise<Partial<ModelSelection>> {
     const chosen = this.options.selection ?? {}
-    if (chosen.model && chosen.effort) {
-      return chosen
-    }
+    // Список нужен всегда: по нему видно, умеет ли модель режимы обслуживания (Fast).
     const catalog = await this.rpc
       .request<{ data: CodexModel[] }>('model/list', {})
       .then(({ data }) => toCatalog(data))
       .catch(() => null)
     const modelId = chosen.model ?? catalog?.defaultModel
-    const effort =
-      chosen.effort ?? catalog?.models.find(({ id }) => id === modelId)?.defaultEffort
-    return { ...(modelId && { model: modelId }), ...(effort && { effort }) }
+    const model = catalog?.models.find(({ id }) => id === modelId)
+    const effort = chosen.effort ?? model?.defaultEffort
+    // Без списка моделей судить не по чему: выбор пользователя передаётся как есть.
+    this.supportsServiceTiers = catalog
+      ? Boolean(model?.serviceTiers?.length)
+      : Boolean(chosen.serviceTier)
+    const serviceTier = this.supportsServiceTiers ? chosen.serviceTier : undefined
+    return {
+      ...(modelId && { model: modelId }),
+      ...(effort && { effort }),
+      ...(serviceTier && { serviceTier })
+    }
   }
 
   private handleNotification(method: string, params: unknown): void {

@@ -13,6 +13,7 @@ import {
 } from '@dnd-kit/core'
 import {
   CircleAlert,
+  CircleCheck,
   ExternalLink,
   FolderGit2,
   MessageSquare,
@@ -21,7 +22,13 @@ import {
   Search,
   X
 } from 'lucide-react'
-import { BOARD_COLUMNS, type BoardColumn, type BoardIssue } from '../../../shared/board'
+import {
+  BOARD_COLUMNS,
+  isReviewAgentStep,
+  type BoardColumn,
+  type BoardIssue,
+  type ReviewStep
+} from '../../../shared/board'
 import { useChatActivity } from '../hooks/ChatActivityContext'
 import { useSettings } from '../hooks/SettingsContext'
 import { useBoard } from '../hooks/useBoard'
@@ -51,8 +58,20 @@ const COLUMN_INFO: Record<BoardColumn, { title: string; hint: string }> = {
   backlog: { title: 'Backlog', hint: 'No open issues' },
   queue: { title: 'Queue', hint: 'Drop tasks for agents' },
   progress: { title: 'In progress', hint: 'Agents at work show up here' },
-  review: { title: 'Review', hint: 'Finished tasks to review' },
-  done: { title: 'Done', hint: 'Tasks leave the board after a day' }
+  review: { title: 'Review', hint: 'Pull requests being reviewed and fixed' },
+  ready: { title: 'Ready', hint: 'Checked and clean, waiting for you to merge' },
+  done: { title: 'Done', hint: 'Merged tasks leave the board after a day' }
+}
+
+/** Что агент делает на каждом шаге проверки: подпись на карточке. */
+const REVIEW_STEP_LABELS: Record<ReviewStep, string> = {
+  waiting: 'Waiting for GitHub',
+  reviewing: 'Reviewing',
+  'fixing-review': 'Fixing review',
+  'fixing-checks': 'Fixing CI',
+  'fixing-conflicts': 'Fixing conflicts',
+  'fixing-comments': 'Fixing comments',
+  stopped: 'Needs you'
 }
 
 /** Пункт меню фильтра «все». */
@@ -119,7 +138,11 @@ export function BoardView({ onOpenChat, onClose }: BoardViewProps) {
           issue.repository.toLowerCase().includes(needle))
     )
   }, [issues, owner, repository, assignee, myLogins, query])
-  const working = issues.filter((issue) => issue.column === 'progress').length
+  // Проверяющие и исправляющие агенты тоже занимают места из лимита.
+  const working = issues.filter(
+    (issue) =>
+      issue.column === 'progress' || (issue.review && isReviewAgentStep(issue.review.step))
+  ).length
   /** Задача, которую сейчас отдают агенту: окно выбора агента и сообщения. */
   const [starting, setStarting] = useState<BoardIssue | null>(null)
 
@@ -211,8 +234,10 @@ export function BoardView({ onOpenChat, onClose }: BoardViewProps) {
         </div>
         <div className="board__actions">
           {hasRepositories && (
-            <span className="board__agents" title="Change the limit in Settings → GitHub">
-              {working} of {boardMaxAgents} agents working
+            <span className="board__agents" title="Change the limit in Settings → Board">
+              {boardMaxAgents === null
+                ? `${working} ${working === 1 ? 'agent' : 'agents'} working`
+                : `${working} of ${boardMaxAgents} agents working`}
             </span>
           )}
           {hasRepositories && (
@@ -402,15 +427,18 @@ interface CardProps {
 function Card({ issue, onMove, onOpenChat }: CardProps) {
   const { setNodeRef, listeners, attributes, isDragging } = useDraggable({ id: issue.id })
 
-  const open = () => (issue.chatId ? onOpenChat(issue.chatId) : window.open(issue.url))
+  // Пока задачу проверяют, открывается чат проверяющего, иначе — чат агента задачи.
+  const chatId = issue.review?.reviewChatId ?? issue.chatId
+  const open = () => (chatId ? onOpenChat(chatId) : window.open(issue.url))
 
   const openMenu = async (event: MouseEvent) => {
     event.preventDefault()
     const items: MenuItem<string>[] = [
-      ...(issue.chatId
-        ? [{ action: 'chat', label: 'Open Chat', icon: <MessageSquare /> } as const]
+      ...(chatId ? [{ action: 'chat', label: 'Open Chat', icon: <MessageSquare /> } as const] : []),
+      ...(issue.review?.pullRequestUrl
+        ? [{ action: 'pull', label: 'Open Pull Request', icon: <ExternalLink /> } as const]
         : []),
-      { action: 'github', label: 'Open on GitHub', icon: <ExternalLink /> },
+      { action: 'github', label: 'Open Issue on GitHub', icon: <ExternalLink /> },
       { type: 'separator' },
       {
         type: 'submenu',
@@ -423,8 +451,10 @@ function Card({ issue, onMove, onOpenChat }: CardProps) {
       }
     ]
     const action = await showMenu(items, event)
-    if (action === 'chat' && issue.chatId) {
-      onOpenChat(issue.chatId)
+    if (action === 'chat' && chatId) {
+      onOpenChat(chatId)
+    } else if (action === 'pull' && issue.review?.pullRequestUrl) {
+      window.open(issue.review.pullRequestUrl)
     } else if (action === 'github') {
       window.open(issue.url)
     } else if (action?.startsWith('move:')) {
@@ -489,10 +519,10 @@ function CardContent({
           ))}
         </div>
       )}
-      {issue.error && (
+      {(issue.error ?? issue.review?.stopped) && (
         <p className="board-card__error">
           <CircleAlert className="board-card__error-icon" />
-          {issue.error}
+          {issue.error ?? issue.review?.stopped}
         </p>
       )}
       <CardFooter issue={issue} onQueue={onQueue} />
@@ -501,6 +531,9 @@ function CardContent({
 }
 
 function CardFooter({ issue, onQueue }: { issue: BoardIssue; onQueue?(): void }) {
+  if (issue.review && (issue.column === 'review' || issue.column === 'ready')) {
+    return <ReviewStatus issue={issue} review={issue.review} />
+  }
   if (issue.chatId && (issue.column === 'progress' || issue.column === 'review')) {
     return <AgentStatus chatId={issue.chatId} column={issue.column} />
   }
@@ -555,6 +588,52 @@ function AgentStatus({ chatId, column }: { chatId: string; column: BoardColumn }
       </span>
     </div>
   )
+}
+
+/** Строка состояния проверки pull request'а: что делает агент или чего ждёт доска. */
+function ReviewStatus({
+  issue,
+  review
+}: {
+  issue: BoardIssue
+  review: NonNullable<BoardIssue['review']>
+}) {
+  const agentChatId = review.step === 'reviewing' ? review.reviewChatId : issue.chatId
+  const rounds = `${review.round}/${review.maxRounds}`
+  const label =
+    issue.column === 'ready'
+      ? review.reviewed
+        ? 'Reviewed, ready to merge'
+        : 'Ready to merge'
+      : review.step === 'waiting'
+        ? (review.detail ?? REVIEW_STEP_LABELS.waiting)
+        : review.step === 'stopped'
+          ? REVIEW_STEP_LABELS.stopped
+          : `${REVIEW_STEP_LABELS[review.step]} · round ${rounds}`
+  return (
+    <div className="board-card__footer">
+      {isReviewAgentStep(review.step) && agentChatId ? (
+        <ReviewAgentDot chatId={agentChatId} />
+      ) : issue.column === 'ready' ? (
+        <CircleCheck className="board-card__ready-icon" />
+      ) : (
+        <ChatStatus status="idle" />
+      )}
+      <span className="board-card__status" data-waiting={review.step === 'stopped'}>
+        {label}
+      </span>
+      {issue.chatId && (
+        <span className="board-card__open">
+          <MessageSquare className="board-card__open-icon" />
+          Chat
+        </span>
+      )}
+    </div>
+  )
+}
+
+function ReviewAgentDot({ chatId }: { chatId: string }) {
+  return <ChatStatus status={useChatActivity(chatId)} />
 }
 
 function describeSync(state: ReturnType<typeof useBoard>['state'], now: number): string {
