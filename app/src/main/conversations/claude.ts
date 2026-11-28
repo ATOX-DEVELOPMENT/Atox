@@ -161,7 +161,9 @@ export const claudeDriver: AgentDriver = {
   agent: 'claude',
 
   catalog(launch) {
-    return withIdleSession(launch, async (session) => toCatalog(await session.supportedModels()))
+    return withIdleSession(launch, async (session) =>
+      withDefaultEffort(toCatalog(await session.supportedModels()))
+    )
   },
 
   commands(launch) {
@@ -491,6 +493,24 @@ function isEffortLevel(value: string | undefined): value is EffortLevel {
   return EFFORT_LEVELS.some((level) => level === value)
 }
 
+/**
+ * Эффорт, с которым Atox запускает Claude, если в чате его не выбрали: у всех моделей один.
+ * Claude Code сам выбрал бы разный и нигде бы его не показал; так в меню видно, какой он.
+ */
+const DEFAULT_EFFORT: EffortLevel = 'high'
+
+/** Отмечает эффорт по умолчанию у моделей, которые его поддерживают. */
+function withDefaultEffort<Catalog extends { models: { efforts: string[] }[] }>(
+  catalog: Catalog
+): Catalog {
+  return {
+    ...catalog,
+    models: catalog.models.map((model) =>
+      model.efforts.includes(DEFAULT_EFFORT) ? { ...model, defaultEffort: DEFAULT_EFFORT } : model
+    )
+  }
+}
+
 class ClaudeSession implements AgentSession {
   readonly worksUnprompted = true
   private readonly input = new AsyncQueue<SDKUserMessage>()
@@ -533,7 +553,8 @@ class ClaudeSession implements AgentSession {
         ...launchOptions(options),
         ...(sessionId && { resume: sessionId }),
         ...(selection?.model && { model: selection.model }),
-        ...(isEffortLevel(selection?.effort) && { effort: selection.effort }),
+        // Эффорт не выбран — тот, что показан в меню как «по умолчанию».
+        effort: isEffortLevel(selection?.effort) ? selection.effort : DEFAULT_EFFORT,
         // Режим «полный доступ», как у агента в терминале с пропуском разрешений.
         permissionMode: 'bypassPermissions',
         allowDangerouslySkipPermissions: true,
