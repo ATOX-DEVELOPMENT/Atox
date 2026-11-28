@@ -2,6 +2,7 @@ import { resolve } from 'node:path'
 import { defineConfig } from 'electron-vite'
 import react from '@vitejs/plugin-react'
 import packageJson from './package.json'
+import claudeSdkPackage from './node_modules/@anthropic-ai/claude-agent-sdk/package.json'
 
 /**
  * Релизы лежат в закрытом репозитории, файлы отдаёт сайт Atox: `latest` — последний релиз,
@@ -11,6 +12,12 @@ const updatesUrl = 'https://atox.dev/updates'
 const updateFeedUrl = `${updatesUrl}/latest`
 const releaseDownloadUrl = updatesUrl
 
+/**
+ * Версия Claude Code, на которую рассчитан его SDK: старее нет смысла запускать — лимиты и новые
+ * модели у неё не работают. Atox запускает установленный у пользователя Claude Code и сравнивает.
+ */
+const claudeCodeMinimumVersion = claudeSdkPackage.claudeCodeVersion
+
 /** Сервер анонимной статистики Atox (админка). */
 const usageStatsUrl = 'https://admin.atox.dev/v1/event'
 
@@ -19,7 +26,8 @@ export default defineConfig({
     define: {
       __UPDATE_FEED_URL__: JSON.stringify(updateFeedUrl),
       __RELEASE_DOWNLOAD_URL__: JSON.stringify(releaseDownloadUrl),
-      __USAGE_STATS_URL__: JSON.stringify(usageStatsUrl)
+      __USAGE_STATS_URL__: JSON.stringify(usageStatsUrl),
+      __CLAUDE_CODE_MIN_VERSION__: JSON.stringify(claudeCodeMinimumVersion)
     },
     build: {
       rollupOptions: {

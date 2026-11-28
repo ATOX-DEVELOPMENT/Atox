@@ -1,5 +1,6 @@
 import type { ProjectFileContent, ProjectFileList } from './projectFiles'
 import type { AgentAccount } from './accounts'
+import type { AgentCliStatus } from './agentCli'
 import type { AgentId } from './agents'
 import type { MessageAttachments, PickedFile } from './attachments'
 import type {
@@ -119,6 +120,17 @@ export interface AtoxApi {
       kind: Kind,
       projectId: string | null
     ): Promise<IntegrationList<Kind>>
+  }
+  agentCli: {
+    /** Установлены ли программы агентов, их версии и идущие установки. */
+    list(): Promise<AgentCliStatus[]>
+    /** Ставит программу агента; ход установки приходит через `onChanged`. */
+    install(agent: AgentId): Promise<void>
+    /** Обновляет программу агента тем способом, которым она установлена. */
+    update(agent: AgentId): Promise<void>
+    /** Убирает сообщение о неудачной установке или обновлении. */
+    dismiss(agent: AgentId): Promise<void>
+    onChanged(listener: (statuses: AgentCliStatus[]) => void): () => void
   }
   chats: {
     /**
@@ -460,6 +472,11 @@ export const IpcChannel = {
   AgentsAvailable: 'agents:available',
   AgentsCatalog: 'agents:catalog',
   AgentsIntegrations: 'agents:integrations',
+  AgentCliList: 'agent-cli:list',
+  AgentCliInstall: 'agent-cli:install',
+  AgentCliUpdate: 'agent-cli:update',
+  AgentCliDismiss: 'agent-cli:dismiss',
+  AgentCliChanged: 'agent-cli:changed',
   ChatsCreate: 'chats:create',
   ChatsFork: 'chats:fork',
   ChatsRemove: 'chats:remove',

@@ -4064,6 +4064,99 @@ ul {
   opacity: 1;
 }
 
+/* Программа агента не установлена, устарела или ставится: над полем, чат при этом не блокируется. */
+.cli-notice {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: var(--radius);
+  color: var(--color-text);
+  background: var(--color-hover);
+  font-size: var(--font-size-small);
+}
+
+.cli-notice > .icon {
+  flex-shrink: 0;
+  width: 14px;
+  height: 14px;
+  margin-top: 2px;
+  color: var(--color-text-muted);
+}
+
+.cli-notice--error {
+  color: var(--color-danger);
+  background: var(--color-danger-background);
+}
+
+.cli-notice--error > .icon {
+  color: inherit;
+}
+
+.cli-notice__body {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  align-self: center;
+}
+
+.cli-notice__problem {
+  color: var(--color-danger);
+  overflow-wrap: anywhere;
+}
+
+.cli-notice__output {
+  margin: 0;
+  max-height: 120px;
+  overflow: auto;
+  font-family: var(--font-mono);
+  font-size: var(--font-size-small);
+  color: var(--color-text-muted);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  user-select: text;
+}
+
+.cli-notice__close {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  align-self: center;
+  padding: 0;
+  color: var(--color-text-muted);
+}
+
+.cli-notice__close:hover {
+  color: var(--color-text);
+}
+
+.cli-notice .settings__button {
+  align-self: center;
+  height: 24px;
+}
+
+/* Раздел настроек «Agent CLIs». */
+.cli-settings__intro {
+  margin: 0 0 20px;
+}
+
+.cli-settings__output {
+  max-height: 240px;
+  padding: 8px 10px;
+  border-radius: var(--radius);
+  background: var(--color-hover);
+}
+
+.cli-settings__failed {
+  width: 14px;
+  height: 14px;
+  margin-right: 6px;
+  vertical-align: -2px;
+  color: var(--color-danger);
+}
+
 /* «+», текст и отправка в одну строку; когда текст растёт, кнопки остаются внизу. */
 .composer__bar {
   display: flex;
