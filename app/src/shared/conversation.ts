@@ -325,6 +325,8 @@ export interface BackgroundTask {
   id: string
   kind: BackgroundTaskKind
   description: string
+  /** Агент умеет остановить именно эту задачу; нет — кнопки «стоп» у неё не будет. */
+  stoppable?: boolean
 }
 
 export interface ConversationSnapshot {

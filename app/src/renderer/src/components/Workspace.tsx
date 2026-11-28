@@ -205,7 +205,7 @@ export function Workspace({
         <ChangesPanel projectId={currentProjectId} />
       )}
       {!pageOpen && shownPanel === 'tasks' && currentProjectId && (
-        <TasksPanel tasks={activeTasks} />
+        <TasksPanel chatId={activeChatId} tasks={activeTasks} />
       )}
       {!pageOpen && shownPanel === 'files' && currentProjectId && (
         <FilesPanel

@@ -402,6 +402,9 @@ export function registerIpcHandlers({
   ipcMain.handle(IpcChannel.ConversationsInterrupt, (_event, chatId: string) =>
     conversations.interrupt(chatId)
   )
+  ipcMain.handle(IpcChannel.ConversationsStopTask, (_event, chatId: string, taskId: unknown) =>
+    conversations.stopTask(chatId, String(taskId))
+  )
   ipcMain.handle(IpcChannel.ConversationsCancelQueued, (_event, chatId: string, itemId: unknown) =>
     conversations.cancelQueued(chatId, String(itemId))
   )
