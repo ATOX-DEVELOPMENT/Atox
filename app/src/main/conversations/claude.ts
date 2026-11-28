@@ -13,7 +13,6 @@ import {
   type ElicitationRequest,
   type ElicitationResult,
   type AccountInfo,
-  type ModelInfo,
   type Options,
   type PermissionResult,
   type SDKControlGetUsageResponse,
@@ -24,13 +23,11 @@ import {
 } from '@anthropic-ai/claude-agent-sdk'
 import {
   limitOutput,
-  type AgentCatalog,
   type BackgroundTaskKind,
   type ApprovalField,
   type InputField,
   type RequestAnswer,
   type AgentCommand,
-  type AgentModel,
   type ContextReport,
   type PlanLimit,
   type TimelineItem,
@@ -39,6 +36,7 @@ import {
 import type { AccountIdentity } from '../../shared/accounts'
 import { AsyncQueue } from './asyncQueue'
 import { isAuthError } from './authErrors'
+import { toCatalog } from './claudeCatalog'
 import { readClaudeMcpServers, readClaudePlugins, readClaudeSkills } from './claudeIntegrations'
 import { displayPath, errorMessage } from './display'
 import { elicitationContent, elicitationFields } from './elicitation'
@@ -80,9 +78,6 @@ type StreamedKind = 'assistant' | 'reasoning'
 /** Уровни эффорта, которые принимает Claude Code. */
 const EFFORT_LEVELS: readonly EffortLevel[] = ['low', 'medium', 'high', 'xhigh', 'max']
 
-/** Строка списка моделей, которая означает «модель по умолчанию», а не отдельную модель. */
-const DEFAULT_MODEL_ALIAS = 'default'
-
 /**
  * Сколько символов текста в среднем приходится на токен: так оценивается ответ, пока модель
  * его пишет, — точное число Claude присылает только в конце каждого сообщения.
@@ -94,9 +89,6 @@ const COMMAND_OUTPUT_MODEL = '<synthetic>'
 
 /** Служебные команды Claude Code для его собственной инфраструктуры — не для людей. */
 const INTERNAL_COMMAND_PREFIX = '__'
-
-/** Полные идентификаторы закреплённых версий: в меню они убраны в подменю. */
-const PINNED_MODEL_PREFIX = 'claude-'
 
 /**
  * Встроенные субагенты Claude работают невидимо для пользователя. В Atox помощники запускаются
@@ -511,33 +503,6 @@ async function withIdleSession<T>(
   } finally {
     input.end()
     session.close()
-  }
-}
-
-function toCatalog(models: ModelInfo[]): AgentCatalog {
-  const alias = models.find(({ value }) => value === DEFAULT_MODEL_ALIAS)
-  const listed = models.filter(({ value }) => value !== DEFAULT_MODEL_ALIAS)
-  // «По умолчанию» — не модель, а ссылка на одну из них: показываем ту, на которую она указывает.
-  const defaultModel =
-    listed.find(
-      (model) =>
-        !model.value.startsWith(PINNED_MODEL_PREFIX) &&
-        model.resolvedModel !== undefined &&
-        model.resolvedModel === alias?.resolvedModel
-    )?.value ??
-    listed[0]?.value ??
-    DEFAULT_MODEL_ALIAS
-  return {
-    agent: 'claude',
-    defaultModel,
-    // Без аккаунта Claude Code отдаёт только общие названия: ни прежних моделей, ни версий.
-    ...(!listed.some(({ value }) => value.startsWith(PINNED_MODEL_PREFIX)) && { incomplete: true }),
-    models: listed.map((model): AgentModel => ({
-      id: model.value,
-      name: model.displayName,
-      efforts: model.supportedEffortLevels ?? [],
-      ...(model.value.startsWith(PINNED_MODEL_PREFIX) && { secondary: true })
-    }))
   }
 }
 
