@@ -385,109 +385,6 @@ kbd {
   color: var(--color-muted);
 }
 
-/* Тарифы */
-
-.plans {
-  display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: 10px;
-  margin-top: 40px;
-}
-
-.plan {
-  display: flex;
-  text-align: left;
-  flex-direction: column;
-  padding: 20px 18px;
-  background: var(--color-surface);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-large);
-}
-
-.plan--featured {
-  border-color: var(--color-accent);
-  box-shadow: 0 0 0 1px var(--color-accent);
-}
-
-.plan__name {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin: 0;
-  font-size: 15px;
-  font-weight: 600;
-}
-
-.plan__tag {
-  padding: 2px 8px;
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--color-accent);
-  background: rgba(10, 132, 255, 0.12);
-  border-radius: 999px;
-}
-
-.plan__price {
-  margin: 14px 0 0;
-  font-size: 32px;
-  font-weight: 700;
-  line-height: 1;
-  letter-spacing: -0.03em;
-}
-
-.plan__price small {
-  font-size: 14px;
-  font-weight: 500;
-  letter-spacing: 0;
-  color: var(--color-muted);
-}
-
-.plan__usage {
-  margin: 10px 0 0;
-  font-size: 14px;
-  color: var(--color-muted);
-}
-
-.plan__usage strong {
-  color: var(--color-text);
-}
-
-.plan ul {
-  flex: 1;
-  margin: 18px 0 22px;
-  padding: 0;
-  list-style: none;
-  font-size: 14px;
-}
-
-.plan li {
-  position: relative;
-  padding-left: 22px;
-  color: var(--color-muted);
-}
-
-.plan li + li {
-  margin-top: 8px;
-}
-
-.plan li::before {
-  content: '✓';
-  position: absolute;
-  left: 0;
-  color: var(--color-success);
-}
-
-.plan .button {
-  width: 100%;
-}
-
-.note {
-  margin: 20px 0 0;
-  text-align: center;
-  font-size: 13px;
-  color: var(--color-faint);
-}
-
 /* Текстовые страницы */
 
 .prose {
@@ -665,17 +562,7 @@ td:last-child {
 
 /* Узкие экраны */
 
-@media (max-width: 1040px) {
-  .plans {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
-}
-
 @media (max-width: 960px) {
-  .plans {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
   .features {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -717,8 +604,7 @@ td:last-child {
     padding-top: 48px;
   }
 
-  .features,
-  .plans {
+  .features {
     grid-template-columns: minmax(0, 1fr);
   }
 

@@ -66,27 +66,28 @@ const PAGES = {
   '/features': { file: 'features.html', nav: 'features' },
   '/about': { file: 'about.html', nav: 'about' },
   '/download': { file: 'download.html', nav: 'download' },
-  '/pricing': { file: 'pricing.html', nav: 'pricing' },
   '/terms': { file: 'terms.html', nav: null },
-  '/privacy': { file: 'privacy.html', nav: null },
-  '/refunds': { file: 'refunds.html', nav: null }
+  '/privacy': { file: 'privacy.html', nav: null }
 }
 
 /** Старые адреса, которые переехали: ссылки на них не должны ломаться. */
 const MOVED_PAGES = {
   '/docs': '/download',
-  '/refund': '/refunds',
-  '/refund-policy': '/refunds',
   '/privacy-policy': '/privacy',
   '/tos': '/terms'
 }
+
+/**
+ * Страницы платных тарифов, которых пока нет: ведут на главную. Переадресация временная —
+ * тарифы могут вернуться, и браузеры не должны запомнить её навсегда.
+ */
+const HIDDEN_PAGES = ['/pricing', '/refunds', '/refund', '/refund-policy']
 const NOT_FOUND_PAGE = { file: '404.html', nav: null }
 
 /** Общие куски страниц: метка в странице → файл, который встаёт на её место. */
 const PARTIALS = {
   header: 'header.html',
-  footer: 'footer.html',
-  plans: 'plans.html'
+  footer: 'footer.html'
 }
 const PARTIAL_SLOT = /<!-- (\w+) -->/g
 
@@ -379,6 +380,9 @@ const server = createServer(async (request, response) => {
     }
     if (MOVED_PAGES[pathname]) {
       return redirect(response, MOVED_PAGES[pathname], 301)
+    }
+    if (HIDDEN_PAGES.includes(pathname)) {
+      return redirect(response, '/')
     }
     if (pathname === '/api/release') {
       return await handleReleaseInfo(response)
